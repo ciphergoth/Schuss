@@ -65,17 +65,42 @@ describe('terrain', () => {
     }
   });
 
-  it('places obstacles on the channel floor, away from the walls', () => {
+  it('places sparse obstacles on the channel floor, away from the walls', () => {
     const t = new Terrain(3);
-    for (const index of [2, 5, 12]) {
-      const obstacles = t.obstaclesForChunk(index);
-      expect(obstacles.length).toBeGreaterThan(0);
-      for (const o of obstacles) {
+    let total = 0;
+    for (let index = 5; index < 25; index++) {
+      for (const o of t.obstaclesForChunk(index)) {
+        total++;
         expect(Math.abs(o.x - t.centerX(o.z))).toBeLessThan(t.channelHalfWidth(o.z) - 1);
         expect(o.z).toBeLessThanOrEqual(-index * CHUNK_LENGTH);
         expect(o.z).toBeGreaterThan(-(index + 1) * CHUNK_LENGTH);
       }
     }
+    expect(total).toBeGreaterThan(3); // rare spice, but present
+    expect(total).toBeLessThan(60); // and genuinely sparse
+  });
+
+  it('slow crud: sticky banks, floor patches, clean ramps and run-in', () => {
+    const t = new Terrain(1);
+    // Banks are made of crud.
+    for (const z of [-150, -600]) {
+      const c = t.centerX(z);
+      expect(t.stickinessAt(c + t.channelHalfWidth(z) + 4, z)).toBeGreaterThan(0.9);
+    }
+    // The run-in is clean everywhere on the floor.
+    for (let x = -10; x <= 10; x += 2) expect(t.stickinessAt(x, -30)).toBe(0);
+    // Patches exist somewhere on the racing floor.
+    let found = 0;
+    for (let z = -100; z > -1200; z -= 7) {
+      if (t.stickinessAt(t.centerX(z) + ((z * 7) % 9), z) > 0.5) found++;
+    }
+    expect(found).toBeGreaterThan(5);
+    // Kicker ramps are always fast snow.
+    let index = 3;
+    while (!t.jumpForChunk(index)) index++;
+    const j = t.jumpForChunk(index)!;
+    const core = t.centerX(j.zLip) + j.xOffset;
+    expect(t.stickinessAt(core, j.zLip + 5)).toBe(0);
   });
 
   it('keeps the first two chunks and the run-in obstacle-free', () => {

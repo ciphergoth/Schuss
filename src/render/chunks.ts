@@ -14,7 +14,7 @@ const CHUNKS_AHEAD = 7;
 const CHUNKS_BEHIND = 2;
 
 const SNOW_FLOOR = new THREE.Color(0xf4f9ff);
-const SNOW_WALL = new THREE.Color(0x9fd8ee); // walls read as blue ice
+const SNOW_CRUD = new THREE.Color(0x8494cf); // slow crud: dusty periwinkle
 
 // Candy-striped marker: a cylinder with horizontal color bands baked into
 // vertex colors.
@@ -127,11 +127,8 @@ export class ChunkRenderer {
       const x = this.terrain.centerX(z) + d;
       pos.setX(v, x);
       pos.setY(v, this.terrain.height(x, z));
-      const wall = Math.min(
-        1,
-        Math.max(0, (Math.abs(d) - this.terrain.channelHalfWidth(z)) / WALL_WIDTH)
-      );
-      c.lerpColors(SNOW_FLOOR, SNOW_WALL, wall);
+      // What you see is what slows you: crud tint tracks the sim's friction.
+      c.lerpColors(SNOW_FLOOR, SNOW_CRUD, this.terrain.stickinessAt(x, z));
       colors[v * 3] = c.r;
       colors[v * 3 + 1] = c.g;
       colors[v * 3 + 2] = c.b;

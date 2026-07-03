@@ -23,7 +23,9 @@ function teleport(sim: Sim, x: number, z: number, speed: number): void {
 describe('flow', () => {
   it('near-missing an obstacle at speed builds flow and score', () => {
     const sim = createSim(1);
-    const obstacle = sim.terrain.obstaclesForChunk(2)[0]!;
+    let oi = 5;
+    while (sim.terrain.obstaclesForChunk(oi).length === 0) oi++;
+    const obstacle = sim.terrain.obstaclesForChunk(oi)[0]!;
     // Pass 0.8m outside the collision circle — inside the near-miss ring.
     teleport(sim, obstacle.x + obstacle.radius + SKIER_RADIUS + 0.8, obstacle.z + 2, 13);
     const events = runCollecting(sim, 0.5);
@@ -55,7 +57,9 @@ describe('flow', () => {
 
   it('a tumble zeroes flow', () => {
     const sim = createSim(1);
-    const obstacle = sim.terrain.obstaclesForChunk(2)[0]!;
+    let oi = 5;
+    while (sim.terrain.obstaclesForChunk(oi).length === 0) oi++;
+    const obstacle = sim.terrain.obstaclesForChunk(oi)[0]!;
     teleport(sim, obstacle.x, obstacle.z + 3, 10);
     sim.flow = 0.8;
     const events = runCollecting(sim, 0.5);

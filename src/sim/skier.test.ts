@@ -171,7 +171,9 @@ describe('skier', () => {
 
   it('airborne skiers hit obstacles they have not cleared', () => {
     const sim = createSim(1);
-    const o = sim.terrain.obstaclesForChunk(2)[0]!;
+    let oi = 5;
+    while (sim.terrain.obstaclesForChunk(oi).length === 0) oi++;
+    const o = sim.terrain.obstaclesForChunk(oi)[0]!;
     teleport(sim, o.x, o.z + 3, 12);
     // Low hop straight at the obstacle: not enough height to clear it.
     stepSim(sim, { steer: 0, stance: 0, jump: 0.2 });
@@ -181,7 +183,9 @@ describe('skier', () => {
 
   it('clearing an obstacle in flight requires real height', () => {
     const sim = createSim(1);
-    const o = sim.terrain.obstaclesForChunk(2)[0]!;
+    let oi = 5;
+    while (sim.terrain.obstaclesForChunk(oi).length === 0) oi++;
+    const o = sim.terrain.obstaclesForChunk(oi)[0]!;
     teleport(sim, o.x, o.z + 3, 12);
     // Same approach, but flying well above the obstacle top.
     sim.skier.y = sim.terrain.height(o.x, o.z + 3) + o.height + 3;
@@ -286,7 +290,9 @@ describe('skier', () => {
 
   it('tumbles on an obstacle hit, loses most speed, then recovers', () => {
     const sim = createSim(1);
-    const obstacle = sim.terrain.obstaclesForChunk(2)[0]!;
+    let oi = 5;
+    while (sim.terrain.obstaclesForChunk(oi).length === 0) oi++;
+    const obstacle = sim.terrain.obstaclesForChunk(oi)[0]!;
     // 3m uphill of the obstacle, aimed straight at it, slow enough to stay
     // grounded (fast skiers can launch off a bump and clear it entirely).
     teleport(sim, obstacle.x, obstacle.z + 3, 10);

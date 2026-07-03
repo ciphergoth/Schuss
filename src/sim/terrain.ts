@@ -130,6 +130,20 @@ export class Terrain {
     return JUMP_LIP_HEIGHT * rise * rise * fade;
   }
 
+  // Slow crud: 0 = fast racing snow, 1 = full sticky. The banks are made of
+  // it (drifting wide costs speed, never stops you), and seeded patches
+  // dapple the floor as the thing you steer around. Kicker ramps stay clean.
+  stickinessAt(x: number, z: number): number {
+    const d = x - this.centerX(z);
+    const wall = Math.min(1, Math.max(0, (Math.abs(d) - this.channelHalfWidth(z)) / 4));
+    let patch = 0;
+    if (z < -80 && this.jumpHeight(d, z) === 0) {
+      const n = this.noise2(x / 13, z / 13, 5);
+      patch = smoothstep(Math.min(1, Math.max(0, (n - 0.62) / 0.1)));
+    }
+    return Math.max(wall, patch);
+  }
+
   height(x: number, z: number): number {
     const d = x - this.centerX(z);
     const a = Math.abs(d);
@@ -170,9 +184,10 @@ export class Terrain {
     if (index > 1) {
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 7919) * 2 ** 31));
       const jump = this.jumpForChunk(index);
-      // Wide stretches turn into obstacle slaloms; tight ones stay clean.
+      // Obstacles are rare spice now — slow crud is the main steering
+      // challenge. A touch more of them in wide stretches.
       const wide = this.channelHalfWidth(zTop - CHUNK_LENGTH / 2) > BASE_HALF_WIDTH + 2;
-      const count = Math.min(3 + Math.floor(index / 4), 7) + (wide ? 2 : 0);
+      const count = index < 5 ? 0 : Math.min(1 + Math.floor(index / 10), 3) + (wide ? 1 : 0);
       for (let t = 0; t < count; t++) {
         const z = zTop - rng() * CHUNK_LENGTH;
         const d = (rng() * 2 - 1) * (this.channelHalfWidth(z) - 2.5);

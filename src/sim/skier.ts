@@ -21,6 +21,7 @@ export interface SkierState {
 const G = 9.81;
 const FRICTION = 0.05; // neutral-stance snow friction coefficient
 const PLOW_FRICTION = 0.6; // at full snowplow
+const CRUD_FRICTION = 0.36; // added at full stickiness: bleeds speed, never stops you
 const DRAG = 0.0035; // neutral quadratic air drag; top speed around 29 m/s
 const TUCK_DRAG_CUT = 0.5; // full tuck halves drag: top speed around 41 m/s
 const TUCK_TURN_CUT = 0.4; // full tuck costs 40% of turn authority
@@ -185,16 +186,20 @@ export function stepSkier(
   // Snowplow scales friction up; tuck cuts drag.
   const [gx, gz] = terrain.gradient(state.x, state.z);
   const slopeAccel = -G * (gx * dirX + gz * dirZ);
+  const muG =
+    (FRICTION +
+      plow * (PLOW_FRICTION - FRICTION) +
+      CRUD_FRICTION * terrain.stickinessAt(state.x, state.z)) *
+    G;
   const friction =
-    (FRICTION + plow * (PLOW_FRICTION - FRICTION)) * G +
-    DRAG * (1 - TUCK_DRAG_CUT * tuck) * (1 - 0.3 * flowBoost) * state.speed * state.speed;
+    muG + DRAG * (1 - TUCK_DRAG_CUT * tuck) * (1 - 0.3 * flowBoost) * state.speed * state.speed;
   state.speed = Math.max(0, state.speed + (slopeAccel - friction) * dt);
 
   // Crawling with the slope not clearly beating friction: pivot toward the
   // fall line so no state is ever a dead end (e.g. stalled facing up a wall).
-  // The margin must exceed static friction or the pivot parks one degree
-  // short of moving and the deadlock survives, just rotated.
-  if (state.speed < 1 && slopeAccel < FRICTION * G + 0.5) {
+  // The margin must exceed the LOCAL static friction (crud included) or the
+  // pivot parks one degree short of moving and the deadlock survives.
+  if (state.speed < 1 && slopeAccel < muG + 0.5) {
     const fallLine = Math.atan2(-gx, gz);
     const diff = Math.atan2(Math.sin(fallLine - state.heading), Math.cos(fallLine - state.heading));
     const step = FALL_LINE_RATE * dt;
