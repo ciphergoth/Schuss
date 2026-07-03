@@ -109,7 +109,8 @@ export function updateSkierView(
   pose.tuck += (tuckTarget - pose.tuck) * k;
   pose.plow += (Math.max(0, input.stance) - pose.plow) * k;
 
-  const phi = NEUTRAL_PHI + 0.75 * pose.tuck + 0.2 * pose.plow;
+  // A held jump charge sinks the skier into a preload crouch.
+  const phi = NEUTRAL_PHI + 0.75 * pose.tuck + 0.2 * pose.plow + 0.55 * (input.charge ?? 0);
   const splay = 0.22 * pose.plow;
   const legDrop = (THIGH + SHIN) * Math.cos(phi);
   pelvis.position.y = ANKLE_Y + legDrop;

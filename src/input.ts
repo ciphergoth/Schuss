@@ -20,12 +20,12 @@ export interface InputSource {
 }
 
 // Mouse: x steers, y sets stance (top = tuck, bottom = snowplow), held button
-// is full snowplow. Touch: first finger does the same, a second finger is full
-// snowplow. Keyboard still works and wins while held. R starts a fresh run.
+// is full snowplow — the mouse owns braking. Touch: first finger works like
+// the mouse position, a second finger is full snowplow. Keyboard steering and
+// stance still work and win while held. R starts a fresh run.
 //
-// Jump: the brake hold (Space / mouse button / second finger) doubles as a
-// charge — release to pop off the snow, bigger with a longer hold. Brake into
-// a lip and release at the crest for big air.
+// Jump is its own control: hold Space to charge (the skier crouches), release
+// to pop — bigger with a longer hold. No stance side effect.
 const MAX_CHARGE_MS = 800;
 
 export function setupInput(onRestart: () => void): InputSource {
@@ -56,13 +56,8 @@ export function setupInput(onRestart: () => void): InputSource {
   });
 
   window.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse') {
-      mouseBrake = true;
-      beginCharge();
-    } else {
-      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (touches.size >= 2) beginCharge();
-    }
+    if (e.pointerType === 'mouse') mouseBrake = true;
+    else touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
   });
   window.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') {
@@ -72,13 +67,8 @@ export function setupInput(onRestart: () => void): InputSource {
     }
   });
   const release = (e: PointerEvent) => {
-    if (e.pointerType === 'mouse') {
-      mouseBrake = false;
-      releaseCharge();
-    } else {
-      touches.delete(e.pointerId);
-      if (touches.size < 2) releaseCharge();
-    }
+    if (e.pointerType === 'mouse') mouseBrake = false;
+    else touches.delete(e.pointerId);
   };
   window.addEventListener('pointerup', release);
   window.addEventListener('pointercancel', release);
@@ -86,8 +76,7 @@ export function setupInput(onRestart: () => void): InputSource {
   const current = (): SkierInput => {
     const key = (...codes: string[]) => codes.some((c) => down.has(c));
     const keySteer = (key('ArrowRight', 'KeyD') ? 1 : 0) - (key('ArrowLeft', 'KeyA') ? 1 : 0);
-    const keyStance =
-      (key('Space', 'ArrowDown', 'KeyS') ? 1 : 0) - (key('ArrowUp', 'KeyW') ? 1 : 0);
+    const keyStance = (key('ArrowDown', 'KeyS') ? 1 : 0) - (key('ArrowUp', 'KeyW') ? 1 : 0);
 
     const firstTouch = touches.values().next();
     const pointer = !firstTouch.done ? firstTouch.value : mouse;
@@ -102,7 +91,9 @@ export function setupInput(onRestart: () => void): InputSource {
           : pointer
             ? pointerAxis(pointer.y, window.innerHeight)
             : 0;
-    return { steer, stance };
+    const charge =
+      chargeStart === null ? 0 : Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS);
+    return { steer, stance, charge };
   };
 
   return {

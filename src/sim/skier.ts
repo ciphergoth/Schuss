@@ -4,6 +4,7 @@ export interface SkierInput {
   steer: number; // -1 (left) .. 1 (right)
   stance: number; // -1 (full tuck) .. 0 (neutral) .. 1 (full snowplow)
   jump?: number; // one-shot: 0..1 charge strength released this step
+  charge?: number; // 0..1 jump charge currently held; render feedback only
 }
 
 export interface SkierState {
