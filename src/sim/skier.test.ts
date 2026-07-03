@@ -279,6 +279,53 @@ describe('skier', () => {
     expect(sim.skier.heading).toBeLessThan(0); // reflected back toward -x
   });
 
+  it('crud slows a fast skier noticeably', () => {
+    const sim = createSim(1);
+    // Find a deep crud patch on the racing floor.
+    let px = 0;
+    let pz = 0;
+    outer: for (let z = -120; z > -1500; z -= 5) {
+      const c = sim.terrain.centerX(z);
+      for (let dx = -8; dx <= 8; dx += 2) {
+        if (sim.terrain.stickinessAt(c + dx, z) > 0.9) {
+          px = c + dx;
+          pz = z;
+          break outer;
+        }
+      }
+    }
+    expect(sim.terrain.stickinessAt(px, pz)).toBeGreaterThan(0.9);
+    teleport(sim, px, pz + 1, 25);
+    stepSim(sim, COAST);
+    const inCrud = sim.skier.speed;
+    const clean = createSim(1);
+    teleport(clean, 0, 800, 25);
+    stepSim(clean, COAST);
+    // One step at the same speed: the crud skier sheds clearly more pace.
+    expect(inCrud).toBeLessThan(clean.skier.speed - 0.04);
+  });
+
+  it('crud never brings you to a permanent halt', () => {
+    const sim = createSim(1);
+    // Same deep-patch hunt, but start at rest in the middle of it.
+    let px = 0;
+    let pz = 0;
+    outer: for (let z = -120; z > -1500; z -= 5) {
+      const c = sim.terrain.centerX(z);
+      for (let dx = -8; dx <= 8; dx += 2) {
+        if (sim.terrain.stickinessAt(c + dx, z) > 0.9) {
+          px = c + dx;
+          pz = z;
+          break outer;
+        }
+      }
+    }
+    teleport(sim, px, pz, 0);
+    run(sim, 6, COAST);
+    // Viscous crud has no static grip: gravity always gets you moving again.
+    expect(sim.skier.speed).toBeGreaterThan(3);
+  });
+
   it('never gets stranded: a stalled skier pivots to the fall line', () => {
     const sim = createSim(1);
     // Parked on the wall facing uphill at zero speed — the old dead end.
