@@ -217,18 +217,19 @@ describe('skier', () => {
     expect(sim.skier.speed).toBeLessThan(39.5);
   });
 
-  it('kickers are the real air: riding one at speed flies far', () => {
+  it('kickers are the real air: steering onto one at speed flies far', () => {
     const sim = createSim(1);
     let index = 3;
     while (!sim.terrain.jumpForChunk(index)) index++;
-    const { zLip } = sim.terrain.jumpForChunk(index)!;
-    const approach = zLip + 22;
-    teleport(sim, sim.terrain.centerX(approach), approach, 18);
+    const { zLip, xOffset } = sim.terrain.jumpForChunk(index)!;
+    const approach = zLip + 12; // on the ramp, lined up with the kicker core
+    teleport(sim, sim.terrain.centerX(zLip) + xOffset, approach, 18);
     let maxAir = 0;
     for (let i = 0; i < Math.round(4 / SIM_DT); i++) {
       stepSim(sim, COAST);
       maxAir = Math.max(maxAir, sim.skier.airTime);
     }
+    expect(sim.skier.tumbling).toBe(0); // didn't just faceplant an obstacle
     expect(maxAir).toBeGreaterThan(0.5); // far beyond any roller hop
   });
 

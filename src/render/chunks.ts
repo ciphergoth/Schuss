@@ -147,12 +147,12 @@ export class ChunkRenderer {
       }
     }
 
-    // Tall striped poles flag each kicker's lip.
+    // Tall striped poles flag the actual edges of each kicker.
     const jump = this.terrain.jumpForChunk(index);
     if (jump) {
       const lipPole = stripedPole(0.2, 2.6, this.red, this.white);
       for (const side of [-1, 1]) {
-        const x = this.terrain.centerX(jump.zLip) + side * (CHANNEL_HALF_WIDTH - 0.5);
+        const x = this.terrain.centerX(jump.zLip) + jump.xOffset + side * (jump.halfWidth + 0.6);
         const marker = new THREE.Mesh(lipPole, this.striped);
         marker.position.set(x, this.terrain.height(x, jump.zLip) + 1.3, jump.zLip);
         marker.castShadow = true;

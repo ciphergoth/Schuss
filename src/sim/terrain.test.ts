@@ -110,18 +110,20 @@ describe('terrain', () => {
     expect(a.jumpForChunk(0)).toBeNull(); // never in the run-in
   });
 
-  it('kicker lips are sheer drops on the floor but fade before the walls', () => {
+  it('kickers are steerable features: sheer at their core, flat floor beside', () => {
     const t = new Terrain(1);
     let index = 3;
     while (!t.jumpForChunk(index)) index++;
-    const { zLip } = t.jumpForChunk(index)!;
-    const c = t.centerX(zLip);
-    const dropAtCenter = t.height(c, zLip + 0.05) - t.height(c, zLip - 0.05);
-    expect(dropAtCenter).toBeGreaterThan(JUMP_LIP_HEIGHT * 0.8);
-    const dropOnWall =
-      t.height(c + CHANNEL_HALF_WIDTH + 3, zLip + 0.05) -
-      t.height(c + CHANNEL_HALF_WIDTH + 3, zLip - 0.05);
-    expect(Math.abs(dropOnWall)).toBeLessThan(0.3);
+    const jump = t.jumpForChunk(index)!;
+    const core = t.centerX(jump.zLip) + jump.xOffset;
+    const dropAtCore = t.height(core, jump.zLip + 0.05) - t.height(core, jump.zLip - 0.05);
+    expect(dropAtCore).toBeGreaterThan(JUMP_LIP_HEIGHT * 0.8);
+    // A couple of meters past the shoulder the floor doesn't notice the jump.
+    const beside = core + jump.halfWidth + 4;
+    const dropBeside = t.height(beside, jump.zLip + 0.05) - t.height(beside, jump.zLip - 0.05);
+    expect(Math.abs(dropBeside)).toBeLessThan(0.3);
+    // And the kicker never crowds the walls.
+    expect(Math.abs(jump.xOffset) + jump.halfWidth).toBeLessThan(CHANNEL_HALF_WIDTH - 1);
   });
 
   it('gradient matches height differences', () => {

@@ -35,12 +35,16 @@ export interface Pickup {
 
 export interface Jump {
   zLip: number; // the edge you fly off; the ramp rises toward it from +z
+  xOffset: number; // kicker center relative to the track centerline
+  halfWidth: number; // lateral half-size of the full-height core
 }
 
-// Kicker geometry: a concave ramp (steepening toward the lip) spanning the
-// channel floor, then a sheer drop. The main mechanism for getting air.
+// Kicker geometry: a concave ramp (steepening toward the lip) then a sheer
+// drop. Kickers are features, not toll booths: each occupies a slice of the
+// floor at a seeded offset, something you steer toward to take the air.
 export const JUMP_RAMP_LENGTH = 14;
 export const JUMP_LIP_HEIGHT = 2.2;
+const JUMP_EDGE = 1.8; // soft shoulder from full height to flat floor
 
 function smoothstep(t: number): number {
   return t * t * (3 - 2 * t);
@@ -93,7 +97,13 @@ export class Terrain {
   jumpForChunk(index: number): Jump | null {
     if (index < 3) return null;
     if (hash2(this.seed, index, 31337) >= 0.25) return null;
-    return { zLip: -index * CHUNK_LENGTH - 24 };
+    const halfWidth = 3.0 + hash2(this.seed, index, 31338) * 1.5;
+    const maxOffset = CHANNEL_HALF_WIDTH - halfWidth - JUMP_EDGE - 0.5;
+    return {
+      zLip: -index * CHUNK_LENGTH - 24,
+      xOffset: (hash2(this.seed, index, 31339) * 2 - 1) * maxOffset,
+      halfWidth,
+    };
   }
 
   private jumpHeight(d: number, z: number): number {
@@ -102,9 +112,11 @@ export class Terrain {
     const u = z - jump.zLip; // distance uphill of the lip
     if (u < 0 || u > JUMP_RAMP_LENGTH) return 0;
     const rise = 1 - u / JUMP_RAMP_LENGTH;
-    // Fade the ramp out before the walls so the banks stay rideable.
-    const fade = Math.min(1, Math.max(0, (CHANNEL_HALF_WIDTH + 2 - Math.abs(d)) / 4));
-    return JUMP_LIP_HEIGHT * rise * rise * smoothstep(fade);
+    // Full height across the kicker's core, soft shoulders down to the floor.
+    const lateral = Math.abs(d - jump.xOffset) - jump.halfWidth;
+    if (lateral >= JUMP_EDGE) return 0;
+    const fade = lateral <= 0 ? 1 : smoothstep(1 - lateral / JUMP_EDGE);
+    return JUMP_LIP_HEIGHT * rise * rise * fade;
   }
 
   height(x: number, z: number): number {
@@ -146,13 +158,25 @@ export class Terrain {
     // Chunks 0 and 1 stay empty so every run starts in the open.
     if (index > 1) {
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 7919) * 2 ** 31));
+      const jump = this.jumpForChunk(index);
       const count = Math.min(3 + Math.floor(index / 4), 7);
       for (let t = 0; t < count; t++) {
         const z = zTop - rng() * CHUNK_LENGTH;
+        const d = (rng() * 2 - 1) * (CHANNEL_HALF_WIDTH - 2.5);
         const radius = 0.45 + rng() * 0.35;
         const kind = rng() < 0.5 ? 'crystal' : 'bollard';
+        // Never on a kicker's footprint: an obstacle hidden on a ramp face
+        // would punish exactly the commitment the jump invites.
+        if (
+          jump &&
+          z > jump.zLip - 3 &&
+          z < jump.zLip + JUMP_RAMP_LENGTH + 3 &&
+          Math.abs(d - jump.xOffset) < jump.halfWidth + 3
+        ) {
+          continue;
+        }
         obstacles.push({
-          x: this.centerX(z) + (rng() * 2 - 1) * (CHANNEL_HALF_WIDTH - 2.5),
+          x: this.centerX(z) + d,
           z,
           radius,
           height: kind === 'crystal' ? radius * 4.6 : 2.4,
