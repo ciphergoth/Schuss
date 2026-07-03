@@ -42,6 +42,17 @@ describe('flow', () => {
     expect(sim.score).toBeGreaterThan(0);
   });
 
+  it('flying off a kicker through the gem arc pays out big', () => {
+    const sim = createSim(1);
+    let index = 3;
+    while (!sim.terrain.jumpForChunk(index)) index++;
+    const { zLip, xOffset } = sim.terrain.jumpForChunk(index)!;
+    teleport(sim, sim.terrain.centerX(zLip) + xOffset, zLip + 12, 20);
+    const events = runCollecting(sim, 3);
+    expect(events.some((e) => e.type === 'pickup' && e.gem)).toBe(true);
+    expect(sim.score).toBeGreaterThanOrEqual(50);
+  });
+
   it('a tumble zeroes flow', () => {
     const sim = createSim(1);
     const obstacle = sim.terrain.obstaclesForChunk(2)[0]!;

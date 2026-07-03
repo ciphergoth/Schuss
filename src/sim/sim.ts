@@ -9,7 +9,7 @@ export const SIM_DT = 1 / 120;
 export type SimEvent =
   | { type: 'nearMiss'; x: number; z: number }
   | { type: 'landing'; airTime: number }
-  | { type: 'pickup'; x: number; z: number }
+  | { type: 'pickup'; x: number; z: number; gem: boolean }
   | { type: 'tumble' };
 
 export interface Sim {
@@ -81,18 +81,19 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     }
   }
 
-  // Pickups: floating discs along the racing line, grabbed on the ground or
-  // in flight (jumping through a line is the stylish way).
+  // Pickups: coins along the racing line, gems floating in kicker flight
+  // arcs. Collection is 3D — gems genuinely require being up there.
   if (s.tumbling === 0) {
     for (const pickup of sim.terrain.pickupsNear(s.z)) {
       if (sim.collected.has(pickup.id)) continue;
       const dx = pickup.x - s.x;
       const dz = pickup.z - s.z;
-      if (dx * dx + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
+      const dy = pickup.y - (s.y + 1.0); // roughly chest height
+      if (dx * dx + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS && Math.abs(dy) < 1.5) {
         sim.collected.add(pickup.id);
-        sim.score += 10;
-        sim.flow = Math.min(1, sim.flow + 0.04);
-        events.push({ type: 'pickup', x: pickup.x, z: pickup.z });
+        sim.score += pickup.gem ? 50 : 10;
+        sim.flow = Math.min(1, sim.flow + (pickup.gem ? 0.15 : 0.04));
+        events.push({ type: 'pickup', x: pickup.x, z: pickup.z, gem: pickup.gem });
       }
     }
   }

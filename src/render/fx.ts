@@ -168,6 +168,7 @@ export class Effects {
   private white = new THREE.Color(0xffffff);
   private powder = new THREE.Color(0xe8f1fb);
   private gold = new THREE.Color(0xffd34d);
+  private cyan = new THREE.Color(0x5df2ff);
 
   constructor(scene: THREE.Scene) {
     this.particles = new Particles(scene);
@@ -220,10 +221,10 @@ export class Effects {
       } else if (e.type === 'pickup') {
         this.particles.spawn(
           new THREE.Vector3(e.x, s.y + 1.1, e.z),
-          new THREE.Vector3(0, 2.5, 0),
-          2.5,
-          12,
-          this.gold
+          new THREE.Vector3(0, e.gem ? 4 : 2.5, 0),
+          e.gem ? 4 : 2.5,
+          e.gem ? 40 : 12,
+          e.gem ? this.cyan : this.gold
         );
       } else {
         // Near-miss: a puff plucked off the obstacle you grazed.

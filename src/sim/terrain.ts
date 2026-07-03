@@ -6,7 +6,10 @@ import { hash2, mulberry32 } from './rng';
 // steepen into containment further out. Chunk i covers
 // z in [-(i+1) * CHUNK_LENGTH, -i * CHUNK_LENGTH).
 export const CHUNK_LENGTH = 40;
-export const CHANNEL_HALF_WIDTH = 14; // half-width of the skiable floor
+// The floor breathes: tight canyons open into wide playgrounds.
+export const BASE_HALF_WIDTH = 15;
+export const WIDTH_SWING = 5; // half-width ranges BASE +- SWING (10..20)
+export const MAX_HALF_WIDTH = BASE_HALF_WIDTH + WIDTH_SWING;
 export const WALL_WIDTH = 10; // rideable bank beyond the floor edge
 
 export const GRADE = 0.35; // average drop per meter of z
@@ -31,6 +34,8 @@ export interface Pickup {
   id: string;
   x: number;
   z: number;
+  y: number; // absolute height; gems float in flight arcs, coins hug the floor
+  gem: boolean; // gems are the airborne reward: worth more, need a jump
 }
 
 export interface Jump {
@@ -85,6 +90,11 @@ export class Terrain {
     return smoothstep(t) * (this.noise1(z / CURVE_WAVELENGTH, 1) - 0.5) * 2 * CURVE_AMP;
   }
 
+  // How wide the skiable floor is at this z.
+  channelHalfWidth(z: number): number {
+    return BASE_HALF_WIDTH + (this.noise1(z / 140, 4) - 0.5) * 2 * WIDTH_SWING;
+  }
+
   // Height of the track's spine: mean grade plus big rollers. Sharp enough
   // (amplitude vs wavelength) that crests genuinely launch a fast skier —
   // these are the track's built-in kickers.
@@ -97,10 +107,11 @@ export class Terrain {
   jumpForChunk(index: number): Jump | null {
     if (index < 3) return null;
     if (hash2(this.seed, index, 31337) >= 0.25) return null;
+    const zLip = -index * CHUNK_LENGTH - 24;
     const halfWidth = 3.0 + hash2(this.seed, index, 31338) * 1.5;
-    const maxOffset = CHANNEL_HALF_WIDTH - halfWidth - JUMP_EDGE - 0.5;
+    const maxOffset = Math.max(0, this.channelHalfWidth(zLip) - halfWidth - JUMP_EDGE - 0.5);
     return {
-      zLip: -index * CHUNK_LENGTH - 24,
+      zLip,
       xOffset: (hash2(this.seed, index, 31339) * 2 - 1) * maxOffset,
       halfWidth,
     };
@@ -127,7 +138,7 @@ export class Terrain {
     // you without any artificial clamp.
     let y = this.baseY(z) + (this.noise2(x / 9, z / 9, 3) - 0.5) * 2 * 0.12;
     y += this.jumpHeight(d, z);
-    const over = a - CHANNEL_HALF_WIDTH;
+    const over = a - this.channelHalfWidth(z);
     if (over > 0) {
       y += 0.09 * over * over * (1 + Math.max(0, over - WALL_WIDTH) * 0.3);
     }
@@ -159,10 +170,12 @@ export class Terrain {
     if (index > 1) {
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 7919) * 2 ** 31));
       const jump = this.jumpForChunk(index);
-      const count = Math.min(3 + Math.floor(index / 4), 7);
+      // Wide stretches turn into obstacle slaloms; tight ones stay clean.
+      const wide = this.channelHalfWidth(zTop - CHUNK_LENGTH / 2) > BASE_HALF_WIDTH + 2;
+      const count = Math.min(3 + Math.floor(index / 4), 7) + (wide ? 2 : 0);
       for (let t = 0; t < count; t++) {
         const z = zTop - rng() * CHUNK_LENGTH;
-        const d = (rng() * 2 - 1) * (CHANNEL_HALF_WIDTH - 2.5);
+        const d = (rng() * 2 - 1) * (this.channelHalfWidth(z) - 2.5);
         const radius = 0.45 + rng() * 0.35;
         const kind = rng() < 0.5 ? 'crystal' : 'bollard';
         // Never on a kicker's footprint: an obstacle hidden on a ramp face
@@ -198,7 +211,8 @@ export class Terrain {
     return obstacles;
   }
 
-  // A line of floating score discs sweeping across the racing line.
+  // Coins sweep across the racing line; gems hang in the flight arc past
+  // each kicker lip — jump as you come off and thread them for the reward.
   pickupsForChunk(index: number): Pickup[] {
     const cached = this.chunkPickups.get(index);
     if (cached) return cached;
@@ -206,16 +220,37 @@ export class Terrain {
     const pickups: Pickup[] = [];
     if (index > 0) {
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 104729) * 2 ** 31));
-      const from = (rng() * 2 - 1) * (CHANNEL_HALF_WIDTH - 4);
-      const to = (rng() * 2 - 1) * (CHANNEL_HALF_WIDTH - 4);
+      const zMid = -index * CHUNK_LENGTH - CHUNK_LENGTH / 2;
+      const sweep = this.channelHalfWidth(zMid) - 4; // wide zones = wide weaves
+      const from = (rng() * 2 - 1) * sweep;
+      const to = (rng() * 2 - 1) * sweep;
       const count = 7;
       for (let k = 0; k < count; k++) {
         const t = k / (count - 1);
         const z = -index * CHUNK_LENGTH - 4 - t * (CHUNK_LENGTH - 8);
-        pickups.push({
-          id: `${index}:${k}`,
-          x: this.centerX(z) + from + (to - from) * smoothstep(t),
-          z,
+        const x = this.centerX(z) + from + (to - from) * smoothstep(t);
+        pickups.push({ id: `${index}:${k}`, x, z, y: this.height(x, z) + 1.1, gem: false });
+      }
+
+      const jump = this.jumpForChunk(index);
+      if (jump) {
+        const core = this.centerX(jump.zLip) + jump.xOffset;
+        const yLip = this.height(core, jump.zLip + 0.05);
+        // Along the ballistic corridor off the lip: reachable at cruise
+        // speed, above anything a grounded skier can touch.
+        const arc: [number, number][] = [
+          [3, 0.2],
+          [6, -0.1],
+          [9, -0.6],
+        ];
+        arc.forEach(([dz, dy], k) => {
+          pickups.push({
+            id: `${index}:g${k}`,
+            x: core,
+            z: jump.zLip - dz,
+            y: yLip + dy,
+            gem: true,
+          });
         });
       }
     }

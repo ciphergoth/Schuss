@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CHANNEL_HALF_WIDTH,
+  BASE_HALF_WIDTH,
   CHUNK_LENGTH,
   GRADE,
   JUMP_LIP_HEIGHT,
   Terrain,
   WALL_WIDTH,
+  WIDTH_SWING,
 } from './terrain';
 
 describe('terrain', () => {
@@ -47,8 +48,8 @@ describe('terrain', () => {
     for (const z of [-100, -500, -1234]) {
       const c = t.centerX(z);
       const floor = t.height(c, z);
-      const lip = t.height(c + CHANNEL_HALF_WIDTH + WALL_WIDTH, z);
-      const beyond = t.height(c + CHANNEL_HALF_WIDTH + WALL_WIDTH + 6, z);
+      const lip = t.height(c + t.channelHalfWidth(z) + WALL_WIDTH, z);
+      const beyond = t.height(c + t.channelHalfWidth(z) + WALL_WIDTH + 6, z);
       expect(lip - floor).toBeGreaterThan(5); // rideable bank, real height
       expect(beyond - lip).toBeGreaterThan(6); // and it keeps getting worse
     }
@@ -70,7 +71,7 @@ describe('terrain', () => {
       const obstacles = t.obstaclesForChunk(index);
       expect(obstacles.length).toBeGreaterThan(0);
       for (const o of obstacles) {
-        expect(Math.abs(o.x - t.centerX(o.z))).toBeLessThan(CHANNEL_HALF_WIDTH - 1);
+        expect(Math.abs(o.x - t.centerX(o.z))).toBeLessThan(t.channelHalfWidth(o.z) - 1);
         expect(o.z).toBeLessThanOrEqual(-index * CHUNK_LENGTH);
         expect(o.z).toBeGreaterThan(-(index + 1) * CHUNK_LENGTH);
       }
@@ -92,7 +93,7 @@ describe('terrain', () => {
       const pickups = t.pickupsForChunk(index);
       expect(pickups.length).toBeGreaterThan(4);
       for (const p of pickups) {
-        expect(Math.abs(p.x - t.centerX(p.z))).toBeLessThan(CHANNEL_HALF_WIDTH);
+        expect(Math.abs(p.x - t.centerX(p.z))).toBeLessThan(t.channelHalfWidth(p.z) + 1);
       }
     }
     expect(t.pickupsForChunk(0)).toEqual([]);
@@ -123,7 +124,34 @@ describe('terrain', () => {
     const dropBeside = t.height(beside, jump.zLip + 0.05) - t.height(beside, jump.zLip - 0.05);
     expect(Math.abs(dropBeside)).toBeLessThan(0.3);
     // And the kicker never crowds the walls.
-    expect(Math.abs(jump.xOffset) + jump.halfWidth).toBeLessThan(CHANNEL_HALF_WIDTH - 1);
+    expect(Math.abs(jump.xOffset) + jump.halfWidth).toBeLessThan(t.channelHalfWidth(jump.zLip) - 1);
+  });
+
+  it('the channel width breathes between tight and wide', () => {
+    const t = new Terrain(1);
+    let min = Infinity;
+    let max = -Infinity;
+    for (let z = -50; z > -3000; z -= 25) {
+      const w = t.channelHalfWidth(z);
+      min = Math.min(min, w);
+      max = Math.max(max, w);
+      expect(w).toBeGreaterThanOrEqual(BASE_HALF_WIDTH - WIDTH_SWING);
+      expect(w).toBeLessThanOrEqual(BASE_HALF_WIDTH + WIDTH_SWING);
+    }
+    expect(max - min).toBeGreaterThan(5); // real variety, not a constant
+  });
+
+  it('gems hang in the flight arc past kicker lips, above grounded reach', () => {
+    const t = new Terrain(1);
+    let index = 3;
+    while (!t.jumpForChunk(index)) index++;
+    const gems = t.pickupsForChunk(index).filter((p) => p.gem);
+    expect(gems.length).toBe(3);
+    for (const g of gems) {
+      expect(g.z).toBeLessThan(t.jumpForChunk(index)!.zLip);
+      // Well above the post-lip floor: you need to be flying.
+      expect(g.y - t.height(g.x, g.z)).toBeGreaterThan(1.6);
+    }
   });
 
   it('gradient matches height differences', () => {

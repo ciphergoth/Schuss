@@ -156,15 +156,22 @@ export class GameAudio {
     src.stop(t + 0.2);
   }
 
-  // Pickup: a bright two-note ding.
-  playDing(): void {
+  // Pickup: a bright two-note ding; gems get a triumphant third note.
+  playDing(gem = false): void {
     if (!this.nodes) return;
     const { ctx, master } = this.nodes;
     const t = ctx.currentTime;
-    for (const [offset, freq] of [
-      [0, 880],
-      [0.07, 1318],
-    ] as const) {
+    const notes: readonly (readonly [number, number])[] = gem
+      ? [
+          [0, 880],
+          [0.07, 1318],
+          [0.14, 1760],
+        ]
+      : [
+          [0, 880],
+          [0.07, 1318],
+        ];
+    for (const [offset, freq] of notes) {
       const osc = ctx.createOscillator();
       osc.type = 'triangle';
       osc.frequency.value = freq;

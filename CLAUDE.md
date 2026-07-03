@@ -13,8 +13,13 @@ visuals up: rainbow trail, spray, FOV kick. Reward loop over penalty loop.
 
 Terrain is a pure height function: a curving centerline (straight near the
 start and uphill of it, for gentle run-ins and predictable physics tests)
-plus a U-channel cross-section. The render layer draws it as a ribbon
-following the centerline, so beyond the walls there's only sky.
+plus a U-channel cross-section whose width breathes (10-20m half-width; wide
+zones get obstacle slaloms and wider pickup weaves). Kickers are steerable
+features with cyan gem arcs floating in their flight paths — jump off the
+lip to collect (50 pts + flow surge vs 10 for floor coins). The render layer
+draws the course as a ribbon clipped just past the bounce barrier, so the
+walls stay low and the world beyond shows: neon edge poles, a city skyline
+with beacon-topped towers, hot-air balloons, clouds below.
 
 ## Tech stack
 

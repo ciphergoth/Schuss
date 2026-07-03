@@ -1,4 +1,4 @@
-import { CHANNEL_HALF_WIDTH, Terrain, WALL_WIDTH } from './terrain';
+import { Terrain, WALL_WIDTH } from './terrain';
 
 export interface SkierInput {
   steer: number; // -1 (left) .. 1 (right)
@@ -43,7 +43,8 @@ const JUMP_POP_MAX = 3.8;
 // Invisible outer barrier where the bank steepens past ~55 degrees: hitting
 // it caroms you back into the course (grounded or flying). Banks up to there
 // are rideable; the near-vertical zone beyond is a wall, not a vert ramp.
-const BOUNCE_LIMIT = CHANNEL_HALF_WIDTH + WALL_WIDTH - 2;
+// Offset from the (variable) floor edge, so it breathes with the course.
+const BOUNCE_MARGIN = WALL_WIDTH - 2;
 const BOUNCE_DAMP = 0.7;
 // A skier crawling uphill-facing pivots toward the fall line instead of
 // being stranded at zero speed forever.
@@ -86,9 +87,10 @@ function collideObstacles(state: SkierState, terrain: Terrain): void {
 // to the limit and reflect the heading across the local track direction.
 function bounceOffBounds(state: SkierState, terrain: Terrain): void {
   const center = terrain.centerX(state.z);
+  const limit = terrain.channelHalfWidth(state.z) + BOUNCE_MARGIN;
   const d = state.x - center;
-  if (Math.abs(d) <= BOUNCE_LIMIT) return;
-  state.x = center + Math.sign(d) * BOUNCE_LIMIT;
+  if (Math.abs(d) <= limit) return;
+  state.x = center + Math.sign(d) * limit;
   const trackHeading = Math.atan2(terrain.centerX(state.z - 1) - terrain.centerX(state.z + 1), 2);
   const diff = state.heading - trackHeading;
   state.heading = trackHeading - Math.atan2(Math.sin(diff), Math.cos(diff));

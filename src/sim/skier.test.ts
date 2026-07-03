@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SIM_DT, Sim, createSim, distanceSkied, stepSim } from './sim';
 import { SkierInput, stepSkier } from './skier';
-import { CHANNEL_HALF_WIDTH, WALL_WIDTH } from './terrain';
+import { WALL_WIDTH } from './terrain';
 
 const COAST: SkierInput = { steer: 0, stance: 0 };
 
@@ -270,7 +270,7 @@ describe('skier', () => {
     teleport(sim, 0, 800, 32);
     sim.skier.heading = Math.PI / 2; // aimed square at the wall
     run(sim, 1.5, COAST); // long enough for one bounce, not a return trip
-    const limit = CHANNEL_HALF_WIDTH + WALL_WIDTH - 2;
+    const limit = sim.terrain.channelHalfWidth(sim.skier.z) + WALL_WIDTH - 2;
     expect(Math.abs(sim.skier.x)).toBeLessThanOrEqual(limit + 0.01);
     expect(sim.skier.heading).toBeLessThan(0); // reflected back toward -x
   });
@@ -278,7 +278,7 @@ describe('skier', () => {
   it('never gets stranded: a stalled skier pivots to the fall line', () => {
     const sim = createSim(1);
     // Parked on the wall facing uphill at zero speed — the old dead end.
-    teleport(sim, CHANNEL_HALF_WIDTH + 6, 780, 0);
+    teleport(sim, sim.terrain.channelHalfWidth(780) + 6, 780, 0);
     sim.skier.heading = Math.PI;
     run(sim, 5, COAST);
     expect(sim.skier.speed).toBeGreaterThan(1);
