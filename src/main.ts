@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { SIM_DT, Sim, createSim, distanceSkied, stepSim } from './sim/sim';
+import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
 import { SkierInput } from './sim/skier';
 import { setupInput } from './input';
 import { createScene } from './render/scene';
 import { ChunkRenderer } from './render/chunks';
 import { createSkierView, updateSkierView } from './render/skierView';
 import { createCamera, updateCamera } from './render/camera';
+import { Effects } from './render/fx';
 import { GameAudio } from './audio/engine';
 
 declare global {
@@ -14,7 +15,8 @@ declare global {
       readonly sim: Sim;
       readonly input: SkierInput; // as of the last rendered frame
       poll: () => SkierInput; // current input state, independent of the frame loop
-      renderFrame?: (delta: number) => void; // force one frame, even while rAF is paused
+      renderFrame?: (delta: number, events?: SimEvent[]) => void; // force one frame while rAF is paused
+      step?: (seconds: number) => void; // advance sim + render while rAF is paused
       readonly audio: GameAudio;
     };
   }
@@ -33,6 +35,7 @@ document.body.appendChild(renderer.domElement);
 const { scene, sun } = createScene();
 const camera = createCamera();
 const skierView = createSkierView(scene);
+const fx = new Effects(scene);
 const stats = document.getElementById('stats')!;
 const flowFill = document.getElementById('flowfill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
@@ -69,12 +72,17 @@ window.addEventListener('resize', () => {
 const clock = new THREE.Clock();
 let accumulator = 0;
 
-function renderFrame(delta: number): void {
+function renderFrame(delta: number, events: SimEvent[] = []): void {
   lastInput = getInput();
   const skier = sim.skier;
   chunkRenderer.update(sim.terrain.chunkIndexAt(skier.z));
   updateSkierView(skierView, skier, lastInput, delta);
-  updateCamera(camera, skier, sim.terrain, delta);
+  updateCamera(camera, skier, sim.terrain, delta, sim.flow);
+  fx.update(sim, lastInput, delta, events);
+  for (const e of events) {
+    if (e.type === 'nearMiss') audio.playWhoosh();
+    else if (e.type === 'landing') audio.playThump(e.airTime);
+  }
 
   // Keep the sun's shadow box centered on the skier.
   sun.position.set(skier.x + 40, skier.y + 24, skier.z - 12);
@@ -91,15 +99,21 @@ function renderFrame(delta: number): void {
 }
 
 window.__game.renderFrame = renderFrame;
+window.__game.step = (seconds: number) => {
+  for (let s = 0; s < seconds; s += SIM_DT) {
+    renderFrame(SIM_DT, stepSim(sim, getInput()));
+  }
+};
 
 function frame(): void {
   const delta = Math.min(clock.getDelta(), 0.25);
   accumulator += delta;
+  const events: SimEvent[] = [];
   while (accumulator >= SIM_DT) {
-    stepSim(sim, getInput());
+    events.push(...stepSim(sim, getInput()));
     accumulator -= SIM_DT;
   }
-  renderFrame(delta);
+  renderFrame(delta, events);
   requestAnimationFrame(frame);
 }
 

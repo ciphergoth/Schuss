@@ -118,6 +118,44 @@ export class GameAudio {
     thud.stop(t + 0.35);
   }
 
+  // Near-miss: a rising whoosh as the tree whips past.
+  playWhoosh(): void {
+    if (!this.nodes) return;
+    const { ctx, master, noise } = this.nodes;
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = noise;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = 2;
+    filter.frequency.setValueAtTime(600, t);
+    filter.frequency.exponentialRampToValueAtTime(2800, t + 0.22);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    src.connect(filter).connect(gain).connect(master);
+    src.start(t);
+    src.stop(t + 0.3);
+  }
+
+  // Landing after air time: a soft powder thump, bigger air = bigger thump.
+  playThump(airTime: number): void {
+    if (!this.nodes) return;
+    const { ctx, master, noise } = this.nodes;
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = noise;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 400;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(Math.min(0.5, 0.15 + airTime * 0.25), t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    src.connect(filter).connect(gain).connect(master);
+    src.start(t);
+    src.stop(t + 0.2);
+  }
+
   toggleMute(): void {
     if (!this.nodes) return;
     this.muted = !this.muted;

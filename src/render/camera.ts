@@ -10,13 +10,18 @@ export function createCamera(): THREE.PerspectiveCamera {
 
 // Third-person follow: sit behind the skier's heading, stay above the terrain,
 // and smooth all motion with an exponential lerp so camera speed is
-// frame-rate independent.
+// frame-rate independent. FOV widens with speed and flow for drama.
 export function updateCamera(
   camera: THREE.PerspectiveCamera,
   state: SkierState,
   terrain: Terrain,
-  dt: number
+  dt: number,
+  flow: number
 ): void {
+  const speedNorm = Math.min(state.speed / 40, 1);
+  const fovTarget = 70 + 16 * speedNorm * speedNorm + 6 * flow;
+  camera.fov += (fovTarget - camera.fov) * (1 - Math.exp(-5 * dt));
+  camera.updateProjectionMatrix();
   const dirX = Math.sin(state.heading);
   const dirZ = -Math.cos(state.heading);
   const skierY = state.y;

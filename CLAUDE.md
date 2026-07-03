@@ -1,7 +1,12 @@
 # Ski game
 
 A 3D browser-based skiing game: endless procedurally generated slope, steer
-around trees, distance is the score. Static site, no server.
+around trees, launch off rollers, build flow. Static site, no server.
+
+Design direction (SSX Tricky spirit): punishment is light — tree hits cost a
+1.3s tumble and most of your speed, never the run. Skiing well (near-misses,
+air time, hard carving) builds a flow meter that cuts drag and turns the
+visuals up: rainbow trail, spray, FOV kick. Reward loop over penalty loop.
 
 ## Tech stack
 
@@ -24,13 +29,15 @@ src/
 ├── sim/               - Pure simulation, fully deterministic
 │   ├── rng.ts         - Seeded hash / PRNG
 │   ├── terrain.ts     - Heightfield + per-chunk tree placement
-│   ├── skier.ts       - Kinematic skier physics, tree collision
-│   └── sim.ts         - World state, fixed SIM_DT stepping
+│   ├── skier.ts       - Kinematic skier physics: carving, air, tumbles
+│   └── sim.ts         - World state, fixed SIM_DT stepping, flow/score,
+│                        SimEvents (nearMiss/landing/tumble) for fx + audio
 ├── render/            - Three.js only
 │   ├── scene.ts       - Lights, sky, fog, shadow-casting sun
 │   ├── chunks.ts      - Ground/tree meshes, created and disposed as you ski
 │   ├── skierView.ts   - Articulated skier model (posable legs/torso)
-│   └── camera.ts      - Third-person follow camera
+│   ├── fx.ts          - Particles (spray/bursts) and the flow trail ribbon
+│   └── camera.ts      - Third-person follow camera, speed/flow FOV kick
 └── audio/             - Web Audio only, fully synthesized (no audio assets)
     ├── params.ts      - Pure state -> synth parameter curves (unit tested)
     └── engine.ts      - Noise/filter graph: wind, edge scrape, crash
@@ -43,7 +50,10 @@ the sim only advances in `SIM_DT` steps. Same seed + same inputs = same run.
 Tests rely on this — keep `Date.now()`, `Math.random()`, and rendering state
 out of `src/sim/`.
 
-Debugging: `window.__game.sim` exposes live sim state in the browser console.
+Debugging: `window.__game` exposes live sim state plus `poll()` (current
+input), `renderFrame(dt)` (force a render while rAF is paused, e.g. hidden
+tab), and `step(seconds)` (advance sim + render while paused). After mutating
+state for verification, restart with R before handing the game back.
 
 ## Running
 
