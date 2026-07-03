@@ -243,12 +243,34 @@ describe('skier', () => {
     expect(sim.skier.airTime).toBeGreaterThan(0.2); // real hangtime, still up
   });
 
+  it('leaving the ground never adds energy: wall rides cannot moon-shot', () => {
+    const sim = createSim(1);
+    teleport(sim, 0, 800, 36);
+    sim.skier.heading = 0.9; // fast, angled hard into the wall
+    let maxAboveGround = 0;
+    let flightHead = -Infinity; // total mechanical energy head at launch
+    for (let i = 0; i < Math.round(6 / SIM_DT); i++) {
+      const wasAirborne = sim.skier.airTime > 0;
+      stepSim(sim, COAST);
+      const s = sim.skier;
+      if (s.airTime > 0) {
+        // Energy head: height plus what the current velocity could climb.
+        const head = s.y + (s.speed * s.speed + s.vy * s.vy) / (2 * 9.81);
+        if (!wasAirborne) flightHead = head;
+        expect(head).toBeLessThanOrEqual(flightHead + 0.01); // no minting mid-flight
+        maxAboveGround = Math.max(maxAboveGround, s.y - sim.terrain.height(s.x, s.z));
+      }
+    }
+    // Popping off a bank is allowed; surveying the course from the sky isn't.
+    expect(maxAboveGround).toBeLessThan(15);
+  });
+
   it('bounces off the outer barrier instead of escaping the course', () => {
     const sim = createSim(1);
     teleport(sim, 0, 800, 32);
     sim.skier.heading = Math.PI / 2; // aimed square at the wall
-    run(sim, 4, COAST);
-    const limit = CHANNEL_HALF_WIDTH + WALL_WIDTH + 2;
+    run(sim, 1.5, COAST); // long enough for one bounce, not a return trip
+    const limit = CHANNEL_HALF_WIDTH + WALL_WIDTH - 2;
     expect(Math.abs(sim.skier.x)).toBeLessThanOrEqual(limit + 0.01);
     expect(sim.skier.heading).toBeLessThan(0); // reflected back toward -x
   });

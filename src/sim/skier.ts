@@ -31,15 +31,19 @@ export const SKIER_RADIUS = 0.4;
 // ballistic path by this much extra downward acceleration (m/s^2, on top of
 // gravity) before ground contact breaks. Compared per-step, scaled by dt.
 const LAUNCH_EXTRA_ACCEL = 6;
+// Steepest launch the track's built features can produce (kicker lips are
+// ~0.31). Terrain steeper than this sheds the skier instead of ramping them:
+// banks are walls, not vert ramps.
+const LAUNCH_MAX_VY_RATIO = 0.35;
 // Jump: a released charge pops the skier off the snow. Deliberately modest —
 // a hop for line adjustments and a little extra off a lip; real air comes
 // from the terrain (and, later, purpose-built ski jumps).
 const JUMP_POP_MIN = 1.8;
 const JUMP_POP_MAX = 3.8;
-// Invisible outer barrier just past the rideable wall: hitting it caroms you
-// back into the course (grounded or flying) instead of onto the endless
-// mathematical super-wall outside the ribbon.
-const BOUNCE_LIMIT = CHANNEL_HALF_WIDTH + WALL_WIDTH + 2;
+// Invisible outer barrier where the bank steepens past ~55 degrees: hitting
+// it caroms you back into the course (grounded or flying). Banks up to there
+// are rideable; the near-vertical zone beyond is a wall, not a vert ramp.
+const BOUNCE_LIMIT = CHANNEL_HALF_WIDTH + WALL_WIDTH - 2;
 const BOUNCE_DAMP = 0.7;
 // A skier crawling uphill-facing pivots toward the fall line instead of
 // being stranded at zero speed forever.
@@ -89,6 +93,9 @@ function bounceOffBounds(state: SkierState, terrain: Terrain): void {
   const diff = state.heading - trackHeading;
   state.heading = trackHeading - Math.atan2(Math.sin(diff), Math.cos(diff));
   state.speed *= BOUNCE_DAMP;
+  // The wall absorbs upward momentum: a carom must not convert a climb into
+  // flight (this was the moon-shot: climb vy + reflected heading = launch).
+  state.vy = Math.min(state.vy, 0);
 }
 
 export function stepSkier(
@@ -204,7 +211,20 @@ export function stepSkier(
   const followVy = (ground - state.y) / dt;
   const ballisticVy = state.vy - G * dt;
   if (followVy < ballisticVy - LAUNCH_EXTRA_ACCEL * dt) {
-    state.vy = ballisticVy;
+    // The glued vy is a kinematic constraint, not paid-for momentum: riding
+    // up a steep bank it can dwarf anything the skier's kinetic energy could
+    // produce, and inheriting it raw launched skiers 100m over the course.
+    // Leaving the ground repartitions velocity, never adds it: the upward
+    // component is limited to the steepest built feature's envelope, and the
+    // total magnitude is capped at the pre-launch speed.
+    const vyLaunch = Math.min(ballisticVy, state.speed * LAUNCH_MAX_VY_RATIO);
+    if (vyLaunch > 0) {
+      const scale = state.speed / Math.hypot(state.speed, vyLaunch);
+      state.speed *= scale;
+      state.vy = vyLaunch * scale;
+    } else {
+      state.vy = ballisticVy;
+    }
     state.y += state.vy * dt;
     state.airTime = dt;
     return;
