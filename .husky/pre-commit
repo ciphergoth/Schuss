@@ -1,8 +1,10 @@
 #!/usr/bin/env sh
 
-# Source devenv if available (provides pnpm)
-if [ -f .devenv/profile ]; then
-  . .devenv/profile
+# Use the project's devenv toolchain (node, pnpm) regardless of whether the
+# committing shell went through direnv. .devenv/profile is a nix profile
+# directory, so its bin/ goes on PATH.
+if [ -d .devenv/profile/bin ]; then
+  PATH="$PWD/.devenv/profile/bin:$PATH"
 fi
 
 pnpm exec lint-staged
