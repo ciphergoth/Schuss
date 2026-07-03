@@ -29,6 +29,6 @@ export function updateCamera(
   const target = new THREE.Vector3(state.x - dirX * 9, 0, state.z - dirZ * 9);
   target.y = Math.max(terrain.height(target.x, target.z) + 2.5, skierY + 4);
 
-  camera.position.lerp(target, 1 - Math.exp(-4 * dt));
+  camera.position.lerp(target, 1 - Math.exp(-6 * dt));
   camera.lookAt(state.x + dirX * 4, skierY + 1.2, state.z + dirZ * 4);
 }

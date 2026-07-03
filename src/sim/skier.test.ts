@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SIM_DT, Sim, createSim, distanceSkied, stepSim } from './sim';
 import { SkierInput, stepSkier } from './skier';
+import { CHANNEL_HALF_WIDTH, WALL_WIDTH } from './terrain';
 
 const COAST: SkierInput = { steer: 0, stance: 0 };
 
@@ -136,6 +137,35 @@ describe('skier', () => {
     run(sim, 2, COAST); // still slow after 2s
     const { skier } = sim;
     expect(skier.y).toBeCloseTo(sim.terrain.height(skier.x, skier.z), 6);
+  });
+
+  it('a released jump charge pops the skier airborne', () => {
+    const sim = createSim(1);
+    teleport(sim, 0, 800, 15);
+    stepSim(sim, { steer: 0, stance: 0, jump: 1 });
+    expect(sim.skier.airTime).toBeGreaterThan(0);
+    expect(sim.skier.vy).toBeGreaterThan(3);
+    run(sim, 0.3, COAST);
+    expect(sim.skier.airTime).toBeGreaterThan(0.2); // real hangtime, still up
+  });
+
+  it('bounces off the outer barrier instead of escaping the course', () => {
+    const sim = createSim(1);
+    teleport(sim, 0, 800, 32);
+    sim.skier.heading = Math.PI / 2; // aimed square at the wall
+    run(sim, 4, COAST);
+    const limit = CHANNEL_HALF_WIDTH + WALL_WIDTH + 2;
+    expect(Math.abs(sim.skier.x)).toBeLessThanOrEqual(limit + 0.01);
+    expect(sim.skier.heading).toBeLessThan(0); // reflected back toward -x
+  });
+
+  it('never gets stranded: a stalled skier pivots to the fall line', () => {
+    const sim = createSim(1);
+    // Parked on the wall facing uphill at zero speed — the old dead end.
+    teleport(sim, CHANNEL_HALF_WIDTH + 6, 780, 0);
+    sim.skier.heading = Math.PI;
+    run(sim, 5, COAST);
+    expect(sim.skier.speed).toBeGreaterThan(1);
   });
 
   it('tumbles on an obstacle hit, loses most speed, then recovers', () => {

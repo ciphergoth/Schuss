@@ -43,7 +43,7 @@ const overlay = document.getElementById('overlay')!;
 let sim = createSim(seed);
 let lastInput: SkierInput = { steer: 0, stance: 0 };
 const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
-const getInput = setupInput(() => {
+const input = setupInput(() => {
   sim = createSim(seed);
 });
 
@@ -56,7 +56,7 @@ window.__game = {
   get input() {
     return lastInput;
   },
-  poll: () => getInput(),
+  poll: () => input.peek(),
   audio,
 };
 
@@ -73,7 +73,7 @@ const clock = new THREE.Clock();
 let accumulator = 0;
 
 function renderFrame(delta: number, events: SimEvent[] = []): void {
-  lastInput = getInput();
+  lastInput = input.peek();
   const skier = sim.skier;
   chunkRenderer.update(sim.terrain.chunkIndexAt(skier.z), sim.collected, sim.time);
   updateSkierView(skierView, skier, lastInput, delta);
@@ -102,7 +102,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
 window.__game.renderFrame = renderFrame;
 window.__game.step = (seconds: number) => {
   for (let s = 0; s < seconds; s += SIM_DT) {
-    renderFrame(SIM_DT, stepSim(sim, getInput()));
+    renderFrame(SIM_DT, stepSim(sim, input.read()));
   }
 };
 
@@ -111,7 +111,7 @@ function frame(): void {
   accumulator += delta;
   const events: SimEvent[] = [];
   while (accumulator >= SIM_DT) {
-    events.push(...stepSim(sim, getInput()));
+    events.push(...stepSim(sim, input.read()));
     accumulator -= SIM_DT;
   }
   renderFrame(delta, events);

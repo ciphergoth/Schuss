@@ -91,5 +91,7 @@ friction braking).
 - Touch: first finger works like the mouse position, second finger = full
   snowplow
 - Keyboard fallback: arrows or A/D steer; up/W tucks, Space/S/down snowplows
-- R, click, or tap to restart after a wipeout
+- Jump: the brake hold (Space / mouse button / second finger) charges; release
+  pops you off the snow, bigger with a longer hold (up to 0.8s)
+- R starts a fresh run
 - M toggles sound (sound starts on the first input, per browser autoplay rules)

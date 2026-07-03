@@ -14,24 +14,55 @@ export function pointerAxis(clientPos: number, viewportExtent: number): number {
   return Math.sign(raw) * Math.min((magnitude - DEAD_ZONE) / (1 - DEAD_ZONE), 1);
 }
 
+export interface InputSource {
+  read: () => SkierInput; // consumes one-shot events (jump); sim stepping only
+  peek: () => SkierInput; // current state, safe to call from anywhere
+}
+
 // Mouse: x steers, y sets stance (top = tuck, bottom = snowplow), held button
 // is full snowplow. Touch: first finger does the same, a second finger is full
 // snowplow. Keyboard still works and wins while held. R starts a fresh run.
-export function setupInput(onRestart: () => void): () => SkierInput {
+//
+// Jump: the brake hold (Space / mouse button / second finger) doubles as a
+// charge — release to pop off the snow, bigger with a longer hold. Brake into
+// a lip and release at the crest for big air.
+const MAX_CHARGE_MS = 800;
+
+export function setupInput(onRestart: () => void): InputSource {
   const down = new Set<string>();
   const touches = new Map<number, { x: number; y: number }>(); // non-mouse pointers
   let mouse: { x: number; y: number } | null = null; // last known cursor position
   let mouseBrake = false;
+  let chargeStart: number | null = null;
+  let pendingJump = 0;
+
+  const beginCharge = () => {
+    if (chargeStart === null) chargeStart = performance.now();
+  };
+  const releaseCharge = () => {
+    if (chargeStart === null) return;
+    pendingJump = Math.max(0.15, Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS));
+    chargeStart = null;
+  };
 
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyR') onRestart();
+    if (e.code === 'Space') beginCharge();
     down.add(e.code);
   });
-  window.addEventListener('keyup', (e) => down.delete(e.code));
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') releaseCharge();
+    down.delete(e.code);
+  });
 
   window.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse') mouseBrake = true;
-    else touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (e.pointerType === 'mouse') {
+      mouseBrake = true;
+      beginCharge();
+    } else {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size >= 2) beginCharge();
+    }
   });
   window.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') {
@@ -41,13 +72,18 @@ export function setupInput(onRestart: () => void): () => SkierInput {
     }
   });
   const release = (e: PointerEvent) => {
-    if (e.pointerType === 'mouse') mouseBrake = false;
-    else touches.delete(e.pointerId);
+    if (e.pointerType === 'mouse') {
+      mouseBrake = false;
+      releaseCharge();
+    } else {
+      touches.delete(e.pointerId);
+      if (touches.size < 2) releaseCharge();
+    }
   };
   window.addEventListener('pointerup', release);
   window.addEventListener('pointercancel', release);
 
-  return () => {
+  const current = (): SkierInput => {
     const key = (...codes: string[]) => codes.some((c) => down.has(c));
     const keySteer = (key('ArrowRight', 'KeyD') ? 1 : 0) - (key('ArrowLeft', 'KeyA') ? 1 : 0);
     const keyStance =
@@ -67,5 +103,17 @@ export function setupInput(onRestart: () => void): () => SkierInput {
             ? pointerAxis(pointer.y, window.innerHeight)
             : 0;
     return { steer, stance };
+  };
+
+  return {
+    peek: current,
+    read: () => {
+      const input = current();
+      if (pendingJump > 0) {
+        input.jump = pendingJump;
+        pendingJump = 0;
+      }
+      return input;
+    },
   };
 }
