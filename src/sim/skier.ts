@@ -24,12 +24,13 @@ export interface SkierState {
 const G = 9.81;
 const FRICTION = 0.05; // neutral-stance snow friction coefficient
 const PLOW_FRICTION = 0.6; // at full snowplow
-// Crud is viscous, not Coulomb: resistance scales with speed, so it bites
-// hard at pace (~10 m/s^2 at 25 m/s in full crud) but fades as you slow —
-// gravity always wins in the end. Full-crud equilibrium on the mean grade is
-// a ~7 m/s crawl. A constant coefficient here once exceeded the slope pull
-// and skiers ground to a permanent halt mid-patch.
-const CRUD_VISCOSITY = 0.4; // per second, at full stickiness
+// Crud is viscous, not Coulomb: resistance scales with speed, so it fades as
+// you slow (gravity always wins; zero force at rest) — a constant coefficient
+// once exceeded the slope pull and skiers ground to a halt mid-patch. The
+// linear+quadratic mix keeps the full-crud crawl at ~7 m/s on the mean grade
+// but bites much harder at race pace: ~8 m/s^2 at 15 m/s, ~16 at 25.
+const CRUD_LINEAR = 0.33; // per second, at full stickiness
+const CRUD_QUAD = 0.012; // per meter, at full stickiness
 const DRAG = 0.0035; // neutral quadratic air drag; top speed around 29 m/s
 const TUCK_DRAG_CUT = 0.5; // full tuck halves drag: top speed around 41 m/s
 const TUCK_TURN_CUT = 0.4; // full tuck costs 40% of turn authority
@@ -272,9 +273,10 @@ export function stepSkier(
   const [gx, gz] = terrain.gradient(state.x, state.z);
   const slopeAccel = -G * (gx * dirX + gz * dirZ);
   const muG = (FRICTION + plow * (PLOW_FRICTION - FRICTION)) * G;
+  const stickiness = terrain.stickinessAt(state.x, state.z);
   const friction =
     muG +
-    CRUD_VISCOSITY * terrain.stickinessAt(state.x, state.z) * state.speed +
+    stickiness * (CRUD_LINEAR * state.speed + CRUD_QUAD * state.speed * state.speed) +
     DRAG * (1 - TUCK_DRAG_CUT * tuck) * state.speed * state.speed;
   const thrust = boosting ? BOOST_ACCEL : 0;
   state.speed = Math.max(0, state.speed + (slopeAccel + thrust - friction) * dt);

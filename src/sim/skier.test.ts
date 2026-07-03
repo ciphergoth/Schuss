@@ -307,6 +307,34 @@ describe('skier', () => {
     expect(inCrud).toBeLessThan(clean.skier.speed - 0.04);
   });
 
+  it('crud bites superlinearly: double the speed, more than double the drag', () => {
+    // Find a deep crud patch on the racing floor.
+    const probe = createSim(1);
+    let px = 0;
+    let pz = 0;
+    outer: for (let z = -120; z > -1500; z -= 5) {
+      const c = probe.terrain.centerX(z);
+      for (let dx = -8; dx <= 8; dx += 2) {
+        if (probe.terrain.stickinessAt(c + dx, z) > 0.9) {
+          px = c + dx;
+          pz = z;
+          break outer;
+        }
+      }
+    }
+    // One-step speed loss at two speeds from the identical spot: slope and
+    // base friction cancel in the difference, leaving the crud curve.
+    const lossAt = (v: number) => {
+      const sim = createSim(1);
+      teleport(sim, px, pz, v);
+      stepSim(sim, COAST);
+      return v - sim.skier.speed;
+    };
+    const extra = lossAt(24) - lossAt(12);
+    // Pure linear crud (the old 0.4*v) gives ~0.052 here; the mix must exceed it.
+    expect(extra).toBeGreaterThan(0.07);
+  });
+
   it('crud never brings you to a permanent halt', () => {
     const sim = createSim(1);
     // Same deep-patch hunt, but start at rest in the middle of it.
