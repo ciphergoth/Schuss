@@ -146,41 +146,31 @@ export class ChunkRenderer {
     const skirt = new THREE.Mesh(geo.clone().translate(0, -2.4, 0), this.underside);
     group.add(skirt);
 
-    // Striped bollards trace the floor edge; tall neon poles rise above them
-    // every other slot so the course outline reads from hundreds of meters.
+    // Striped bollards trace the floor edge.
     const bollardGeo = stripedPole(0.16, 1.5, this.red, this.white);
-    const neonGeo = new THREE.CylinderGeometry(0.14, 0.14, 9, 6);
     for (const side of [-1, 1]) {
       for (let k = 0; k < CHUNK_LENGTH / 8; k++) {
         const z = zTop - 4 - k * 8;
-        const edge = this.terrain.channelHalfWidth(z);
-        const x = this.terrain.centerX(z) + side * (edge + 1.5);
+        const x = this.terrain.centerX(z) + side * (this.terrain.channelHalfWidth(z) + 1.5);
         const marker = new THREE.Mesh(bollardGeo, this.striped);
         marker.position.set(x, this.terrain.height(x, z) + 0.75, z);
         marker.castShadow = true;
         group.add(marker);
-        if (k % 2 === 0) {
-          const neonX = this.terrain.centerX(z) + side * (edge + 3);
-          const neon = new THREE.Mesh(
-            neonGeo,
-            this.neons[(index + k + (side === 1 ? 1 : 0)) % this.neons.length]!
-          );
-          neon.position.set(neonX, this.terrain.height(neonX, z) + 4.5, z);
-          group.add(neon);
-        }
       }
     }
 
-    // Tall striped poles flag the actual edges of each kicker.
+    // Ski jumps announce themselves: a pair of tall neon poles at the lip
+    // edges, one color per kicker, visible from hundreds of meters uphill so
+    // you can pick your line early.
     const jump = this.terrain.jumpForChunk(index);
     if (jump) {
-      const lipPole = stripedPole(0.2, 2.6, this.red, this.white);
+      const neonGeo = new THREE.CylinderGeometry(0.22, 0.22, 11, 6);
+      const neon = this.neons[index % this.neons.length]!;
       for (const side of [-1, 1]) {
         const x = this.terrain.centerX(jump.zLip) + jump.xOffset + side * (jump.halfWidth + 0.6);
-        const marker = new THREE.Mesh(lipPole, this.striped);
-        marker.position.set(x, this.terrain.height(x, jump.zLip) + 1.3, jump.zLip);
-        marker.castShadow = true;
-        group.add(marker);
+        const pole = new THREE.Mesh(neonGeo, neon);
+        pole.position.set(x, this.terrain.height(x, jump.zLip) + 5.5, jump.zLip);
+        group.add(pole);
       }
     }
 
