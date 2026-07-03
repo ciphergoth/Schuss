@@ -74,7 +74,13 @@ export function createSkier(): SkierState {
 }
 
 // Ease the heading toward the steering target: proportional, rate-limited,
-// no overshoot. Self-centering — steer 0 means "follow the course".
+// no overshoot. Self-centering — steer 0 means "follow the course". A skier
+// up on a bank additionally gets nosed back toward the floor: centering the
+// heading alone would happily cruise parallel INSIDE the sticky wall forever
+// (the "insists on skiing the wall" bug). Full deflection out-muscles the
+// recovery, so deliberate wall-riding still works.
+const BANK_RECOVERY = 0.55; // radians of target bias at full strength
+
 function steerToward(
   state: SkierState,
   terrain: Terrain,
@@ -83,8 +89,13 @@ function steerToward(
   dt: number
 ): void {
   const tuck = Math.max(0, -input.stance);
+  const d = state.x - terrain.centerX(state.z);
+  const over = Math.abs(d) - terrain.channelHalfWidth(state.z);
+  const recovery = over > 0 ? -Math.sign(d) * Math.min(1, over / 6) * BANK_RECOVERY : 0;
   const target =
-    terrain.trackHeading(state.z) + input.steer * MAX_STEER_OFFSET * (1 - TUCK_TURN_CUT * tuck);
+    terrain.trackHeading(state.z) +
+    input.steer * MAX_STEER_OFFSET * (1 - TUCK_TURN_CUT * tuck) +
+    recovery;
   const diff = Math.atan2(Math.sin(target - state.heading), Math.cos(target - state.heading));
   const rate = Math.max(-maxRate, Math.min(maxRate, STEER_GAIN * diff));
   state.heading += rate * dt;

@@ -329,6 +329,24 @@ describe('skier', () => {
     expect(sim.skier.speed).toBeGreaterThan(3);
   });
 
+  it('a hands-off skier on the bank noses back down to the floor', () => {
+    const sim = createSim(1);
+    const z = 700;
+    teleport(sim, sim.terrain.channelHalfWidth(z) + 5, z, 15); // up the right bank
+    run(sim, 5, COAST);
+    const d = Math.abs(sim.skier.x - sim.terrain.centerX(sim.skier.z));
+    expect(d).toBeLessThan(sim.terrain.channelHalfWidth(sim.skier.z) + 0.5);
+  });
+
+  it('a long hands-off run stays on the course, not the walls', () => {
+    const sim = createSim(1);
+    run(sim, 40, COAST);
+    const s = sim.skier;
+    const d = Math.abs(s.x - sim.terrain.centerX(s.z));
+    expect(d).toBeLessThan(sim.terrain.channelHalfWidth(s.z) + 1);
+    expect(s.speed).toBeGreaterThan(4); // still skiing, not parked in crud
+  });
+
   it('never gets stranded: a stalled skier pivots to the fall line', () => {
     const sim = createSim(1);
     // Parked on the wall facing uphill at zero speed — the old dead end.
