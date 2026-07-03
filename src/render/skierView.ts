@@ -96,10 +96,11 @@ export function updateSkierView(
   const { group, pelvis, torso, legs, skis, pose } = view;
 
   group.position.set(state.x, state.y, state.z);
-  group.rotation.y = Math.atan2(Math.sin(state.heading), -Math.cos(state.heading));
-  // Lean into turns. A tumble is a forward somersault: the timer runs to zero,
-  // so tumbling * 10 spins ~2 turns and lands exactly upright.
-  group.rotation.x = state.tumbling * 10;
+  // Trick spin rides on top of the travel heading; trick flip shares the
+  // pitch axis with the tumble somersault (tumbling * 10 runs the timer to
+  // zero, landing exactly upright).
+  group.rotation.y = Math.atan2(Math.sin(state.heading), -Math.cos(state.heading)) + state.spin;
+  group.rotation.x = state.tumbling > 0 ? state.tumbling * 10 : state.flip;
   group.rotation.z = -input.steer * 0.3;
 
   // Ease the pose toward the input stance, frame-rate independently. Airborne,

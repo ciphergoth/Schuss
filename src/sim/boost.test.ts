@@ -68,7 +68,7 @@ describe('boost economy', () => {
     const events = runCollecting(sim, 3);
     const gems = events.filter((e) => e.type === 'pickup' && e.gem).length;
     expect(gems).toBeGreaterThanOrEqual(2); // the arc genuinely threads
-    expect(sim.boost).toBeGreaterThan(0.4); // two gems' worth in the tank
+    expect(sim.boost).toBeGreaterThan(0.2); // two gems' worth in the tank
   });
 
   it('a tumble still fires its event but keeps the tank', () => {
@@ -83,7 +83,7 @@ describe('boost economy', () => {
     expect(sim.boost).toBe(0.8); // losing your speed is punishment enough
   });
 
-  it('burning boost accelerates hard and drains the tank', () => {
+  it('burning boost accelerates hard and drains the tank slowly', () => {
     const plain = createSim(1);
     const burner = createSim(1);
     teleport(plain, 0, 800, 20);
@@ -94,7 +94,57 @@ describe('boost economy', () => {
       stepSim(burner, { steer: 0, stance: 0, boost: true });
     }
     expect(burner.skier.speed).toBeGreaterThan(plain.skier.speed + 3);
-    expect(burner.boost).toBeLessThan(0.2); // ~3s of a full tank spent
+    // Big tank: 3s of burning leaves roughly half (full tank ~6.7s).
+    expect(burner.boost).toBeGreaterThan(0.4);
+    expect(burner.boost).toBeLessThan(0.65);
+  });
+
+  it('a clean 360 lands, pays boost, and fires a trick event', () => {
+    const sim = createSim(1);
+    teleport(sim, 0, 800, 15);
+    sim.skier.y += 8; // plenty of hangtime to rotate
+    sim.skier.airTime = 0.01;
+    sim.skier.vy = 0;
+    const events: SimEvent[] = [];
+    // Spin until just short of a full turn, then stop rotating and land.
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
+      events.push(...stepSim(sim, { steer: 1, stance: 0, boost: true }));
+    }
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    expect(sim.skier.tumbling).toBe(0);
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick).toBeDefined();
+    expect(sim.boost).toBeGreaterThan(0.1);
+    expect(sim.skier.spin).toBe(0); // ledger settled on landing
+  });
+
+  it('cursor hover noise never rotates the skier in trick mode', () => {
+    const sim = createSim(1);
+    teleport(sim, 0, 800, 15);
+    sim.skier.y += 8;
+    sim.skier.airTime = 0.01;
+    sim.skier.vy = 0;
+    while (sim.skier.airTime > 0) {
+      stepSim(sim, { steer: 0.2, stance: -0.25, boost: true }); // sloppy hover
+    }
+    expect(sim.skier.tumbling).toBe(0); // landed clean: no drift accumulated
+  });
+
+  it('landing mid-rotation is a wipeout and pays nothing', () => {
+    const sim = createSim(1);
+    teleport(sim, 0, 800, 15);
+    sim.skier.y += 8;
+    sim.skier.airTime = 0.01;
+    sim.skier.vy = 0;
+    const events: SimEvent[] = [];
+    // Spin to ~180 and hold it there — land sideways.
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < Math.PI) {
+      events.push(...stepSim(sim, { steer: 1, stance: 0, boost: true }));
+    }
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    expect(sim.skier.tumbling).toBeGreaterThan(0);
+    expect(events.some((e) => e.type === 'trick')).toBe(false);
+    expect(sim.boost).toBe(0);
   });
 
   it('an empty tank gives nothing', () => {

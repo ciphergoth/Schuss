@@ -208,6 +208,25 @@ export class GameAudio {
     else void this.nodes.ctx.resume();
   }
 
+  // Landed trick: an ascending arpeggio, one extra note for a full turn+.
+  playTrick(turns: number): void {
+    if (!this.nodes) return;
+    const { ctx, master } = this.nodes;
+    const t = ctx.currentTime;
+    const notes = turns >= 1 ? [660, 880, 1108, 1318] : [660, 880, 1108];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.16, t + i * 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.06 + 0.16);
+      osc.connect(gain).connect(master);
+      osc.start(t + i * 0.06);
+      osc.stop(t + i * 0.06 + 0.18);
+    });
+  }
+
   toggleMute(): void {
     if (!this.nodes) return;
     this.muted = !this.muted;

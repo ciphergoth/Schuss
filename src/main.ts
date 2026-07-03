@@ -102,6 +102,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     if (e.type === 'nearMiss') audio.playWhoosh();
     else if (e.type === 'landing') audio.playThump(e.airTime);
     else if (e.type === 'pickup') audio.playDing(e.gem);
+    else if (e.type === 'trick') audio.playTrick(e.spins + e.flips);
   }
 
   // Keep the sun's shadow box centered on the skier.

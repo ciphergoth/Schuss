@@ -17,6 +17,8 @@ export interface SkierState {
   speed: number; // horizontal m/s along the heading
   airTime: number; // seconds airborne this jump; 0 = grounded
   tumbling: number; // seconds of tumble remaining; 0 = on skis
+  spin: number; // trick yaw accumulated this flight (radians)
+  flip: number; // trick pitch accumulated this flight (radians)
 }
 
 const G = 9.81;
@@ -71,8 +73,32 @@ const TUMBLE_SPEED_KEEP = 0.25;
 const TUMBLE_FRICTION = 0.35;
 const AIR_TURN_FACTOR = 0.5; // reduced but real steering mid-air
 
+// Tricks: holding the boost button in the air turns steer into spin and
+// stance into flip. The landing judges the rotation — land near-clean or
+// tumble. Travel flies straight while tricking: style costs line control.
+const SPIN_RATE = 6; // rad/s of trick yaw
+const FLIP_RATE = 5; // rad/s of trick pitch
+export const SPIN_TOLERANCE = 0.7; // radians from clean at touchdown
+export const FLIP_TOLERANCE = 0.55;
+
 export function createSkier(): SkierState {
-  return { x: 0, z: 0, y: 0, vy: 0, heading: 0, speed: 0, airTime: 0, tumbling: 0 };
+  return {
+    x: 0,
+    z: 0,
+    y: 0,
+    vy: 0,
+    heading: 0,
+    speed: 0,
+    airTime: 0,
+    tumbling: 0,
+    spin: 0,
+    flip: 0,
+  };
+}
+
+// How far a rotation is from "clean" (any whole number of full turns).
+function residual(angle: number): number {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
 
 // Ease the heading toward the steering target: proportional, rate-limited,
@@ -165,10 +191,20 @@ export function stepSkier(
   }
 
   if (state.airTime > 0) {
-    // Ballistic: gravity on vy, air drag on speed (tuck still matters),
-    // reduced steering authority. Obstacles stay solid — clear or tumble.
+    // Ballistic: gravity on vy, air drag on speed (tuck still matters).
+    // Button held = trick mode: steer spins, stance flips, travel flies
+    // straight. Button up = gentle heading control toward the landing line.
     const airTuck = Math.max(0, -input.stance);
-    steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
+    if (input.boost) {
+      // Wide dead zone: analog cursor hover noise must not integrate into
+      // rotation over a whole flight — only deliberate deflection tricks.
+      const deadband = (v: number) =>
+        Math.abs(v) > 0.35 ? (Math.sign(v) * (Math.abs(v) - 0.35)) / 0.65 : 0;
+      state.spin += SPIN_RATE * deadband(input.steer) * dt;
+      state.flip += FLIP_RATE * deadband(input.stance) * dt;
+    } else {
+      steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
+    }
     state.speed = Math.max(
       0,
       state.speed - DRAG * (1 - TUCK_DRAG_CUT * airTuck) * state.speed * state.speed * dt
@@ -207,6 +243,15 @@ export function stepSkier(
       const horizontal = Math.hypot(vx, vz);
       if (horizontal > 0.1) state.heading = Math.atan2(vx, -vz);
       state.speed = horizontal;
+
+      // The landing judges the trick: mid-rotation at touchdown is a wipeout.
+      if (
+        Math.abs(residual(state.spin)) > SPIN_TOLERANCE ||
+        Math.abs(residual(state.flip)) > FLIP_TOLERANCE
+      ) {
+        state.tumbling = TUMBLE_TIME;
+        state.speed *= TUMBLE_SPEED_KEEP;
+      }
     }
     return;
   }

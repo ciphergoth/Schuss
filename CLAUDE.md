@@ -9,10 +9,13 @@ Design rules: punishment is light — obstacle hits cost a 1.3s tumble and most
 of your speed, never the run; the walls contain you physically (rideable
 banks that steepen), no fences or fail states. The economy is SSX Tricky's:
 the run is measured in speed and distance (HUD is SI: m/s and m), and the
-BOOST TANK (vertical bar, left edge) fills only from deliberate rewards —
-coins and gems (tricks later); racing alone earns nothing. Burning it is hard
-acceleration with flames, rainbow trail, FOV slam, and rumble. Reward loop
-over penalty loop.
+BOOST TANK (tall vertical bar, left edge; big and slow on both ends) fills
+only from deliberate rewards — coins, gems, and above all TRICKS: hold the
+button in the air and steer spins / stance flips (with a wide dead zone so
+cursor hover can't drift you); land near-clean and the rotation pays into
+the tank, land mid-rotation and you tumble. Racing alone earns nothing.
+Burning is hard acceleration with flames, rainbow trail, FOV slam, rumble.
+Reward loop over penalty loop.
 
 Terrain is a pure height function: a curving centerline (straight near the
 start and uphill of it, for gentle run-ins and predictable physics tests)

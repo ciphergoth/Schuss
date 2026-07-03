@@ -219,6 +219,11 @@ export class Effects {
           Math.min(60, Math.round(e.airTime * 45)),
           this.powder
         );
+      } else if (e.type === 'trick') {
+        // Landed trick: a two-tone firework proportional to the rotation.
+        const count = Math.min(70, Math.round((e.spins + e.flips) * 45));
+        this.particles.spawn(skierPos, new THREE.Vector3(0, 4.5, 0), 5, count, this.gold);
+        this.particles.spawn(skierPos, new THREE.Vector3(0, 3.5, 0), 4, count, this.cyan);
       } else if (e.type === 'pickup') {
         this.particles.spawn(
           new THREE.Vector3(e.x, s.y + 1.1, e.z),

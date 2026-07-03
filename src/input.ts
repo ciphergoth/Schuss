@@ -7,6 +7,7 @@ const DEAD_ZONE = 0.06;
 const SATURATION = 0.55;
 
 export function pointerAxis(clientPos: number, viewportExtent: number): number {
+  if (viewportExtent <= 0) return 0; // degenerate viewport = no deflection, not NaN
   const half = viewportExtent / 2;
   const raw = (clientPos - half) / (half * SATURATION);
   const magnitude = Math.abs(raw);

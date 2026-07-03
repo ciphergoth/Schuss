@@ -10,6 +10,7 @@ export type SimEvent =
   | { type: 'nearMiss'; x: number; z: number }
   | { type: 'landing'; airTime: number }
   | { type: 'pickup'; x: number; z: number; gem: boolean }
+  | { type: 'trick'; spins: number; flips: number } // full turns, landed clean
   | { type: 'tumble' };
 
 export interface Sim {
@@ -23,12 +24,16 @@ export interface Sim {
 }
 
 // The SSX economy: the run is measured in speed and distance, and the tank
-// fills ONLY from deliberate rewards — coins (detours), gems (kicker flights),
-// and later tricks. Merely racing earns nothing: near-misses and plain
-// landings celebrate with events/fx but pay no boost.
-const BOOST_GEM = 0.25;
-const BOOST_COIN = 0.07;
-const BOOST_DRAIN = 0.3; // per second while burning
+// fills ONLY from deliberate rewards — coins (detours), gems (kicker
+// flights), and above all landed tricks. Merely racing earns nothing:
+// near-misses and plain landings celebrate with events/fx but pay no boost.
+// The tank is big and slow on both ends: harder to fill, harder to deplete.
+const BOOST_GEM = 0.12;
+const BOOST_COIN = 0.035;
+const BOOST_PER_SPIN = 0.16; // per full 360 landed clean
+const BOOST_PER_FLIP = 0.22; // flips pay more — they are scarier
+const BOOST_TRICK_CAP = 0.5; // per landing
+const BOOST_DRAIN = 0.15; // per second while burning
 const NEAR_MISS_RING = 1.1; // meters beyond a collision that still count
 const NEAR_MISS_MIN_SPEED = 12;
 const NEAR_MISS_COOLDOWN = 0.6;
@@ -72,8 +77,19 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     events.push({ type: 'tumble' });
   }
 
-  if (airBefore > MIN_STYLISH_AIR && s.airTime === 0 && s.tumbling === 0) {
-    events.push({ type: 'landing', airTime: airBefore });
+  // Any return to the snow settles the flight's rotation ledger.
+  if (airBefore > 0 && s.airTime === 0) {
+    const spins = Math.abs(s.spin) / (2 * Math.PI);
+    const flips = Math.abs(s.flip) / (2 * Math.PI);
+    if (s.tumbling === 0) {
+      if (airBefore > MIN_STYLISH_AIR) events.push({ type: 'landing', airTime: airBefore });
+      if (spins + flips >= 0.4) {
+        earnBoost(sim, Math.min(BOOST_TRICK_CAP, spins * BOOST_PER_SPIN + flips * BOOST_PER_FLIP));
+        events.push({ type: 'trick', spins, flips });
+      }
+    }
+    s.spin = 0;
+    s.flip = 0;
   }
 
   const grounded = s.airTime === 0 && s.tumbling === 0;
