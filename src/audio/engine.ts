@@ -156,6 +156,27 @@ export class GameAudio {
     src.stop(t + 0.2);
   }
 
+  // Pickup: a bright two-note ding.
+  playDing(): void {
+    if (!this.nodes) return;
+    const { ctx, master } = this.nodes;
+    const t = ctx.currentTime;
+    for (const [offset, freq] of [
+      [0, 880],
+      [0.07, 1318],
+    ] as const) {
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.18, t + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.18);
+      osc.connect(gain).connect(master);
+      osc.start(t + offset);
+      osc.stop(t + offset + 0.2);
+    }
+  }
+
   toggleMute(): void {
     if (!this.nodes) return;
     this.muted = !this.muted;

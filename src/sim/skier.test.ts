@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SIM_DT, Sim, createSim, distanceSkied, stepSim } from './sim';
-import { SkierInput } from './skier';
+import { SkierInput, stepSkier } from './skier';
 
 const COAST: SkierInput = { steer: 0, stance: 0 };
 
@@ -74,18 +74,30 @@ describe('skier', () => {
     expect(full.skier.speed).toBeLessThan(half.skier.speed);
   });
 
-  it('tuck raises top speed', () => {
+  it('tuck cuts drag', () => {
+    // Same state, one step, only the stance differs: isolates the mechanism
+    // from terrain and airtime effects.
+    const neutral = createSim(1);
+    const tucked = createSim(1);
+    teleport(neutral, 0, 800, 30);
+    teleport(tucked, 0, 800, 30);
+    stepSkier(neutral.skier, neutral.terrain, COAST, SIM_DT, 0);
+    stepSkier(tucked.skier, tucked.terrain, { steer: 0, stance: -1 }, SIM_DT, 0);
+    expect(tucked.skier.speed).toBeGreaterThan(neutral.skier.speed);
+  });
+
+  it('tuck covers more mountain over a long run', () => {
+    // On a rolling track the tucked skier also spends more time airborne (no
+    // acceleration in flight), so compare ground covered, not top speed.
     const coasting = createSim(1);
     const tucked = createSim(1);
-    // Start well uphill of the start line: the slope there has no interior
-    // trees, so a long straight run can't crash.
-    teleport(coasting, 0, 800);
-    teleport(tucked, 0, 800);
+    teleport(coasting, 0, 800, 10);
+    teleport(tucked, 0, 800, 10);
     run(coasting, 20, COAST);
     run(tucked, 20, { steer: 0, stance: -1 });
     expect(coasting.skier.tumbling).toBe(0);
     expect(tucked.skier.tumbling).toBe(0);
-    expect(tucked.skier.speed).toBeGreaterThan(coasting.skier.speed + 3);
+    expect(tucked.skier.z).toBeLessThan(coasting.skier.z - 15);
   });
 
   it('tuck reduces turn authority', () => {
@@ -126,17 +138,19 @@ describe('skier', () => {
     expect(skier.y).toBeCloseTo(sim.terrain.height(skier.x, skier.z), 6);
   });
 
-  it('tumbles on a tree hit, loses most speed, then recovers', () => {
+  it('tumbles on an obstacle hit, loses most speed, then recovers', () => {
     const sim = createSim(1);
-    const tree = sim.terrain.treesForChunk(2)[0]!;
-    // 3m uphill of the tree, aimed straight at it, slow enough to stay
-    // grounded (fast skiers can launch off a mogul and clear trees entirely).
-    teleport(sim, tree.x, tree.z + 3, 10);
+    const obstacle = sim.terrain.obstaclesForChunk(2)[0]!;
+    // 3m uphill of the obstacle, aimed straight at it, slow enough to stay
+    // grounded (fast skiers can launch off a bump and clear it entirely).
+    teleport(sim, obstacle.x, obstacle.z + 3, 10);
     run(sim, 0.6, COAST);
     expect(sim.skier.tumbling).toBeGreaterThan(0);
     expect(sim.skier.speed).toBeLessThan(5);
     // Pushed clear of the trunk, not stuck inside it.
-    expect(Math.hypot(tree.x - sim.skier.x, tree.z - sim.skier.z)).toBeGreaterThan(tree.radius);
+    expect(Math.hypot(obstacle.x - sim.skier.x, obstacle.z - sim.skier.z)).toBeGreaterThan(
+      obstacle.radius
+    );
 
     // No steering authority while tumbling.
     const headingDuringTumble = sim.skier.heading;

@@ -3,7 +3,7 @@ import { SkierState } from '../sim/skier';
 import { Terrain } from '../sim/terrain';
 
 export function createCamera(): THREE.PerspectiveCamera {
-  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 900);
   camera.position.set(0, 6, 12);
   return camera;
 }

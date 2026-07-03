@@ -58,7 +58,7 @@ export function stepSkier(
 
   if (state.airTime > 0) {
     // Ballistic: no friction, gravity on vy, a sliver of air steering.
-    // No tree collisions — clearing a tree in flight is earned.
+    // No obstacle collisions — clearing one in flight is earned.
     state.heading += TURN_RATE * AIR_TURN_FACTOR * input.steer * dt;
     state.x += Math.sin(state.heading) * state.speed * dt;
     state.z += -Math.cos(state.heading) * state.speed * dt;
@@ -113,21 +113,21 @@ export function stepSkier(
   state.y = ground;
   state.vy = followVy;
 
-  for (const tree of terrain.treesNear(state.z)) {
-    const dx = tree.x - state.x;
-    const dz = tree.z - state.z;
-    const r = tree.radius + SKIER_RADIUS;
+  for (const obstacle of terrain.obstaclesNear(state.z)) {
+    const dx = obstacle.x - state.x;
+    const dz = obstacle.z - state.z;
+    const r = obstacle.radius + SKIER_RADIUS;
     if (dx * dx + dz * dz < r * r) {
       state.tumbling = TUMBLE_TIME;
       state.speed *= TUMBLE_SPEED_KEEP;
-      // Carom sideways off the trunk: place the skier beside the tree,
-      // perpendicular to their heading, so the tumble slides past it instead
-      // of through it. Pick the side the skier was already favoring.
+      // Carom sideways off the obstacle: place the skier beside it,
+      // perpendicular to their heading, so the tumble slides past instead
+      // of through. Pick the side the skier was already favoring.
       const perpX = Math.cos(state.heading);
       const perpZ = Math.sin(state.heading);
       const side = perpX * -dx + perpZ * -dz >= 0 ? 1 : -1;
-      state.x = tree.x + perpX * side * (r + 0.05);
-      state.z = tree.z + perpZ * side * (r + 0.05);
+      state.x = obstacle.x + perpX * side * (r + 0.05);
+      state.z = obstacle.z + perpZ * side * (r + 0.05);
       return;
     }
   }

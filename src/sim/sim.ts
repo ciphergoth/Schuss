@@ -9,6 +9,7 @@ export const SIM_DT = 1 / 120;
 export type SimEvent =
   | { type: 'nearMiss'; x: number; z: number }
   | { type: 'landing'; airTime: number }
+  | { type: 'pickup'; x: number; z: number }
   | { type: 'tumble' };
 
 export interface Sim {
@@ -18,6 +19,7 @@ export interface Sim {
   flow: number; // 0..1 — earned by skiing well, spent as a drag-cutting boost
   score: number; // style points
   nearMissCooldown: number;
+  collected: Set<string>; // pickup ids gathered this run
 }
 
 // Flow tuning: reward loop over penalty loop.
@@ -27,12 +29,21 @@ const NEAR_MISS_RING = 1.1; // meters beyond a collision that still count
 const NEAR_MISS_MIN_SPEED = 12;
 const NEAR_MISS_COOLDOWN = 0.6;
 const MIN_STYLISH_AIR = 0.25; // seconds; shorter hops don't score
+const PICKUP_RADIUS = 1.3;
 
 export function createSim(seed: number): Sim {
   const terrain = new Terrain(seed);
   const skier = createSkier();
   skier.y = terrain.height(skier.x, skier.z);
-  return { terrain, skier, time: 0, flow: 0, score: 0, nearMissCooldown: 0 };
+  return {
+    terrain,
+    skier,
+    time: 0,
+    flow: 0,
+    score: 0,
+    nearMissCooldown: 0,
+    collected: new Set(),
+  };
 }
 
 export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
@@ -58,14 +69,30 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
 
   const grounded = s.airTime === 0 && s.tumbling === 0;
   if (grounded && s.speed > NEAR_MISS_MIN_SPEED && sim.nearMissCooldown === 0) {
-    for (const tree of sim.terrain.treesNear(s.z)) {
-      const d = Math.hypot(tree.x - s.x, tree.z - s.z);
-      if (d < tree.radius + SKIER_RADIUS + NEAR_MISS_RING) {
+    for (const obstacle of sim.terrain.obstaclesNear(s.z)) {
+      const d = Math.hypot(obstacle.x - s.x, obstacle.z - s.z);
+      if (d < obstacle.radius + SKIER_RADIUS + NEAR_MISS_RING) {
         sim.flow = Math.min(1, sim.flow + 0.15);
         sim.score += Math.round(25 * (1 + sim.flow));
         sim.nearMissCooldown = NEAR_MISS_COOLDOWN;
-        events.push({ type: 'nearMiss', x: tree.x, z: tree.z });
+        events.push({ type: 'nearMiss', x: obstacle.x, z: obstacle.z });
         break;
+      }
+    }
+  }
+
+  // Pickups: floating discs along the racing line, grabbed on the ground or
+  // in flight (jumping through a line is the stylish way).
+  if (s.tumbling === 0) {
+    for (const pickup of sim.terrain.pickupsNear(s.z)) {
+      if (sim.collected.has(pickup.id)) continue;
+      const dx = pickup.x - s.x;
+      const dz = pickup.z - s.z;
+      if (dx * dx + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
+        sim.collected.add(pickup.id);
+        sim.score += 10;
+        sim.flow = Math.min(1, sim.flow + 0.04);
+        events.push({ type: 'pickup', x: pickup.x, z: pickup.z });
       }
     }
   }

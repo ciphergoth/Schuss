@@ -1,12 +1,20 @@
 # Ski game
 
-A 3D browser-based skiing game: endless procedurally generated slope, steer
-around trees, launch off rollers, build flow. Static site, no server.
+A 3D browser-based skiing game in the spirit of PS2-era SSX Tricky: an
+endless procedurally generated walled track — a banked ice channel floating
+in a dusk sky above a city — with obstacles, jumps, and pickup lines. Static
+site, no server.
 
-Design direction (SSX Tricky spirit): punishment is light — tree hits cost a
-1.3s tumble and most of your speed, never the run. Skiing well (near-misses,
-air time, hard carving) builds a flow meter that cuts drag and turns the
+Design rules: punishment is light — obstacle hits cost a 1.3s tumble and most
+of your speed, never the run; the walls contain you physically (rideable
+banks that steepen), no fences or fail states. Skiing well (near-misses, air
+time, hard carving, pickups) builds a flow meter that cuts drag and turns the
 visuals up: rainbow trail, spray, FOV kick. Reward loop over penalty loop.
+
+Terrain is a pure height function: a curving centerline (straight near the
+start and uphill of it, for gentle run-ins and predictable physics tests)
+plus a U-channel cross-section. The render layer draws it as a ribbon
+following the centerline, so beyond the walls there's only sky.
 
 ## Tech stack
 
@@ -28,13 +36,15 @@ src/
 ├── input.ts           - Keyboard → SkierInput
 ├── sim/               - Pure simulation, fully deterministic
 │   ├── rng.ts         - Seeded hash / PRNG
-│   ├── terrain.ts     - Heightfield + per-chunk tree placement
+│   ├── terrain.ts     - Track heightfield: centerline, walls, obstacles,
+│   │                    pickup lines (all seeded per chunk)
 │   ├── skier.ts       - Kinematic skier physics: carving, air, tumbles
 │   └── sim.ts         - World state, fixed SIM_DT stepping, flow/score,
 │                        SimEvents (nearMiss/landing/tumble) for fx + audio
 ├── render/            - Three.js only
 │   ├── scene.ts       - Lights, sky, fog, shadow-casting sun
-│   ├── chunks.ts      - Ground/tree meshes, created and disposed as you ski
+│   ├── chunks.ts      - Track ribbon, bollards, arches, obstacles, pickups,
+│   │                    skyline/clouds; created and disposed as you ski
 │   ├── skierView.ts   - Articulated skier model (posable legs/torso)
 │   ├── fx.ts          - Particles (spray/bursts) and the flow trail ribbon
 │   └── camera.ts      - Third-person follow camera, speed/flow FOV kick

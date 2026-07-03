@@ -75,13 +75,14 @@ let accumulator = 0;
 function renderFrame(delta: number, events: SimEvent[] = []): void {
   lastInput = getInput();
   const skier = sim.skier;
-  chunkRenderer.update(sim.terrain.chunkIndexAt(skier.z));
+  chunkRenderer.update(sim.terrain.chunkIndexAt(skier.z), sim.collected, sim.time);
   updateSkierView(skierView, skier, lastInput, delta);
   updateCamera(camera, skier, sim.terrain, delta, sim.flow);
   fx.update(sim, lastInput, delta, events);
   for (const e of events) {
     if (e.type === 'nearMiss') audio.playWhoosh();
     else if (e.type === 'landing') audio.playThump(e.airTime);
+    else if (e.type === 'pickup') audio.playDing();
   }
 
   // Keep the sun's shadow box centered on the skier.

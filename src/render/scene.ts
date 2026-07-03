@@ -7,16 +7,18 @@ export interface SceneSetup {
 
 export function createScene(): SceneSetup {
   const scene = new THREE.Scene();
-  const sky = new THREE.Color(0xaeccf2);
+  // Dusk race palette: indigo sky, hazy horizon, warm low light — the course
+  // floats against it like an SSX night event.
+  const sky = new THREE.Color(0x3d4490);
   scene.background = sky;
-  scene.fog = new THREE.Fog(sky, 60, 240);
+  scene.fog = new THREE.Fog(sky, 110, 520);
 
-  scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x8899aa, 0.85));
+  scene.add(new THREE.HemisphereLight(0x93a2ff, 0x2c3260, 0.95));
 
-  // Low-ish warm sun: long shadows and visible shading on the terrain facets.
+  // Low warm key light: long shadows and visible shading on the track facets.
   // Position and target follow the skier each frame so the shadow camera's
   // box stays centered on the action.
-  const sun = new THREE.DirectionalLight(0xfff3e0, 1.8);
+  const sun = new THREE.DirectionalLight(0xffd9a8, 1.7);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 1;

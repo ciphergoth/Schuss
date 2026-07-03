@@ -21,11 +21,11 @@ function teleport(sim: Sim, x: number, z: number, speed: number): void {
 }
 
 describe('flow', () => {
-  it('near-missing a tree at speed builds flow and score', () => {
+  it('near-missing an obstacle at speed builds flow and score', () => {
     const sim = createSim(1);
-    const tree = sim.terrain.treesForChunk(2)[0]!;
+    const obstacle = sim.terrain.obstaclesForChunk(2)[0]!;
     // Pass 0.8m outside the collision circle — inside the near-miss ring.
-    teleport(sim, tree.x + tree.radius + SKIER_RADIUS + 0.8, tree.z + 2, 13);
+    teleport(sim, obstacle.x + obstacle.radius + SKIER_RADIUS + 0.8, obstacle.z + 2, 13);
     const events = runCollecting(sim, 0.5);
     expect(sim.skier.tumbling).toBe(0);
     expect(events.some((e) => e.type === 'nearMiss')).toBe(true);
@@ -35,7 +35,7 @@ describe('flow', () => {
 
   it('landing real air time scores points', () => {
     const sim = createSim(1);
-    teleport(sim, 0, 800, 30); // tree-free slope, fast
+    teleport(sim, 0, 800, 30); // straight obstacle-free run-in, fast
     const events = runCollecting(sim, 10, { steer: 0, stance: -1 });
     expect(events.some((e) => e.type === 'landing')).toBe(true);
     expect(sim.score).toBeGreaterThan(0);
@@ -43,8 +43,8 @@ describe('flow', () => {
 
   it('a tumble zeroes flow', () => {
     const sim = createSim(1);
-    const tree = sim.terrain.treesForChunk(2)[0]!;
-    teleport(sim, tree.x, tree.z + 3, 10);
+    const obstacle = sim.terrain.obstaclesForChunk(2)[0]!;
+    teleport(sim, obstacle.x, obstacle.z + 3, 10);
     sim.flow = 0.8;
     const events = runCollecting(sim, 0.5);
     expect(events.some((e) => e.type === 'tumble')).toBe(true);
