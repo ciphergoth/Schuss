@@ -93,5 +93,6 @@ friction braking).
 - Keyboard fallback: arrows or A/D steer; up/W tucks, Space/S/down snowplows
 - Jump: hold Space to charge (skier crouches), release to pop — bigger with a
   longer hold (up to 0.8s). Jump is independent of braking.
+- Esc or ? pauses (freezes the sim, suspends audio) and shows the key guide
 - R starts a fresh run
 - M toggles sound (sound starts on the first input, per browser autoplay rules)

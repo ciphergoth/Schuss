@@ -177,6 +177,14 @@ export class GameAudio {
     }
   }
 
+  // Game pause: silence everything by suspending the context (also stops the
+  // wind loop from burning CPU), resume picks up exactly where it left off.
+  setPaused(paused: boolean): void {
+    if (!this.nodes) return;
+    if (paused) void this.nodes.ctx.suspend();
+    else void this.nodes.ctx.resume();
+  }
+
   toggleMute(): void {
     if (!this.nodes) return;
     this.muted = !this.muted;

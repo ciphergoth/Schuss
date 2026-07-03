@@ -17,6 +17,7 @@ declare global {
       poll: () => SkierInput; // current input state, independent of the frame loop
       renderFrame?: (delta: number, events?: SimEvent[]) => void; // force one frame while rAF is paused
       step?: (seconds: number) => void; // advance sim + render while rAF is paused
+      readonly paused: boolean;
       readonly audio: GameAudio;
     };
   }
@@ -39,12 +40,27 @@ const fx = new Effects(scene);
 const stats = document.getElementById('stats')!;
 const flowFill = document.getElementById('flowfill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
+const pauseScreen = document.getElementById('pause')!;
 
 let sim = createSim(seed);
 let lastInput: SkierInput = { steer: 0, stance: 0 };
 const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
 const input = setupInput(() => {
   sim = createSim(seed);
+});
+
+// Esc or ? pauses: the sim freezes, the cursor is yours, and the pause screen
+// doubles as the key guide.
+let paused = false;
+
+function setPaused(next: boolean): void {
+  paused = next;
+  pauseScreen.classList.toggle('visible', paused);
+  audio.setPaused(paused);
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' || e.key === '?') setPaused(!paused);
 });
 
 const audio = new GameAudio();
@@ -57,6 +73,9 @@ window.__game = {
     return lastInput;
   },
   poll: () => input.peek(),
+  get paused() {
+    return paused;
+  },
   audio,
 };
 
@@ -108,6 +127,14 @@ window.__game.step = (seconds: number) => {
 
 function frame(): void {
   const delta = Math.min(clock.getDelta(), 0.25);
+  if (paused) {
+    // Keep drawing (resizes still work) but freeze the world; the clock keeps
+    // draining so resuming doesn't fast-forward.
+    accumulator = 0;
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+    return;
+  }
   accumulator += delta;
   const events: SimEvent[] = [];
   while (accumulator >= SIM_DT) {

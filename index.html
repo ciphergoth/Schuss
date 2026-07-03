@@ -54,6 +54,46 @@
       #overlay.visible {
         display: flex;
       }
+      #pause {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(10, 14, 40, 0.55);
+        user-select: none;
+      }
+      #pause.visible {
+        display: flex;
+      }
+      #pause .panel {
+        background: rgba(18, 24, 64, 0.92);
+        border-radius: 14px;
+        padding: 26px 34px;
+        color: white;
+        text-shadow: 0 1px 3px rgba(0, 0, 40, 0.6);
+        min-width: 320px;
+      }
+      #pause h1 {
+        margin: 0 0 14px;
+        font-size: 30px;
+        font-style: italic;
+      }
+      #pause table {
+        border-collapse: collapse;
+        font-size: 16px;
+        line-height: 1.9;
+      }
+      #pause td:first-child {
+        padding-right: 22px;
+        color: #ffd34d;
+        white-space: nowrap;
+      }
+      #pause .hint {
+        margin-top: 14px;
+        font-size: 14px;
+        opacity: 0.75;
+      }
     </style>
   </head>
   <body>
@@ -62,6 +102,40 @@
       <div id="flowbar"><div id="flowfill"></div></div>
     </div>
     <div id="overlay">Wipeout!</div>
+    <div id="pause">
+      <div class="panel">
+        <h1>Paused</h1>
+        <table>
+          <tr>
+            <td>Mouse left / right</td>
+            <td>Steer (or &larr;/&rarr;, A/D)</td>
+          </tr>
+          <tr>
+            <td>Mouse up</td>
+            <td>Tuck &mdash; faster, harder to turn (or &uarr;/W)</td>
+          </tr>
+          <tr>
+            <td>Mouse down / button</td>
+            <td>Snowplow brake (or &darr;/S)</td>
+          </tr>
+          <tr>
+            <td>Space (hold, release)</td>
+            <td>Charge a jump, pop at the crest</td>
+          </tr>
+          <tr>
+            <td>R</td>
+            <td>Fresh run</td>
+          </tr>
+          <tr>
+            <td>M</td>
+            <td>Mute</td>
+          </tr>
+        </table>
+        <div class="hint">
+          Esc or ? resumes &middot; ride the walls, graze the obstacles, thread the gold
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
