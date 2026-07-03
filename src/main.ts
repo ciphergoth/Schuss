@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SIM_DT, Sim, createSim, distanceSkied, stepSim } from './sim/sim';
+import { SkierInput } from './sim/skier';
 import { setupInput } from './input';
 import { createScene } from './render/scene';
 import { ChunkRenderer } from './render/chunks';
@@ -8,7 +9,11 @@ import { createCamera, updateCamera } from './render/camera';
 
 declare global {
   interface Window {
-    __game: { readonly sim: Sim };
+    __game: {
+      readonly sim: Sim;
+      readonly input: SkierInput; // as of the last rendered frame
+      poll: () => SkierInput; // current input state, independent of the frame loop
+    };
   }
 }
 
@@ -27,16 +32,24 @@ const hud = document.getElementById('hud')!;
 const overlay = document.getElementById('overlay')!;
 
 let sim = createSim(seed);
+let lastInput: SkierInput = { steer: 0, brake: false };
 const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
+const getInput = setupInput(
+  () => {
+    sim = createSim(seed);
+  },
+  () => sim.skier.crashed
+);
+
 window.__game = {
   get sim() {
     return sim;
   },
+  get input() {
+    return lastInput;
+  },
+  poll: () => getInput(),
 };
-
-const getInput = setupInput(() => {
-  sim = createSim(seed);
-});
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -54,6 +67,7 @@ function frame(): void {
   const delta = Math.min(clock.getDelta(), 0.25);
   accumulator += delta;
   const input = getInput();
+  lastInput = input;
   while (accumulator >= SIM_DT) {
     stepSim(sim, input);
     accumulator -= SIM_DT;

@@ -57,6 +57,7 @@ Or manually: `devenv shell -- pnpm install`, then `devenv shell -- pnpm dev`.
 
 ## Controls
 
-- Arrow keys or A/D to steer
-- Space, S, or down arrow to brake
-- R to restart after a wipeout
+- Mouse: horizontal position steers (analog), hold button to brake
+- Touch: first finger's x position steers, second finger brakes
+- Keyboard fallback: arrows or A/D steer, Space/S/down brake
+- R, click, or tap to restart after a wipeout
