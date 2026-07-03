@@ -30,7 +30,13 @@ const CRUD_VISCOSITY = 0.4; // per second, at full stickiness
 const DRAG = 0.0035; // neutral quadratic air drag; top speed around 29 m/s
 const TUCK_DRAG_CUT = 0.5; // full tuck halves drag: top speed around 41 m/s
 const TUCK_TURN_CUT = 0.4; // full tuck costs 40% of turn authority
-const TURN_RATE = 2.6; // rad/s at full turning authority
+// Steering is position-to-direction: the stick/cursor sets a TARGET heading
+// relative to the course direction (center = follow the track), and the
+// heading eases toward it. Rate control (cursor = rotation speed) integrates
+// small errors into wild weaving — pilot-induced oscillation.
+const MAX_STEER_OFFSET = 1.15; // radians of target offset at full deflection
+const STEER_GAIN = 4; // per second: how eagerly heading chases the target
+const TURN_RATE = 2.6; // rad/s ceiling on heading change
 export const SKIER_RADIUS = 0.4;
 
 // Don't go airborne over every pebble: the terrain has to fall away from the
@@ -67,6 +73,23 @@ export function createSkier(): SkierState {
   return { x: 0, z: 0, y: 0, vy: 0, heading: 0, speed: 0, airTime: 0, tumbling: 0 };
 }
 
+// Ease the heading toward the steering target: proportional, rate-limited,
+// no overshoot. Self-centering — steer 0 means "follow the course".
+function steerToward(
+  state: SkierState,
+  terrain: Terrain,
+  input: SkierInput,
+  maxRate: number,
+  dt: number
+): void {
+  const tuck = Math.max(0, -input.stance);
+  const target =
+    terrain.trackHeading(state.z) + input.steer * MAX_STEER_OFFSET * (1 - TUCK_TURN_CUT * tuck);
+  const diff = Math.atan2(Math.sin(target - state.heading), Math.cos(target - state.heading));
+  const rate = Math.max(-maxRate, Math.min(maxRate, STEER_GAIN * diff));
+  state.heading += rate * dt;
+}
+
 // Obstacles are solid cylinders: overlap in the horizontal plane only counts
 // below their top, so a jump has to genuinely clear them. A hit starts a
 // tumble and caroms the skier sideways past the obstacle.
@@ -97,7 +120,7 @@ function bounceOffBounds(state: SkierState, terrain: Terrain): void {
   const d = state.x - center;
   if (Math.abs(d) <= limit) return;
   state.x = center + Math.sign(d) * limit;
-  const trackHeading = Math.atan2(terrain.centerX(state.z - 1) - terrain.centerX(state.z + 1), 2);
+  const trackHeading = terrain.trackHeading(state.z);
   const diff = state.heading - trackHeading;
   state.heading = trackHeading - Math.atan2(Math.sin(diff), Math.cos(diff));
   state.speed *= BOUNCE_DAMP;
@@ -129,10 +152,10 @@ export function stepSkier(
   }
 
   if (state.airTime > 0) {
-    // Ballistic: gravity on vy, air drag on speed (tuck still matters), a
-    // sliver of air steering. Obstacles stay solid — clear them or tumble.
+    // Ballistic: gravity on vy, air drag on speed (tuck still matters),
+    // reduced steering authority. Obstacles stay solid — clear or tumble.
     const airTuck = Math.max(0, -input.stance);
-    state.heading += TURN_RATE * AIR_TURN_FACTOR * input.steer * dt;
+    steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
     state.speed = Math.max(
       0,
       state.speed - DRAG * (1 - TUCK_DRAG_CUT * airTuck) * state.speed * state.speed * dt
@@ -178,10 +201,9 @@ export function stepSkier(
   const plow = Math.max(0, input.stance);
   const tuck = Math.max(0, -input.stance);
 
-  // Turning authority ramps up with speed (skis can't pivot while stationary)
-  // and drops in a tuck (speed is a trade against control).
-  const turnFactor = Math.min(state.speed / 4, 1) * (1 - TUCK_TURN_CUT * tuck);
-  state.heading += TURN_RATE * turnFactor * input.steer * dt;
+  // Turning authority ramps up with speed (skis can't pivot while
+  // stationary); a tuck narrows the target range inside steerToward.
+  steerToward(state, terrain, input, TURN_RATE * Math.min(state.speed / 4, 1), dt);
 
   const dirX = Math.sin(state.heading);
   const dirZ = -Math.cos(state.heading);

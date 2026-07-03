@@ -269,14 +269,17 @@ describe('skier', () => {
     expect(maxAboveGround).toBeLessThan(15);
   });
 
-  it('bounces off the outer barrier instead of escaping the course', () => {
+  it('the outer barrier contains a skier holding full lock at speed', () => {
     const sim = createSim(1);
     teleport(sim, 0, 800, 32);
-    sim.skier.heading = Math.PI / 2; // aimed square at the wall
-    run(sim, 1.5, COAST); // long enough for one bounce, not a return trip
-    const limit = sim.terrain.channelHalfWidth(sim.skier.z) + WALL_WIDTH - 2;
-    expect(Math.abs(sim.skier.x)).toBeLessThanOrEqual(limit + 0.01);
-    expect(sim.skier.heading).toBeLessThan(0); // reflected back toward -x
+    let maxOver = -Infinity;
+    for (let i = 0; i < Math.round(5 / SIM_DT); i++) {
+      stepSim(sim, { steer: 1, stance: 0 }); // permanently carving at the wall
+      const s = sim.skier;
+      const limit = sim.terrain.channelHalfWidth(s.z) + WALL_WIDTH - 2;
+      maxOver = Math.max(maxOver, Math.abs(s.x - sim.terrain.centerX(s.z)) - limit);
+    }
+    expect(maxOver).toBeLessThanOrEqual(0.01);
   });
 
   it('crud slows a fast skier noticeably', () => {

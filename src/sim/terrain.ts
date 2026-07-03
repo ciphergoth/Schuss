@@ -95,6 +95,12 @@ export class Terrain {
     return BASE_HALF_WIDTH + (this.noise1(z / 140, 4) - 0.5) * 2 * WIDTH_SWING;
   }
 
+  // The direction the course itself is heading at this z (heading convention:
+  // 0 = straight down -z).
+  trackHeading(z: number): number {
+    return Math.atan2(this.centerX(z - 1) - this.centerX(z + 1), 2);
+  }
+
   // Height of the track's spine: mean grade plus big rollers. Sharp enough
   // (amplitude vs wavelength) that crests genuinely launch a fast skier —
   // these are the track's built-in kickers.

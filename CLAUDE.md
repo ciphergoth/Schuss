@@ -91,8 +91,10 @@ Both pointer axes are analog. Stance runs from -1 (tuck: half drag, higher top
 speed, 40% less turn authority) through 0 (neutral) to +1 (snowplow: heavy
 friction braking).
 
-- Mouse: x steers, y sets stance (top = tuck, bottom = snowplow), hold button
-  for full snowplow
+- Mouse: x position sets a TARGET direction relative to the course (center =
+  follow the track, edges = ~66 degrees across it); heading eases toward it
+  with no overshoot. Rate-based steering caused pilot-induced weaving.
+  y sets stance (top = tuck, bottom = snowplow); hold button for full snowplow
 - Touch: first finger works like the mouse position, second finger = full
   snowplow
 - Keyboard fallback: arrows or A/D steer; up/W tucks, Space/S/down snowplows
