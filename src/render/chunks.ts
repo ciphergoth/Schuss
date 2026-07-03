@@ -164,22 +164,23 @@ export class ChunkRenderer {
       group.add(bar);
     }
 
-    // Obstacles: ice crystals and fat striped bollards on the floor.
+    // Obstacles: ice crystals and fat striped bollards on the floor. Visual
+    // size derives from the sim's collision height so what you see is what
+    // you have to clear.
     for (const o of this.terrain.obstaclesForChunk(index)) {
       const y = this.terrain.height(o.x, o.z);
       let mesh: THREE.Mesh;
       if (o.kind === 'crystal') {
         mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(o.radius * 2, 0), this.crystal);
-        mesh.scale.y = 2.3;
-        mesh.position.set(o.x, y + o.radius * 2.2, o.z);
+        mesh.scale.y = o.height / (o.radius * 4); // icosahedron spans 2x its radius
         mesh.rotation.y = o.x * 7; // deterministic variety
       } else {
         mesh = new THREE.Mesh(
-          stripedPole(o.radius * 1.3, 2.4, this.orange, this.white),
+          stripedPole(o.radius * 1.3, o.height, this.orange, this.white),
           this.striped
         );
-        mesh.position.set(o.x, y + 1.2, o.z);
       }
+      mesh.position.set(o.x, y + o.height / 2, o.z);
       mesh.castShadow = true;
       group.add(mesh);
     }

@@ -54,6 +54,28 @@ export function createSkier(): SkierState {
   return { x: 0, z: 0, y: 0, vy: 0, heading: 0, speed: 0, airTime: 0, tumbling: 0 };
 }
 
+// Obstacles are solid cylinders: overlap in the horizontal plane only counts
+// below their top, so a jump has to genuinely clear them. A hit starts a
+// tumble and caroms the skier sideways past the obstacle.
+function collideObstacles(state: SkierState, terrain: Terrain): void {
+  for (const obstacle of terrain.obstaclesNear(state.z)) {
+    const dx = obstacle.x - state.x;
+    const dz = obstacle.z - state.z;
+    const r = obstacle.radius + SKIER_RADIUS;
+    if (dx * dx + dz * dz >= r * r) continue;
+    if (state.y >= terrain.height(obstacle.x, obstacle.z) + obstacle.height) continue;
+    state.tumbling = TUMBLE_TIME;
+    state.speed *= TUMBLE_SPEED_KEEP;
+    state.airTime = 0;
+    const perpX = Math.cos(state.heading);
+    const perpZ = Math.sin(state.heading);
+    const side = perpX * -dx + perpZ * -dz >= 0 ? 1 : -1;
+    state.x = obstacle.x + perpX * side * (r + 0.05);
+    state.z = obstacle.z + perpZ * side * (r + 0.05);
+    return;
+  }
+}
+
 // Carom off the invisible barrier just outside the rideable walls: clamp back
 // to the limit and reflect the heading across the local track direction.
 function bounceOffBounds(state: SkierState, terrain: Terrain): void {
@@ -90,24 +112,48 @@ export function stepSkier(
   }
 
   if (state.airTime > 0) {
-    // Ballistic: no friction, gravity on vy, a sliver of air steering.
-    // No obstacle collisions — clearing one in flight is earned.
+    // Ballistic: gravity on vy, air drag on speed (tuck still matters), a
+    // sliver of air steering. Obstacles stay solid — clear them or tumble.
+    const airTuck = Math.max(0, -input.stance);
     state.heading += TURN_RATE * AIR_TURN_FACTOR * input.steer * dt;
+    state.speed = Math.max(
+      0,
+      state.speed - DRAG * (1 - TUCK_DRAG_CUT * airTuck) * state.speed * state.speed * dt
+    );
     state.x += Math.sin(state.heading) * state.speed * dt;
     state.z += -Math.cos(state.heading) * state.speed * dt;
     bounceOffBounds(state, terrain);
     state.vy -= G * dt;
     state.y += state.vy * dt;
     state.airTime += dt;
+    collideObstacles(state, terrain);
+    if (state.tumbling > 0) return;
     const ground = terrain.height(state.x, state.z);
     if (state.y <= ground) {
       state.y = ground;
       state.airTime = 0;
-      // Hand vertical velocity back to terrain-following. Zeroing it instead
-      // makes the next step see the ground "falling away" at slope speed and
-      // relaunch forever — the perpetual-bounce bug.
+      // Landing is an inelastic collision with the slope: the velocity
+      // component into the surface is absorbed, the component along it
+      // survives. Landing on a descending face converts fall into speed;
+      // zeroing vy instead caused the perpetual-bounce bug.
+      const dirX = Math.sin(state.heading);
+      const dirZ = -Math.cos(state.heading);
+      let vx = dirX * state.speed;
+      let vz = dirZ * state.speed;
       const [lgx, lgz] = terrain.gradient(state.x, state.z);
-      state.vy = state.speed * (lgx * Math.sin(state.heading) + lgz * -Math.cos(state.heading));
+      const nl = Math.hypot(lgx, 1, lgz);
+      const nx = -lgx / nl;
+      const ny = 1 / nl;
+      const nz = -lgz / nl;
+      const into = vx * nx + state.vy * ny + vz * nz;
+      if (into < 0) {
+        vx -= into * nx;
+        vz -= into * nz;
+        state.vy -= into * ny;
+      }
+      const horizontal = Math.hypot(vx, vz);
+      if (horizontal > 0.1) state.heading = Math.atan2(vx, -vz);
+      state.speed = horizontal;
     }
     return;
   }
@@ -173,22 +219,5 @@ export function stepSkier(
     return;
   }
 
-  for (const obstacle of terrain.obstaclesNear(state.z)) {
-    const dx = obstacle.x - state.x;
-    const dz = obstacle.z - state.z;
-    const r = obstacle.radius + SKIER_RADIUS;
-    if (dx * dx + dz * dz < r * r) {
-      state.tumbling = TUMBLE_TIME;
-      state.speed *= TUMBLE_SPEED_KEEP;
-      // Carom sideways off the obstacle: place the skier beside it,
-      // perpendicular to their heading, so the tumble slides past instead
-      // of through. Pick the side the skier was already favoring.
-      const perpX = Math.cos(state.heading);
-      const perpZ = Math.sin(state.heading);
-      const side = perpX * -dx + perpZ * -dz >= 0 ? 1 : -1;
-      state.x = obstacle.x + perpX * side * (r + 0.05);
-      state.z = obstacle.z + perpZ * side * (r + 0.05);
-      return;
-    }
-  }
+  collideObstacles(state, terrain);
 }

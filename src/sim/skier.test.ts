@@ -169,6 +169,54 @@ describe('skier', () => {
     }
   });
 
+  it('airborne skiers hit obstacles they have not cleared', () => {
+    const sim = createSim(1);
+    const o = sim.terrain.obstaclesForChunk(2)[0]!;
+    teleport(sim, o.x, o.z + 3, 12);
+    // Low hop straight at the obstacle: not enough height to clear it.
+    stepSim(sim, { steer: 0, stance: 0, jump: 0.2 });
+    run(sim, 0.5, COAST);
+    expect(sim.skier.tumbling).toBeGreaterThan(0);
+  });
+
+  it('clearing an obstacle in flight requires real height', () => {
+    const sim = createSim(1);
+    const o = sim.terrain.obstaclesForChunk(2)[0]!;
+    teleport(sim, o.x, o.z + 3, 12);
+    // Same approach, but flying well above the obstacle top.
+    sim.skier.y = sim.terrain.height(o.x, o.z + 3) + o.height + 3;
+    sim.skier.airTime = 0.01;
+    sim.skier.vy = 2;
+    run(sim, 0.35, COAST);
+    expect(sim.skier.tumbling).toBe(0);
+    expect(sim.skier.z).toBeLessThan(o.z); // sailed past it
+  });
+
+  it('landing on a descending slope converts fall into speed', () => {
+    const sim = createSim(1);
+    teleport(sim, 0, 800, 20);
+    const before = sim.skier.speed;
+    stepSim(sim, { steer: 0, stance: 0, jump: 1 });
+    for (let i = 0; i < Math.round(3 / SIM_DT) && sim.skier.airTime > 0; i++) {
+      stepSim(sim, COAST);
+    }
+    expect(sim.skier.airTime).toBe(0);
+    // Fell for a while onto a downhill face: some of that vertical momentum
+    // becomes along-slope speed instead of vanishing.
+    expect(sim.skier.speed).toBeGreaterThan(before);
+  });
+
+  it('air drag still acts while airborne', () => {
+    const sim = createSim(1);
+    teleport(sim, 0, 800, 40);
+    sim.skier.y += 30; // high above the track
+    sim.skier.airTime = 0.01;
+    sim.skier.vy = 0;
+    run(sim, 1, COAST);
+    expect(sim.skier.airTime).toBeGreaterThan(0.9);
+    expect(sim.skier.speed).toBeLessThan(39.5);
+  });
+
   it('a released jump charge pops the skier airborne', () => {
     const sim = createSim(1);
     teleport(sim, 0, 800, 15);

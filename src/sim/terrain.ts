@@ -23,7 +23,8 @@ export interface Obstacle {
   x: number;
   z: number;
   radius: number; // collision radius
-  kind: 'crystal' | 'bollard'; // render variety only
+  height: number; // collision height above the snow; jumps must clear it
+  kind: 'crystal' | 'bollard';
 }
 
 export interface Pickup {
@@ -119,11 +120,14 @@ export class Terrain {
       const count = Math.min(3 + Math.floor(index / 4), 7);
       for (let t = 0; t < count; t++) {
         const z = zTop - rng() * CHUNK_LENGTH;
+        const radius = 0.45 + rng() * 0.35;
+        const kind = rng() < 0.5 ? 'crystal' : 'bollard';
         obstacles.push({
           x: this.centerX(z) + (rng() * 2 - 1) * (CHANNEL_HALF_WIDTH - 2.5),
           z,
-          radius: 0.45 + rng() * 0.35,
-          kind: rng() < 0.5 ? 'crystal' : 'bollard',
+          radius,
+          height: kind === 'crystal' ? radius * 4.6 : 2.4,
+          kind,
         });
       }
     }
