@@ -12,7 +12,10 @@ export interface Sim {
 }
 
 export function createSim(seed: number): Sim {
-  return { terrain: new Terrain(seed), skier: createSkier(), time: 0 };
+  const terrain = new Terrain(seed);
+  const skier = createSkier();
+  skier.y = terrain.height(skier.x, skier.z);
+  return { terrain, skier, time: 0 };
 }
 
 export function stepSim(sim: Sim, input: SkierInput): void {

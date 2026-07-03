@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { SkierInput, SkierState } from '../sim/skier';
-import { Terrain } from '../sim/terrain';
 
 // Two-segment legs with a solvable pose: the thigh pitches forward by phi and
 // the knee flexes by 2*phi, which keeps the ankle exactly under the hip, so
@@ -91,22 +90,23 @@ export function createSkierView(scene: THREE.Scene): SkierView {
 export function updateSkierView(
   view: SkierView,
   state: SkierState,
-  terrain: Terrain,
   input: SkierInput,
   dt: number
 ): void {
   const { group, pelvis, torso, legs, skis, pose } = view;
 
-  group.position.set(state.x, terrain.height(state.x, state.z), state.z);
+  group.position.set(state.x, state.y, state.z);
   group.rotation.y = Math.atan2(Math.sin(state.heading), -Math.cos(state.heading));
   // Lean into turns. A tumble is a forward somersault: the timer runs to zero,
   // so tumbling * 10 spins ~2 turns and lands exactly upright.
   group.rotation.x = state.tumbling * 10;
   group.rotation.z = -input.steer * 0.3;
 
-  // Ease the pose toward the input stance, frame-rate independently.
+  // Ease the pose toward the input stance, frame-rate independently. Airborne,
+  // the knees come up regardless of stance.
   const k = 1 - Math.exp(-12 * dt);
-  pose.tuck += (Math.max(0, -input.stance) - pose.tuck) * k;
+  const tuckTarget = state.airTime > 0 ? Math.max(0.6, -input.stance) : Math.max(0, -input.stance);
+  pose.tuck += (tuckTarget - pose.tuck) * k;
   pose.plow += (Math.max(0, input.stance) - pose.plow) * k;
 
   const phi = NEUTRAL_PHI + 0.75 * pose.tuck + 0.2 * pose.plow;

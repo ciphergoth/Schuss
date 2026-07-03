@@ -19,7 +19,7 @@ export function updateCamera(
 ): void {
   const dirX = Math.sin(state.heading);
   const dirZ = -Math.cos(state.heading);
-  const skierY = terrain.height(state.x, state.z);
+  const skierY = state.y;
 
   const target = new THREE.Vector3(state.x - dirX * 9, 0, state.z - dirZ * 9);
   target.y = Math.max(terrain.height(target.x, target.z) + 2.5, skierY + 4);

@@ -72,13 +72,12 @@ function renderFrame(delta: number): void {
   lastInput = getInput();
   const skier = sim.skier;
   chunkRenderer.update(sim.terrain.chunkIndexAt(skier.z));
-  updateSkierView(skierView, skier, sim.terrain, lastInput, delta);
+  updateSkierView(skierView, skier, lastInput, delta);
   updateCamera(camera, skier, sim.terrain, delta);
 
   // Keep the sun's shadow box centered on the skier.
-  const skierY = sim.terrain.height(skier.x, skier.z);
-  sun.position.set(skier.x + 40, skierY + 24, skier.z - 12);
-  sun.target.position.set(skier.x, skierY, skier.z);
+  sun.position.set(skier.x + 40, skier.y + 24, skier.z - 12);
+  sun.target.position.set(skier.x, skier.y, skier.z);
 
   audio.update(skier, lastInput);
 

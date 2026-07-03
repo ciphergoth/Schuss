@@ -67,7 +67,7 @@ export class ChunkRenderer {
       pos.setY(v, this.terrain.height(x, z));
       const [gx, gz] = this.terrain.gradient(x, z);
       const deviation = Math.hypot(gx, gz - GRADE);
-      vertexColor.lerpColors(SNOW_FLAT, SNOW_STEEP, Math.min(deviation / 0.3, 1));
+      vertexColor.lerpColors(SNOW_FLAT, SNOW_STEEP, Math.min(deviation / 0.22, 1));
       colors[v * 3] = vertexColor.r;
       colors[v * 3 + 1] = vertexColor.g;
       colors[v * 3 + 2] = vertexColor.b;

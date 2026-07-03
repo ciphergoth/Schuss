@@ -8,6 +8,20 @@ function run(sim: Sim, seconds: number, input: SkierInput): void {
   for (let i = 0; i < Math.round(seconds / SIM_DT); i++) stepSim(sim, input);
 }
 
+// Move the skier somewhere on the mountain, keeping state self-consistent:
+// y on the terrain and vy following the slope at the given speed — otherwise
+// the first step correctly rules them airborne (ground falls away under a
+// skier with vy=0) and they hop over whatever the test aimed them at.
+function teleport(sim: Sim, x: number, z: number, speed = 0): void {
+  const s = sim.skier;
+  s.x = x;
+  s.z = z;
+  s.speed = speed;
+  s.y = sim.terrain.height(x, z);
+  const [gx, gz] = sim.terrain.gradient(x, z);
+  s.vy = speed * (gx * Math.sin(s.heading) + gz * -Math.cos(s.heading));
+}
+
 describe('skier', () => {
   it('accelerates downhill from rest without drifting sideways', () => {
     const sim = createSim(1);
@@ -63,8 +77,8 @@ describe('skier', () => {
     const tucked = createSim(1);
     // Start well uphill of the start line: the slope there has no interior
     // trees, so a long straight run can't crash.
-    coasting.skier.z = 800;
-    tucked.skier.z = 800;
+    teleport(coasting, 0, 800);
+    teleport(tucked, 0, 800);
     run(coasting, 20, COAST);
     run(tucked, 20, { steer: 0, stance: -1 });
     expect(coasting.skier.tumbling).toBe(0);
@@ -82,12 +96,40 @@ describe('skier', () => {
     expect(tucked.skier.heading).toBeLessThan(neutral.skier.heading * 0.75);
   });
 
+  it('launches off rollers at speed and lands again', () => {
+    const sim = createSim(1);
+    // Tree-free slope uphill of the start line, fast in a tuck.
+    teleport(sim, 0, 800, 30);
+    let sawAir = 0;
+    let maxHeightAboveGround = 0;
+    for (let i = 0; i < Math.round(15 / SIM_DT); i++) {
+      stepSim(sim, { steer: 0, stance: -1 });
+      if (sim.skier.airTime > 0) {
+        sawAir = Math.max(sawAir, sim.skier.airTime);
+        maxHeightAboveGround = Math.max(
+          maxHeightAboveGround,
+          sim.skier.y - sim.terrain.height(sim.skier.x, sim.skier.z)
+        );
+      }
+    }
+    expect(sawAir).toBeGreaterThan(0.1); // real hangtime, not a single-step blip
+    expect(maxHeightAboveGround).toBeGreaterThan(0.1);
+    expect(maxHeightAboveGround).toBeLessThan(15); // and not launched to the moon
+  });
+
+  it('stays glued to the terrain at low speed', () => {
+    const sim = createSim(3);
+    run(sim, 2, COAST); // still slow after 2s
+    const { skier } = sim;
+    expect(skier.y).toBeCloseTo(sim.terrain.height(skier.x, skier.z), 6);
+  });
+
   it('tumbles on a tree hit, loses most speed, then recovers', () => {
     const sim = createSim(1);
     const tree = sim.terrain.treesForChunk(2)[0]!;
-    sim.skier.x = tree.x;
-    sim.skier.z = tree.z + 5; // 5m uphill of the tree, aimed straight at it
-    sim.skier.speed = 15;
+    // 3m uphill of the tree, aimed straight at it, slow enough to stay
+    // grounded (fast skiers can launch off a mogul and clear trees entirely).
+    teleport(sim, tree.x, tree.z + 3, 10);
     run(sim, 0.6, COAST);
     expect(sim.skier.tumbling).toBeGreaterThan(0);
     expect(sim.skier.speed).toBeLessThan(5);

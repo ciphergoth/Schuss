@@ -8,8 +8,11 @@ export interface SkierInput {
 export interface SkierState {
   x: number;
   z: number;
+  y: number; // world height; equals terrain height while grounded
+  vy: number; // vertical velocity; terrain-following while grounded
   heading: number; // radians; 0 = straight downhill (-z), positive = toward +x
-  speed: number; // m/s along the heading
+  speed: number; // horizontal m/s along the heading
+  airTime: number; // seconds airborne this jump; 0 = grounded
   tumbling: number; // seconds of tumble remaining; 0 = on skis
 }
 
@@ -27,9 +30,10 @@ export const SKIER_RADIUS = 0.4;
 const TUMBLE_TIME = 1.3; // seconds without control after a hit
 const TUMBLE_SPEED_KEEP = 0.25;
 const TUMBLE_FRICTION = 0.35;
+const AIR_TURN_FACTOR = 0.25; // little steering authority mid-air
 
 export function createSkier(): SkierState {
-  return { x: 0, z: 0, heading: 0, speed: 0, tumbling: 0 };
+  return { x: 0, z: 0, y: 0, vy: 0, heading: 0, speed: 0, airTime: 0, tumbling: 0 };
 }
 
 export function stepSkier(
@@ -40,11 +44,32 @@ export function stepSkier(
 ): void {
   if (state.tumbling > 0) {
     // No control while tumbling: skid straight ahead under heavy friction,
-    // then pop back up. Collisions are ignored — you're already down.
+    // glued to the snow, then pop back up. Collisions are ignored — you're
+    // already down.
     state.tumbling = Math.max(0, state.tumbling - dt);
     state.speed = Math.max(0, state.speed - TUMBLE_FRICTION * G * dt);
     state.x += Math.sin(state.heading) * state.speed * dt;
     state.z += -Math.cos(state.heading) * state.speed * dt;
+    state.y = terrain.height(state.x, state.z);
+    state.vy = 0;
+    return;
+  }
+
+  if (state.airTime > 0) {
+    // Ballistic: no friction, gravity on vy, a sliver of air steering.
+    // No tree collisions — clearing a tree in flight is earned.
+    state.heading += TURN_RATE * AIR_TURN_FACTOR * input.steer * dt;
+    state.x += Math.sin(state.heading) * state.speed * dt;
+    state.z += -Math.cos(state.heading) * state.speed * dt;
+    state.vy -= G * dt;
+    state.y += state.vy * dt;
+    state.airTime += dt;
+    const ground = terrain.height(state.x, state.z);
+    if (state.y <= ground) {
+      state.y = ground;
+      state.vy = 0;
+      state.airTime = 0;
+    }
     return;
   }
 
@@ -71,6 +96,21 @@ export function stepSkier(
 
   state.x += dirX * state.speed * dt;
   state.z += dirZ * state.speed * dt;
+
+  // Stick to the terrain unless it falls away faster than gravity can pull us
+  // down from the current vertical velocity — then we're airborne (crests and
+  // rollers launch you at speed).
+  const ground = terrain.height(state.x, state.z);
+  const followVy = (ground - state.y) / dt;
+  const ballisticVy = state.vy - G * dt;
+  if (followVy < ballisticVy) {
+    state.vy = ballisticVy;
+    state.y += state.vy * dt;
+    state.airTime = dt;
+    return;
+  }
+  state.y = ground;
+  state.vy = followVy;
 
   for (const tree of terrain.treesNear(state.z)) {
     const dx = tree.x - state.x;

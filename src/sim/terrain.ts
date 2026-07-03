@@ -38,8 +38,10 @@ export class Terrain {
   }
 
   height(x: number, z: number): number {
+    // Rolls are the jump ramps; moguls stay gentle so they read as texture
+    // rather than launching the skier off every bump.
     const rolls = (this.noise(x / 30, z / 30, 1) - 0.5) * 2 * 1.2;
-    const moguls = (this.noise(x / 8, z / 8, 2) - 0.5) * 2 * 0.35;
+    const moguls = (this.noise(x / 10, z / 10, 2) - 0.5) * 2 * 0.15;
     return GRADE * z + rolls + moguls;
   }
 

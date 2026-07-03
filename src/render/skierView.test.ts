@@ -11,8 +11,9 @@ const terrain = new Terrain(1);
 function settled(input: SkierInput): SkierView {
   const view = createSkierView(new THREE.Scene());
   const state = createSkier();
+  state.y = terrain.height(state.x, state.z);
   // Plenty of frames for the pose easing to converge.
-  for (let i = 0; i < 300; i++) updateSkierView(view, state, terrain, input, 1 / 60);
+  for (let i = 0; i < 300; i++) updateSkierView(view, state, input, 1 / 60);
   return view;
 }
 
@@ -50,10 +51,10 @@ describe('skier rig', () => {
   it('tumbling somersaults the skier and recovery lands upright', () => {
     const view = createSkierView(new THREE.Scene());
     const state = { ...createSkier(), tumbling: 0.6 };
-    updateSkierView(view, state, terrain, { steer: 0, stance: 0 }, 1 / 60);
+    updateSkierView(view, state, { steer: 0, stance: 0 }, 1 / 60);
     expect(Math.abs(view.group.rotation.x)).toBeGreaterThan(1);
     state.tumbling = 0;
-    updateSkierView(view, state, terrain, { steer: 0, stance: 0 }, 1 / 60);
+    updateSkierView(view, state, { steer: 0, stance: 0 }, 1 / 60);
     expect(view.group.rotation.x).toBe(0);
   });
 });
