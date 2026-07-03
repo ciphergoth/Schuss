@@ -99,11 +99,12 @@ export class ChunkRenderer {
 
     // Track ribbon: a grid in track space (offset from centerline x along z),
     // so the mesh follows the course through its curves.
+    // Enough z-resolution that kicker ramps and lips read as built geometry.
     let geo: THREE.BufferGeometry = new THREE.PlaneGeometry(
       RIBBON_HALF_WIDTH * 2,
       CHUNK_LENGTH,
       30,
-      14
+      28
     );
     geo.rotateX(-Math.PI / 2);
     geo.translate(0, 0, zMid);
@@ -141,6 +142,19 @@ export class ChunkRenderer {
         const x = this.terrain.centerX(z) + side * (CHANNEL_HALF_WIDTH + 1.5);
         const marker = new THREE.Mesh(bollardGeo, this.striped);
         marker.position.set(x, this.terrain.height(x, z) + 0.75, z);
+        marker.castShadow = true;
+        group.add(marker);
+      }
+    }
+
+    // Tall striped poles flag each kicker's lip.
+    const jump = this.terrain.jumpForChunk(index);
+    if (jump) {
+      const lipPole = stripedPole(0.2, 2.6, this.red, this.white);
+      for (const side of [-1, 1]) {
+        const x = this.terrain.centerX(jump.zLip) + side * (CHANNEL_HALF_WIDTH - 0.5);
+        const marker = new THREE.Mesh(lipPole, this.striped);
+        marker.position.set(x, this.terrain.height(x, jump.zLip) + 1.3, jump.zLip);
         marker.castShadow = true;
         group.add(marker);
       }

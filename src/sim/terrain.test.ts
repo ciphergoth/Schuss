@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { CHANNEL_HALF_WIDTH, CHUNK_LENGTH, GRADE, Terrain, WALL_WIDTH } from './terrain';
+import {
+  CHANNEL_HALF_WIDTH,
+  CHUNK_LENGTH,
+  GRADE,
+  JUMP_LIP_HEIGHT,
+  Terrain,
+  WALL_WIDTH,
+} from './terrain';
 
 describe('terrain', () => {
   it('is a pure function of the seed', () => {
@@ -89,6 +96,32 @@ describe('terrain', () => {
       }
     }
     expect(t.pickupsForChunk(0)).toEqual([]);
+  });
+
+  it('places deterministic ski jumps along the course', () => {
+    const a = new Terrain(1);
+    const b = new Terrain(1);
+    const jumpChunks: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      expect(a.jumpForChunk(i)).toEqual(b.jumpForChunk(i));
+      if (a.jumpForChunk(i)) jumpChunks.push(i);
+    }
+    expect(jumpChunks.length).toBeGreaterThan(3);
+    expect(a.jumpForChunk(0)).toBeNull(); // never in the run-in
+  });
+
+  it('kicker lips are sheer drops on the floor but fade before the walls', () => {
+    const t = new Terrain(1);
+    let index = 3;
+    while (!t.jumpForChunk(index)) index++;
+    const { zLip } = t.jumpForChunk(index)!;
+    const c = t.centerX(zLip);
+    const dropAtCenter = t.height(c, zLip + 0.05) - t.height(c, zLip - 0.05);
+    expect(dropAtCenter).toBeGreaterThan(JUMP_LIP_HEIGHT * 0.8);
+    const dropOnWall =
+      t.height(c + CHANNEL_HALF_WIDTH + 3, zLip + 0.05) -
+      t.height(c + CHANNEL_HALF_WIDTH + 3, zLip - 0.05);
+    expect(Math.abs(dropOnWall)).toBeLessThan(0.3);
   });
 
   it('gradient matches height differences', () => {

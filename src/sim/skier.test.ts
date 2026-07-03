@@ -217,6 +217,21 @@ describe('skier', () => {
     expect(sim.skier.speed).toBeLessThan(39.5);
   });
 
+  it('kickers are the real air: riding one at speed flies far', () => {
+    const sim = createSim(1);
+    let index = 3;
+    while (!sim.terrain.jumpForChunk(index)) index++;
+    const { zLip } = sim.terrain.jumpForChunk(index)!;
+    const approach = zLip + 22;
+    teleport(sim, sim.terrain.centerX(approach), approach, 18);
+    let maxAir = 0;
+    for (let i = 0; i < Math.round(4 / SIM_DT); i++) {
+      stepSim(sim, COAST);
+      maxAir = Math.max(maxAir, sim.skier.airTime);
+    }
+    expect(maxAir).toBeGreaterThan(0.5); // far beyond any roller hop
+  });
+
   it('a released jump charge pops the skier airborne', () => {
     const sim = createSim(1);
     teleport(sim, 0, 800, 15);

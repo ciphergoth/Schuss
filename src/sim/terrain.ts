@@ -33,6 +33,15 @@ export interface Pickup {
   z: number;
 }
 
+export interface Jump {
+  zLip: number; // the edge you fly off; the ramp rises toward it from +z
+}
+
+// Kicker geometry: a concave ramp (steepening toward the lip) spanning the
+// channel floor, then a sheer drop. The main mechanism for getting air.
+export const JUMP_RAMP_LENGTH = 14;
+export const JUMP_LIP_HEIGHT = 2.2;
+
 function smoothstep(t: number): number {
   return t * t * (3 - 2 * t);
 }
@@ -79,13 +88,33 @@ export class Terrain {
     return GRADE * z + (this.noise1(z / 55, 2) - 0.5) * 2 * 3.2;
   }
 
+  // A ski jump every few chunks, deterministic per seed. The whole ramp fits
+  // inside its chunk, so height() only ever consults one chunk's jump.
+  jumpForChunk(index: number): Jump | null {
+    if (index < 3) return null;
+    if (hash2(this.seed, index, 31337) >= 0.25) return null;
+    return { zLip: -index * CHUNK_LENGTH - 24 };
+  }
+
+  private jumpHeight(d: number, z: number): number {
+    const jump = this.jumpForChunk(this.chunkIndexAt(z));
+    if (!jump) return 0;
+    const u = z - jump.zLip; // distance uphill of the lip
+    if (u < 0 || u > JUMP_RAMP_LENGTH) return 0;
+    const rise = 1 - u / JUMP_RAMP_LENGTH;
+    // Fade the ramp out before the walls so the banks stay rideable.
+    const fade = Math.min(1, Math.max(0, (CHANNEL_HALF_WIDTH + 2 - Math.abs(d)) / 4));
+    return JUMP_LIP_HEIGHT * rise * rise * smoothstep(fade);
+  }
+
   height(x: number, z: number): number {
     const d = x - this.centerX(z);
     const a = Math.abs(d);
-    // Floor: gentle mogul texture. Walls: quadratic bank that keeps
-    // steepening past the rideable zone, so the course contains you without
-    // any artificial clamp.
+    // Floor: gentle mogul texture plus any kicker ramp. Walls: quadratic bank
+    // that keeps steepening past the rideable zone, so the course contains
+    // you without any artificial clamp.
     let y = this.baseY(z) + (this.noise2(x / 9, z / 9, 3) - 0.5) * 2 * 0.12;
+    y += this.jumpHeight(d, z);
     const over = a - CHANNEL_HALF_WIDTH;
     if (over > 0) {
       y += 0.09 * over * over * (1 + Math.max(0, over - WALL_WIDTH) * 0.3);
