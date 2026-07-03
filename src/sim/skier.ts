@@ -31,9 +31,11 @@ export const SKIER_RADIUS = 0.4;
 // ballistic path by this much extra downward acceleration (m/s^2, on top of
 // gravity) before ground contact breaks. Compared per-step, scaled by dt.
 const LAUNCH_EXTRA_ACCEL = 6;
-// Jump: released brake charge pops the skier off the snow.
-const JUMP_POP_MIN = 3.2;
-const JUMP_POP_MAX = 6.6;
+// Jump: a released charge pops the skier off the snow. Deliberately modest —
+// a hop for line adjustments and a little extra off a lip; real air comes
+// from the terrain (and, later, purpose-built ski jumps).
+const JUMP_POP_MIN = 1.8;
+const JUMP_POP_MAX = 3.8;
 // Invisible outer barrier just past the rideable wall: hitting it caroms you
 // back into the course (grounded or flying) instead of onto the endless
 // mathematical super-wall outside the ribbon.
