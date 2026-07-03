@@ -10,7 +10,7 @@ export interface SkierState {
   z: number;
   heading: number; // radians; 0 = straight downhill (-z), positive = toward +x
   speed: number; // m/s along the heading
-  crashed: boolean;
+  tumbling: number; // seconds of tumble remaining; 0 = on skis
 }
 
 const G = 9.81;
@@ -22,8 +22,14 @@ const TUCK_TURN_CUT = 0.4; // full tuck costs 40% of turn authority
 const TURN_RATE = 1.6; // rad/s at full turning authority
 export const SKIER_RADIUS = 0.4;
 
+// Punishment is light by design: a tree hit costs most of your speed and a
+// moment of comedy, never the run.
+const TUMBLE_TIME = 1.3; // seconds without control after a hit
+const TUMBLE_SPEED_KEEP = 0.25;
+const TUMBLE_FRICTION = 0.35;
+
 export function createSkier(): SkierState {
-  return { x: 0, z: 0, heading: 0, speed: 0, crashed: false };
+  return { x: 0, z: 0, heading: 0, speed: 0, tumbling: 0 };
 }
 
 export function stepSkier(
@@ -32,7 +38,15 @@ export function stepSkier(
   input: SkierInput,
   dt: number
 ): void {
-  if (state.crashed) return;
+  if (state.tumbling > 0) {
+    // No control while tumbling: skid straight ahead under heavy friction,
+    // then pop back up. Collisions are ignored — you're already down.
+    state.tumbling = Math.max(0, state.tumbling - dt);
+    state.speed = Math.max(0, state.speed - TUMBLE_FRICTION * G * dt);
+    state.x += Math.sin(state.heading) * state.speed * dt;
+    state.z += -Math.cos(state.heading) * state.speed * dt;
+    return;
+  }
 
   const plow = Math.max(0, input.stance);
   const tuck = Math.max(0, -input.stance);
@@ -63,8 +77,16 @@ export function stepSkier(
     const dz = tree.z - state.z;
     const r = tree.radius + SKIER_RADIUS;
     if (dx * dx + dz * dz < r * r) {
-      state.crashed = true;
-      state.speed = 0;
+      state.tumbling = TUMBLE_TIME;
+      state.speed *= TUMBLE_SPEED_KEEP;
+      // Carom sideways off the trunk: place the skier beside the tree,
+      // perpendicular to their heading, so the tumble slides past it instead
+      // of through it. Pick the side the skier was already favoring.
+      const perpX = Math.cos(state.heading);
+      const perpZ = Math.sin(state.heading);
+      const side = perpX * -dx + perpZ * -dz >= 0 ? 1 : -1;
+      state.x = tree.x + perpX * side * (r + 0.05);
+      state.z = tree.z + perpZ * side * (r + 0.05);
       return;
     }
   }

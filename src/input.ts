@@ -16,9 +16,8 @@ export function pointerAxis(clientPos: number, viewportExtent: number): number {
 
 // Mouse: x steers, y sets stance (top = tuck, bottom = snowplow), held button
 // is full snowplow. Touch: first finger does the same, a second finger is full
-// snowplow. Keyboard still works and wins while held. Any pointer press
-// restarts after a wipeout.
-export function setupInput(onRestart: () => void, isCrashed: () => boolean): () => SkierInput {
+// snowplow. Keyboard still works and wins while held. R starts a fresh run.
+export function setupInput(onRestart: () => void): () => SkierInput {
   const down = new Set<string>();
   const touches = new Map<number, { x: number; y: number }>(); // non-mouse pointers
   let mouse: { x: number; y: number } | null = null; // last known cursor position
@@ -31,10 +30,6 @@ export function setupInput(onRestart: () => void, isCrashed: () => boolean): () 
   window.addEventListener('keyup', (e) => down.delete(e.code));
 
   window.addEventListener('pointerdown', (e) => {
-    if (isCrashed()) {
-      onRestart();
-      return;
-    }
     if (e.pointerType === 'mouse') mouseBrake = true;
     else touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
   });

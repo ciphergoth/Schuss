@@ -12,7 +12,7 @@ describe('skier', () => {
   it('accelerates downhill from rest without drifting sideways', () => {
     const sim = createSim(1);
     run(sim, 4, COAST);
-    expect(sim.skier.crashed).toBe(false);
+    expect(sim.skier.tumbling).toBe(0);
     expect(sim.skier.speed).toBeGreaterThan(5);
     expect(distanceSkied(sim)).toBeGreaterThan(15);
     expect(sim.skier.x).toBe(0); // heading never changed, so no lateral motion
@@ -67,8 +67,8 @@ describe('skier', () => {
     tucked.skier.z = 800;
     run(coasting, 20, COAST);
     run(tucked, 20, { steer: 0, stance: -1 });
-    expect(coasting.skier.crashed).toBe(false);
-    expect(tucked.skier.crashed).toBe(false);
+    expect(coasting.skier.tumbling).toBe(0);
+    expect(tucked.skier.tumbling).toBe(0);
     expect(tucked.skier.speed).toBeGreaterThan(coasting.skier.speed + 3);
   });
 
@@ -82,18 +82,26 @@ describe('skier', () => {
     expect(tucked.skier.heading).toBeLessThan(neutral.skier.heading * 0.75);
   });
 
-  it('crashes into a tree and stays down', () => {
+  it('tumbles on a tree hit, loses most speed, then recovers', () => {
     const sim = createSim(1);
     const tree = sim.terrain.treesForChunk(2)[0]!;
     sim.skier.x = tree.x;
     sim.skier.z = tree.z + 5; // 5m uphill of the tree, aimed straight at it
     sim.skier.speed = 15;
-    run(sim, 1, COAST);
-    expect(sim.skier.crashed).toBe(true);
-    const { x, z } = sim.skier;
-    run(sim, 1, COAST);
-    expect(sim.skier.x).toBe(x);
-    expect(sim.skier.z).toBe(z);
-    expect(sim.skier.speed).toBe(0);
+    run(sim, 0.6, COAST);
+    expect(sim.skier.tumbling).toBeGreaterThan(0);
+    expect(sim.skier.speed).toBeLessThan(5);
+    // Pushed clear of the trunk, not stuck inside it.
+    expect(Math.hypot(tree.x - sim.skier.x, tree.z - sim.skier.z)).toBeGreaterThan(tree.radius);
+
+    // No steering authority while tumbling.
+    const headingDuringTumble = sim.skier.heading;
+    run(sim, 0.3, { steer: 1, stance: 0 });
+    expect(sim.skier.heading).toBe(headingDuringTumble);
+
+    // Back on skis and accelerating again — the run never ended.
+    run(sim, 3, COAST);
+    expect(sim.skier.tumbling).toBe(0);
+    expect(sim.skier.speed).toBeGreaterThan(1);
   });
 });

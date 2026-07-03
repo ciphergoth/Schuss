@@ -47,10 +47,13 @@ describe('skier rig', () => {
     expect(plowed.skis[1].position.x).toBeGreaterThan(neutral.skis[1].position.x + 0.05);
   });
 
-  it('crash lays the skier down', () => {
+  it('tumbling somersaults the skier and recovery lands upright', () => {
     const view = createSkierView(new THREE.Scene());
-    const state = { ...createSkier(), crashed: true };
+    const state = { ...createSkier(), tumbling: 0.6 };
     updateSkierView(view, state, terrain, { steer: 0, stance: 0 }, 1 / 60);
-    expect(Math.abs(view.group.rotation.z)).toBeGreaterThan(1);
+    expect(Math.abs(view.group.rotation.x)).toBeGreaterThan(1);
+    state.tumbling = 0;
+    updateSkierView(view, state, terrain, { steer: 0, stance: 0 }, 1 / 60);
+    expect(view.group.rotation.x).toBe(0);
   });
 });

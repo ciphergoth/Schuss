@@ -22,7 +22,7 @@ const MASTER_LEVEL = 0.6;
 export class GameAudio {
   private nodes: AudioNodes | null = null;
   private muted = false;
-  private wasCrashed = false;
+  private wasTumbling = false;
 
   constructor() {
     const unlock = () => {
@@ -77,10 +77,11 @@ export class GameAudio {
     const { ctx, windGain, windFilter, carveGain } = this.nodes;
     const t = ctx.currentTime;
 
-    if (state.crashed && !this.wasCrashed) this.playCrash();
-    this.wasCrashed = state.crashed;
+    const tumbling = state.tumbling > 0;
+    if (tumbling && !this.wasTumbling) this.playCrash();
+    this.wasTumbling = tumbling;
 
-    const p = mix(state.crashed ? 0 : state.speed, input.steer, input.stance);
+    const p = mix(state.speed, input.steer, input.stance);
     windGain.gain.setTargetAtTime(p.windGain, t, 0.08);
     windFilter.frequency.setTargetAtTime(p.windFreq, t, 0.08);
     carveGain.gain.setTargetAtTime(p.carveGain, t, 0.05);

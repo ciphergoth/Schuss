@@ -99,8 +99,10 @@ export function updateSkierView(
 
   group.position.set(state.x, terrain.height(state.x, state.z), state.z);
   group.rotation.y = Math.atan2(Math.sin(state.heading), -Math.cos(state.heading));
-  // Lean into turns; lie flat after a wipeout.
-  group.rotation.z = state.crashed ? 1.45 : -input.steer * 0.3;
+  // Lean into turns. A tumble is a forward somersault: the timer runs to zero,
+  // so tumbling * 10 spins ~2 turns and lands exactly upright.
+  group.rotation.x = state.tumbling * 10;
+  group.rotation.z = -input.steer * 0.3;
 
   // Ease the pose toward the input stance, frame-rate independently.
   const k = 1 - Math.exp(-12 * dt);

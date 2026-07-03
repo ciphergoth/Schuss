@@ -39,12 +39,9 @@ const overlay = document.getElementById('overlay')!;
 let sim = createSim(seed);
 let lastInput: SkierInput = { steer: 0, stance: 0 };
 const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
-const getInput = setupInput(
-  () => {
-    sim = createSim(seed);
-  },
-  () => sim.skier.crashed
-);
+const getInput = setupInput(() => {
+  sim = createSim(seed);
+});
 
 const audio = new GameAudio();
 
@@ -86,7 +83,7 @@ function renderFrame(delta: number): void {
   audio.update(skier, lastInput);
 
   hud.textContent = `${Math.round(skier.speed * 3.6)} km/h · ${Math.round(distanceSkied(sim))} m`;
-  overlay.classList.toggle('visible', skier.crashed);
+  overlay.classList.toggle('visible', skier.tumbling > 0);
 
   renderer.render(scene, camera);
 }

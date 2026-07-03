@@ -25,32 +25,26 @@
       }
       #overlay {
         position: fixed;
-        inset: 0;
+        top: 20%;
+        left: 0;
+        right: 0;
         display: none;
-        align-items: center;
         justify-content: center;
-        flex-direction: column;
-        gap: 8px;
         color: white;
         text-shadow: 0 2px 6px rgba(0, 0, 40, 0.8);
-        background: rgba(20, 30, 60, 0.35);
         font-size: 42px;
+        font-style: italic;
         user-select: none;
+        pointer-events: none;
       }
       #overlay.visible {
         display: flex;
-      }
-      #overlay small {
-        font-size: 20px;
       }
     </style>
   </head>
   <body>
     <div id="hud"></div>
-    <div id="overlay">
-      <div>Wipeout!</div>
-      <small>Click, tap, or press R to restart</small>
-    </div>
+    <div id="overlay">Wipeout!</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
