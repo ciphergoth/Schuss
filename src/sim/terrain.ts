@@ -109,9 +109,9 @@ export class Terrain {
 
   // THE GOLDEN PATH: the intended line through the course, as an offset from
   // the centerline. Every generator derives from it — kickers sit on it, the
-  // crud-free corridor follows it, coins trace it, gem arcs assume you fly
-  // off its kickers at PLAN_SPEED. Ski it and the course pays; leave it and
-  // crud, distance, and missed rewards are the price.
+  // crud-free corridor follows it, gem arcs assume you fly off its kickers at
+  // PLAN_SPEED. It is deliberately unmarked: reading the clean snow and the
+  // kicker gates to find it IS the game. Coins sit off it as paid detours.
   planOffset(z: number): number {
     return (this.noise1(z / 90, 6) - 0.5) * 2 * (this.channelHalfWidth(z) - 6);
   }
