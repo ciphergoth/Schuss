@@ -25,6 +25,16 @@ describe('audio mix params', () => {
     expect(mix(20, 0, 1).carveGain).toBeGreaterThan(mix(20, 1, 0).carveGain);
   });
 
+  it('crud grinds louder with stickiness and speed, silent when clean or still', () => {
+    expect(mix(20, 0, 0, 0).crudGain).toBe(0);
+    expect(mix(0, 0, 0, 1).crudGain).toBe(0);
+    const slow = mix(6, 0, 0, 1).crudGain;
+    const fast = mix(20, 0, 0, 1).crudGain;
+    expect(slow).toBeGreaterThan(0.1);
+    expect(fast).toBeGreaterThan(slow);
+    expect(mix(20, 0, 0, 0.5).crudGain).toBeLessThan(fast);
+  });
+
   it('stays within sane bounds at extremes', () => {
     for (const speed of [0, 20, 40, 100]) {
       for (const steer of [-1, 0, 1]) {

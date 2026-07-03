@@ -109,7 +109,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   sun.position.set(skier.x + 40, skier.y + 24, skier.z - 12);
   sun.target.position.set(skier.x, skier.y, skier.z);
 
-  audio.update(skier, lastInput, sim.boosting);
+  audio.update(skier, lastInput, sim.boosting, sim.terrain.stickinessAt(skier.x, skier.z));
 
   // The run IS the score: speed and distance, full SI. The vertical bar on
   // the left is the boost tank, SSX-style.

@@ -8,6 +8,7 @@ interface AudioNodes {
   windFilter: BiquadFilterNode;
   carveGain: GainNode;
   boostGain: GainNode;
+  crudGain: GainNode;
   noise: AudioBuffer;
 }
 
@@ -82,24 +83,36 @@ export class GameAudio {
     boostGain.gain.value = 0;
     source.connect(boostFilter).connect(boostGain).connect(master);
 
+    // Crud grind: a rough low-mid band, clearly apart from the bright carve
+    // hiss and the deep boost rumble.
+    const crudFilter = ctx.createBiquadFilter();
+    crudFilter.type = 'bandpass';
+    crudFilter.frequency.value = 520;
+    crudFilter.Q.value = 1.4;
+    const crudGain = ctx.createGain();
+    crudGain.gain.value = 0;
+    source.connect(crudFilter).connect(crudGain).connect(master);
+
     source.start();
-    return { ctx, master, windGain, windFilter, carveGain, boostGain, noise };
+    return { ctx, master, windGain, windFilter, carveGain, boostGain, crudGain, noise };
   }
 
-  update(state: SkierState, input: SkierInput, boosting = false): void {
+  update(state: SkierState, input: SkierInput, boosting = false, stickiness = 0): void {
     if (!this.nodes) return;
-    const { ctx, windGain, windFilter, carveGain, boostGain } = this.nodes;
+    const { ctx, windGain, windFilter, carveGain, boostGain, crudGain } = this.nodes;
     const t = ctx.currentTime;
 
     const tumbling = state.tumbling > 0;
     if (tumbling && !this.wasTumbling) this.playCrash();
     this.wasTumbling = tumbling;
 
-    const p = mix(state.speed, input.steer, input.stance);
+    // Airborne skiers touch no snow: no crud grind mid-flight.
+    const p = mix(state.speed, input.steer, input.stance, state.airTime > 0 ? 0 : stickiness);
     windGain.gain.setTargetAtTime(p.windGain, t, 0.08);
     windFilter.frequency.setTargetAtTime(p.windFreq, t, 0.08);
     carveGain.gain.setTargetAtTime(p.carveGain, t, 0.05);
     boostGain.gain.setTargetAtTime(boosting ? 0.4 : 0, t, 0.05);
+    crudGain.gain.setTargetAtTime(p.crudGain, t, 0.04);
   }
 
   private playCrash(): void {
