@@ -81,6 +81,9 @@ export function createSkierView(scene: THREE.Scene): SkierView {
   };
   const skis: [THREE.Mesh, THREE.Mesh] = [buildSki(-1), buildSki(1)];
 
+  group.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) obj.castShadow = true;
+  });
   scene.add(group);
   return { group, pelvis, torso, legs, skis, pose: { tuck: 0, plow: 0 } };
 }

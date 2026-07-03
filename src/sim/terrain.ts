@@ -6,7 +6,7 @@ import { hash2, mulberry32 } from './rng';
 export const CHUNK_LENGTH = 40;
 export const CORRIDOR_HALF_WIDTH = 30;
 
-const GRADE = 0.35; // average drop per meter of z
+export const GRADE = 0.35; // average drop per meter of z
 
 export interface Tree {
   x: number;

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { CHUNK_LENGTH, CORRIDOR_HALF_WIDTH, Terrain } from '../sim/terrain';
+import { CHUNK_LENGTH, CORRIDOR_HALF_WIDTH, GRADE, Terrain } from '../sim/terrain';
+import { hash2 } from '../sim/rng';
 
 // Ground is wider than the tree corridor so the forest walls never sit on the
 // edge of the mesh.
@@ -7,18 +8,23 @@ const GROUND_WIDTH = (CORRIDOR_HALF_WIDTH + 15) * 2;
 const CHUNKS_AHEAD = 6;
 const CHUNKS_BEHIND = 2;
 
+// Snow tint by deviation from the mean slope: flat snow is warm white, the
+// steep sides of rolls and moguls shade toward blue-gray. This is what makes
+// the terrain relief readable at a distance.
+const SNOW_FLAT = new THREE.Color(0xf7faff);
+const SNOW_STEEP = new THREE.Color(0xc3d2e6);
+
 export class ChunkRenderer {
   private chunks = new Map<number, THREE.Group>();
   private snow = new THREE.MeshStandardMaterial({
-    color: 0xf4f9ff,
+    vertexColors: true,
     roughness: 1,
     flatShading: true,
   });
-  private foliage = new THREE.MeshStandardMaterial({
-    color: 0x1d5a2f,
-    roughness: 1,
-    flatShading: true,
-  });
+  // A few foliage tones; picked per tree so the forest reads as layers.
+  private foliages = [0x143f21, 0x1d5a2f, 0x2d6e3e].map(
+    (color) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true })
+  );
   private trunk = new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 1 });
 
   constructor(
@@ -53,26 +59,42 @@ export class ChunkRenderer {
     geo.translate(0, 0, -(index + 0.5) * CHUNK_LENGTH);
     geo = geo.toNonIndexed();
     const pos = geo.getAttribute('position');
+    const colors = new Float32Array(pos.count * 3);
+    const vertexColor = new THREE.Color();
     for (let v = 0; v < pos.count; v++) {
-      pos.setY(v, this.terrain.height(pos.getX(v), pos.getZ(v)));
+      const x = pos.getX(v);
+      const z = pos.getZ(v);
+      pos.setY(v, this.terrain.height(x, z));
+      const [gx, gz] = this.terrain.gradient(x, z);
+      const deviation = Math.hypot(gx, gz - GRADE);
+      vertexColor.lerpColors(SNOW_FLAT, SNOW_STEEP, Math.min(deviation / 0.3, 1));
+      colors[v * 3] = vertexColor.r;
+      colors[v * 3 + 1] = vertexColor.g;
+      colors[v * 3 + 2] = vertexColor.b;
     }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
-    group.add(new THREE.Mesh(geo, this.snow));
+    const ground = new THREE.Mesh(geo, this.snow);
+    ground.receiveShadow = true;
+    group.add(ground);
 
     for (const tree of this.terrain.treesForChunk(index)) {
-      const ground = this.terrain.height(tree.x, tree.z);
-      const height = 2.5 + tree.radius * 3;
-      const cone = new THREE.Mesh(
-        new THREE.ConeGeometry(tree.radius * 2.4, height, 7),
-        this.foliage
-      );
-      cone.position.set(tree.x, ground + 0.4 + height / 2, tree.z);
+      const snow = this.terrain.height(tree.x, tree.z);
+      // Deterministic per-tree cosmetics, independent of the sim.
+      const jitter = hash2(this.terrain.seed, Math.round(tree.x * 10), Math.round(tree.z * 10));
+      const height = (2.5 + tree.radius * 3) * (0.8 + jitter * 0.5);
+      const foliage =
+        this.foliages[Math.floor(jitter * this.foliages.length) % this.foliages.length]!;
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(tree.radius * 2.4, height, 7), foliage);
+      cone.position.set(tree.x, snow + 0.4 + height / 2, tree.z);
+      cone.castShadow = true;
       group.add(cone);
       const stem = new THREE.Mesh(
         new THREE.CylinderGeometry(tree.radius * 0.5, tree.radius * 0.5, 1, 6),
         this.trunk
       );
-      stem.position.set(tree.x, ground + 0.3, tree.z);
+      stem.position.set(tree.x, snow + 0.3, tree.z);
+      stem.castShadow = true;
       group.add(stem);
     }
 

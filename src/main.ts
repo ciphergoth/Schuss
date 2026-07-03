@@ -13,6 +13,7 @@ declare global {
       readonly sim: Sim;
       readonly input: SkierInput; // as of the last rendered frame
       poll: () => SkierInput; // current input state, independent of the frame loop
+      renderFrame?: (delta: number) => void; // force one frame, even while rAF is paused
     };
   }
 }
@@ -23,9 +24,11 @@ const seed = Number(new URLSearchParams(location.search).get('seed') ?? '1');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-const scene = createScene();
+const { scene, sun } = createScene();
 const camera = createCamera();
 const skierView = createSkierView(scene);
 const hud = document.getElementById('hud')!;
@@ -63,25 +66,34 @@ window.addEventListener('resize', () => {
 const clock = new THREE.Clock();
 let accumulator = 0;
 
-function frame(): void {
-  const delta = Math.min(clock.getDelta(), 0.25);
-  accumulator += delta;
-  const input = getInput();
-  lastInput = input;
-  while (accumulator >= SIM_DT) {
-    stepSim(sim, input);
-    accumulator -= SIM_DT;
-  }
-
+function renderFrame(delta: number): void {
+  lastInput = getInput();
   const skier = sim.skier;
   chunkRenderer.update(sim.terrain.chunkIndexAt(skier.z));
-  updateSkierView(skierView, skier, sim.terrain, input, delta);
+  updateSkierView(skierView, skier, sim.terrain, lastInput, delta);
   updateCamera(camera, skier, sim.terrain, delta);
+
+  // Keep the sun's shadow box centered on the skier.
+  const skierY = sim.terrain.height(skier.x, skier.z);
+  sun.position.set(skier.x + 40, skierY + 24, skier.z - 12);
+  sun.target.position.set(skier.x, skierY, skier.z);
 
   hud.textContent = `${Math.round(skier.speed * 3.6)} km/h · ${Math.round(distanceSkied(sim))} m`;
   overlay.classList.toggle('visible', skier.crashed);
 
   renderer.render(scene, camera);
+}
+
+window.__game.renderFrame = renderFrame;
+
+function frame(): void {
+  const delta = Math.min(clock.getDelta(), 0.25);
+  accumulator += delta;
+  while (accumulator >= SIM_DT) {
+    stepSim(sim, getInput());
+    accumulator -= SIM_DT;
+  }
+  renderFrame(delta);
   requestAnimationFrame(frame);
 }
 
