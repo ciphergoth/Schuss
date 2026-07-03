@@ -35,8 +35,9 @@ describe('flow', () => {
 
   it('landing real air time scores points', () => {
     const sim = createSim(1);
-    teleport(sim, 0, 800, 30); // straight obstacle-free run-in, fast
-    const events = runCollecting(sim, 10, { steer: 0, stance: -1 });
+    teleport(sim, 0, 800, 25); // straight obstacle-free run-in, fast
+    stepSim(sim, { steer: 0, stance: 0, jump: 1 }); // full-charge jump
+    const events = runCollecting(sim, 4);
     expect(events.some((e) => e.type === 'landing')).toBe(true);
     expect(sim.score).toBeGreaterThan(0);
   });

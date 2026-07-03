@@ -83,8 +83,9 @@ export function stepSkier(
     state.x += Math.sin(state.heading) * state.speed * dt;
     state.z += -Math.cos(state.heading) * state.speed * dt;
     bounceOffBounds(state, terrain);
-    state.y = terrain.height(state.x, state.z);
-    state.vy = 0;
+    const groundY = terrain.height(state.x, state.z);
+    state.vy = (groundY - state.y) / dt; // keep following, so recovery doesn't relaunch
+    state.y = groundY;
     return;
   }
 
@@ -101,8 +102,12 @@ export function stepSkier(
     const ground = terrain.height(state.x, state.z);
     if (state.y <= ground) {
       state.y = ground;
-      state.vy = 0;
       state.airTime = 0;
+      // Hand vertical velocity back to terrain-following. Zeroing it instead
+      // makes the next step see the ground "falling away" at slope speed and
+      // relaunch forever — the perpetual-bounce bug.
+      const [lgx, lgz] = terrain.gradient(state.x, state.z);
+      state.vy = state.speed * (lgx * Math.sin(state.heading) + lgz * -Math.cos(state.heading));
     }
     return;
   }

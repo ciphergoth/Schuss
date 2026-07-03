@@ -71,9 +71,11 @@ export class Terrain {
     return smoothstep(t) * (this.noise1(z / CURVE_WAVELENGTH, 1) - 0.5) * 2 * CURVE_AMP;
   }
 
-  // Height of the track's spine: mean grade plus big rollers (the jumps).
+  // Height of the track's spine: mean grade plus big rollers. Sharp enough
+  // (amplitude vs wavelength) that crests genuinely launch a fast skier —
+  // these are the track's built-in kickers.
   private baseY(z: number): number {
-    return GRADE * z + (this.noise1(z / 70, 2) - 0.5) * 2 * 3.0;
+    return GRADE * z + (this.noise1(z / 55, 2) - 0.5) * 2 * 3.2;
   }
 
   height(x: number, z: number): number {

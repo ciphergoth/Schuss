@@ -139,6 +139,36 @@ describe('skier', () => {
     expect(skier.y).toBeCloseTo(sim.terrain.height(skier.x, skier.z), 6);
   });
 
+  it('landings stick: no perpetual bouncing at speed', () => {
+    const sim = createSim(1);
+    teleport(sim, 0, 800, 25);
+    let groundedSteps = 0;
+    const total = Math.round(10 / SIM_DT);
+    for (let i = 0; i < total; i++) {
+      stepSim(sim, COAST);
+      if (sim.skier.airTime === 0) groundedSteps++;
+    }
+    // Real crests still launch, but most of a run is on the snow. The
+    // perpetual-bounce bug drove this below 10%.
+    expect(groundedSteps / total).toBeGreaterThan(0.5);
+  });
+
+  it('a jump lands and stays landed on a straight stretch', () => {
+    const sim = createSim(1);
+    teleport(sim, 0, 900, 18);
+    stepSim(sim, { steer: 0, stance: 0, jump: 0.5 });
+    // Fly the whole arc out.
+    for (let i = 0; i < Math.round(3 / SIM_DT) && sim.skier.airTime > 0; i++) {
+      stepSim(sim, COAST);
+    }
+    expect(sim.skier.airTime).toBe(0);
+    // Immediately after touchdown the skier keeps ground contact.
+    for (let i = 0; i < 20; i++) {
+      stepSim(sim, COAST);
+      expect(sim.skier.airTime).toBe(0);
+    }
+  });
+
   it('a released jump charge pops the skier airborne', () => {
     const sim = createSim(1);
     teleport(sim, 0, 800, 15);
