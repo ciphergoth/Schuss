@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "skigame",
+      "runtimeExecutable": "devenv",
+      "runtimeArgs": ["shell", "--", "pnpm", "dev"],
+      "port": 5173
+    }
+  ]
+}

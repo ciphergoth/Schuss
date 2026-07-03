@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+
+# Source devenv if available (provides pnpm)
+if [ -f .devenv/profile ]; then
+  . .devenv/profile
+fi
+
+pnpm exec lint-staged
+pnpm typecheck
+pnpm test
