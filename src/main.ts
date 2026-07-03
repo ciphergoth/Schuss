@@ -6,6 +6,7 @@ import { createScene } from './render/scene';
 import { ChunkRenderer } from './render/chunks';
 import { createSkierView, updateSkierView } from './render/skierView';
 import { createCamera, updateCamera } from './render/camera';
+import { GameAudio } from './audio/engine';
 
 declare global {
   interface Window {
@@ -14,6 +15,7 @@ declare global {
       readonly input: SkierInput; // as of the last rendered frame
       poll: () => SkierInput; // current input state, independent of the frame loop
       renderFrame?: (delta: number) => void; // force one frame, even while rAF is paused
+      readonly audio: GameAudio;
     };
   }
 }
@@ -44,6 +46,8 @@ const getInput = setupInput(
   () => sim.skier.crashed
 );
 
+const audio = new GameAudio();
+
 window.__game = {
   get sim() {
     return sim;
@@ -52,6 +56,7 @@ window.__game = {
     return lastInput;
   },
   poll: () => getInput(),
+  audio,
 };
 
 window.addEventListener('resize', () => {
@@ -77,6 +82,8 @@ function renderFrame(delta: number): void {
   const skierY = sim.terrain.height(skier.x, skier.z);
   sun.position.set(skier.x + 40, skierY + 24, skier.z - 12);
   sun.target.position.set(skier.x, skierY, skier.z);
+
+  audio.update(skier, lastInput);
 
   hud.textContent = `${Math.round(skier.speed * 3.6)} km/h · ${Math.round(distanceSkied(sim))} m`;
   overlay.classList.toggle('visible', skier.crashed);

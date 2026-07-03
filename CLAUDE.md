@@ -26,12 +26,17 @@ src/
 │   ├── terrain.ts     - Heightfield + per-chunk tree placement
 │   ├── skier.ts       - Kinematic skier physics, tree collision
 │   └── sim.ts         - World state, fixed SIM_DT stepping
-└── render/            - Three.js only
-    ├── scene.ts       - Lights, sky, fog
-    ├── chunks.ts      - Ground/tree meshes, created and disposed as you ski
-    ├── skierView.ts   - Skier model
-    └── camera.ts      - Third-person follow camera
+├── render/            - Three.js only
+│   ├── scene.ts       - Lights, sky, fog, shadow-casting sun
+│   ├── chunks.ts      - Ground/tree meshes, created and disposed as you ski
+│   ├── skierView.ts   - Articulated skier model (posable legs/torso)
+│   └── camera.ts      - Third-person follow camera
+└── audio/             - Web Audio only, fully synthesized (no audio assets)
+    ├── params.ts      - Pure state -> synth parameter curves (unit tested)
+    └── engine.ts      - Noise/filter graph: wind, edge scrape, crash
 ```
+
+Like the render layer, audio reads sim state each frame and never writes it.
 
 Determinism: the world is a pure function of a seed (`?seed=N` URL param), and
 the sim only advances in `SIM_DT` steps. Same seed + same inputs = same run.
@@ -67,3 +72,4 @@ friction braking).
   snowplow
 - Keyboard fallback: arrows or A/D steer; up/W tucks, Space/S/down snowplows
 - R, click, or tap to restart after a wipeout
+- M toggles sound (sound starts on the first input, per browser autoplay rules)
