@@ -23,6 +23,20 @@
         line-height: 1.5;
         user-select: none;
       }
+      #flowbar {
+        width: 170px;
+        height: 9px;
+        margin-top: 4px;
+        border-radius: 5px;
+        background: rgba(10, 20, 50, 0.35);
+        overflow: hidden;
+      }
+      #flowfill {
+        height: 100%;
+        width: 0;
+        border-radius: 5px;
+        transition: width 80ms linear;
+      }
       #overlay {
         position: fixed;
         top: 20%;
@@ -43,7 +57,10 @@
     </style>
   </head>
   <body>
-    <div id="hud"></div>
+    <div id="hud">
+      <div id="stats"></div>
+      <div id="flowbar"><div id="flowfill"></div></div>
+    </div>
     <div id="overlay">Wipeout!</div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -42,6 +42,8 @@ describe('skier', () => {
     }
     expect(a.skier).toEqual(b.skier);
     expect(a.time).toBe(b.time);
+    expect(a.flow).toBe(b.flow);
+    expect(a.score).toBe(b.score);
   });
 
   it('steering right curves the path toward +x', () => {

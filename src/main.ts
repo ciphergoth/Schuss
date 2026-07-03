@@ -33,7 +33,8 @@ document.body.appendChild(renderer.domElement);
 const { scene, sun } = createScene();
 const camera = createCamera();
 const skierView = createSkierView(scene);
-const hud = document.getElementById('hud')!;
+const stats = document.getElementById('stats')!;
+const flowFill = document.getElementById('flowfill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
 
 let sim = createSim(seed);
@@ -81,7 +82,9 @@ function renderFrame(delta: number): void {
 
   audio.update(skier, lastInput);
 
-  hud.textContent = `${Math.round(skier.speed * 3.6)} km/h · ${Math.round(distanceSkied(sim))} m`;
+  stats.textContent = `${Math.round(skier.speed * 3.6)} km/h · ${Math.round(distanceSkied(sim))} m · ${sim.score} pts`;
+  flowFill.style.width = `${sim.flow * 100}%`;
+  flowFill.style.background = `hsl(${185 + sim.flow * 135}, 95%, 62%)`;
   overlay.classList.toggle('visible', skier.tumbling > 0);
 
   renderer.render(scene, camera);

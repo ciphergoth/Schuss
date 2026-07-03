@@ -40,7 +40,8 @@ export function stepSkier(
   state: SkierState,
   terrain: Terrain,
   input: SkierInput,
-  dt: number
+  dt: number,
+  flowBoost: number // 0..1; earned flow cuts drag, so skiing well is fast
 ): void {
   if (state.tumbling > 0) {
     // No control while tumbling: skid straight ahead under heavy friction,
@@ -91,7 +92,7 @@ export function stepSkier(
   const slopeAccel = -G * (gx * dirX + gz * dirZ);
   const friction =
     (FRICTION + plow * (PLOW_FRICTION - FRICTION)) * G +
-    DRAG * (1 - TUCK_DRAG_CUT * tuck) * state.speed * state.speed;
+    DRAG * (1 - TUCK_DRAG_CUT * tuck) * (1 - 0.3 * flowBoost) * state.speed * state.speed;
   state.speed = Math.max(0, state.speed + (slopeAccel - friction) * dt);
 
   state.x += dirX * state.speed * dt;
