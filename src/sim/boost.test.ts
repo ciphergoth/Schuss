@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SIM_DT, Sim, SimEvent, createSim, stepSim } from './sim';
-import { SKIER_RADIUS, stepSkier } from './skier';
+import { SKIER_RADIUS } from './skier';
 import { PLAN_SPEED } from './terrain';
 
 const COAST = { steer: 0, stance: 0 };
@@ -21,8 +21,8 @@ function teleport(sim: Sim, x: number, z: number, speed: number): void {
   s.vy = speed * (gx * Math.sin(s.heading) + gz * -Math.cos(s.heading));
 }
 
-describe('flow', () => {
-  it('near-missing an obstacle at speed builds flow and score', () => {
+describe('boost economy', () => {
+  it('near-missing an obstacle at speed earns boost', () => {
     const sim = createSim(1);
     let oi = 5;
     while (sim.terrain.obstaclesForChunk(oi).length === 0) oi++;
@@ -32,17 +32,16 @@ describe('flow', () => {
     const events = runCollecting(sim, 0.5);
     expect(sim.skier.tumbling).toBe(0);
     expect(events.some((e) => e.type === 'nearMiss')).toBe(true);
-    expect(sim.flow).toBeGreaterThan(0.1);
-    expect(sim.score).toBeGreaterThan(0);
+    expect(sim.boost).toBeGreaterThan(0.05);
   });
 
-  it('landing real air time scores points', () => {
+  it('landing real air time earns boost', () => {
     const sim = createSim(1);
     teleport(sim, 0, 800, 25); // straight obstacle-free run-in, fast
     stepSim(sim, { steer: 0, stance: 0, jump: 1 }); // full-charge jump
     const events = runCollecting(sim, 4);
     expect(events.some((e) => e.type === 'landing')).toBe(true);
-    expect(sim.score).toBeGreaterThan(0);
+    expect(sim.boost).toBeGreaterThan(0.05);
   });
 
   it('skiing the golden path at plan speed threads the gem arc', () => {
@@ -56,38 +55,46 @@ describe('flow', () => {
     const events = runCollecting(sim, 3);
     const gems = events.filter((e) => e.type === 'pickup' && e.gem).length;
     expect(gems).toBeGreaterThanOrEqual(2); // the arc genuinely threads
-    expect(sim.score).toBeGreaterThanOrEqual(100);
+    expect(sim.boost).toBeGreaterThan(0.4); // two gems' worth in the tank
   });
 
-  it('a tumble zeroes flow', () => {
+  it('a tumble still fires its event but keeps the tank', () => {
     const sim = createSim(1);
     let oi = 5;
     while (sim.terrain.obstaclesForChunk(oi).length === 0) oi++;
     const obstacle = sim.terrain.obstaclesForChunk(oi)[0]!;
     teleport(sim, obstacle.x, obstacle.z + 3, 10);
-    sim.flow = 0.8;
+    sim.boost = 0.8;
     const events = runCollecting(sim, 0.5);
     expect(events.some((e) => e.type === 'tumble')).toBe(true);
-    expect(sim.flow).toBe(0);
+    expect(sim.boost).toBe(0.8); // losing your speed is punishment enough
   });
 
-  it('flow decays when nothing stylish is happening', () => {
-    const sim = createSim(3);
-    sim.flow = 0.5;
-    runCollecting(sim, 2);
-    expect(sim.flow).toBeLessThan(0.45);
-    expect(sim.flow).toBeGreaterThan(0.3);
-  });
-
-  it('flow boost makes the skier faster', () => {
+  it('burning boost accelerates hard and drains the tank', () => {
     const plain = createSim(1);
-    const boosted = createSim(1);
-    teleport(plain, 0, 800, 25);
-    teleport(boosted, 0, 800, 25);
-    for (let i = 0; i < Math.round(6 / SIM_DT); i++) {
-      stepSkier(plain.skier, plain.terrain, COAST, SIM_DT, 0);
-      stepSkier(boosted.skier, boosted.terrain, COAST, SIM_DT, 1);
+    const burner = createSim(1);
+    teleport(plain, 0, 800, 20);
+    teleport(burner, 0, 800, 20);
+    burner.boost = 1;
+    for (let i = 0; i < Math.round(3 / SIM_DT); i++) {
+      stepSim(plain, COAST);
+      stepSim(burner, { steer: 0, stance: 0, boost: true });
     }
-    expect(boosted.skier.speed).toBeGreaterThan(plain.skier.speed + 1);
+    expect(burner.skier.speed).toBeGreaterThan(plain.skier.speed + 3);
+    expect(burner.boost).toBeLessThan(0.2); // ~3s of a full tank spent
+  });
+
+  it('an empty tank gives nothing', () => {
+    const plain = createSim(1);
+    const pretender = createSim(1);
+    teleport(plain, 0, 800, 20);
+    teleport(pretender, 0, 800, 20);
+    for (let i = 0; i < Math.round(2 / SIM_DT); i++) {
+      stepSim(plain, COAST);
+      stepSim(pretender, { steer: 0, stance: 0, boost: true });
+    }
+    expect(pretender.boost).toBe(0);
+    expect(pretender.skier.speed).toBeCloseTo(plain.skier.speed, 6);
+    expect(pretender.boosting).toBe(false);
   });
 });

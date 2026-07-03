@@ -169,6 +169,7 @@ export class Effects {
   private powder = new THREE.Color(0xe8f1fb);
   private gold = new THREE.Color(0xffd34d);
   private cyan = new THREE.Color(0x5df2ff);
+  private flame = new THREE.Color(0xff7a2a);
 
   constructor(scene: THREE.Scene) {
     this.particles = new Particles(scene);
@@ -238,8 +239,19 @@ export class Effects {
       }
     }
 
+    // Burning boost: flame spray behind the skis and the rainbow trail.
+    if (sim.boosting) {
+      this.particles.spawn(
+        new THREE.Vector3(s.x - dirX * 0.6, s.y + 0.15, s.z - dirZ * 0.6),
+        new THREE.Vector3(-dirX * 6, 1.2, -dirZ * 6),
+        2.2,
+        6,
+        this.flame
+      );
+    }
+
     if (grounded && s.speed > 4) this.trail.push(s.x, s.y, s.z, s.heading);
-    this.trail.rebuild(sim.flow, sim.time);
+    this.trail.rebuild(sim.boosting ? 1 : 0, sim.time);
     this.particles.update(dt);
   }
 }

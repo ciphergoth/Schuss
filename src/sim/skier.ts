@@ -5,6 +5,7 @@ export interface SkierInput {
   stance: number; // -1 (full tuck) .. 0 (neutral) .. 1 (full snowplow)
   jump?: number; // one-shot: 0..1 charge strength released this step
   charge?: number; // 0..1 jump charge currently held; render feedback only
+  boost?: boolean; // burn the tank (Shift / right mouse)
 }
 
 export interface SkierState {
@@ -30,6 +31,7 @@ const CRUD_VISCOSITY = 0.4; // per second, at full stickiness
 const DRAG = 0.0035; // neutral quadratic air drag; top speed around 29 m/s
 const TUCK_DRAG_CUT = 0.5; // full tuck halves drag: top speed around 41 m/s
 const TUCK_TURN_CUT = 0.4; // full tuck costs 40% of turn authority
+const BOOST_ACCEL = 5.5; // m/s^2 while burning the tank — rocket territory
 // Steering is position-to-direction: the stick/cursor sets a TARGET heading
 // relative to the course direction (center = follow the track), and the
 // heading eases toward it. Rate control (cursor = rotation speed) integrates
@@ -145,7 +147,7 @@ export function stepSkier(
   terrain: Terrain,
   input: SkierInput,
   dt: number,
-  flowBoost: number // 0..1; earned flow cuts drag, so skiing well is fast
+  boosting: boolean // burning the tank this step (the sim decides eligibility)
 ): void {
   if (state.tumbling > 0) {
     // No control while tumbling: skid straight ahead under heavy friction,
@@ -228,8 +230,9 @@ export function stepSkier(
   const friction =
     muG +
     CRUD_VISCOSITY * terrain.stickinessAt(state.x, state.z) * state.speed +
-    DRAG * (1 - TUCK_DRAG_CUT * tuck) * (1 - 0.3 * flowBoost) * state.speed * state.speed;
-  state.speed = Math.max(0, state.speed + (slopeAccel - friction) * dt);
+    DRAG * (1 - TUCK_DRAG_CUT * tuck) * state.speed * state.speed;
+  const thrust = boosting ? BOOST_ACCEL : 0;
+  state.speed = Math.max(0, state.speed + (slopeAccel + thrust - friction) * dt);
 
   // Crawling with the slope not clearly beating friction: pivot toward the
   // fall line so no state is ever a dead end (e.g. stalled facing up a wall).

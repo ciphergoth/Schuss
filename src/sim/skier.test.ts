@@ -43,8 +43,7 @@ describe('skier', () => {
     }
     expect(a.skier).toEqual(b.skier);
     expect(a.time).toBe(b.time);
-    expect(a.flow).toBe(b.flow);
-    expect(a.score).toBe(b.score);
+    expect(a.boost).toBe(b.boost);
   });
 
   it('steering right curves the path toward +x', () => {
@@ -82,8 +81,8 @@ describe('skier', () => {
     const tucked = createSim(1);
     teleport(neutral, 0, 800, 30);
     teleport(tucked, 0, 800, 30);
-    stepSkier(neutral.skier, neutral.terrain, COAST, SIM_DT, 0);
-    stepSkier(tucked.skier, tucked.terrain, { steer: 0, stance: -1 }, SIM_DT, 0);
+    stepSkier(neutral.skier, neutral.terrain, COAST, SIM_DT, false);
+    stepSkier(tucked.skier, tucked.terrain, { steer: 0, stance: -1 }, SIM_DT, false);
     expect(tucked.skier.speed).toBeGreaterThan(neutral.skier.speed);
   });
 

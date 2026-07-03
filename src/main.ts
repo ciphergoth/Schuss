@@ -38,7 +38,7 @@ const camera = createCamera();
 const skierView = createSkierView(scene);
 const fx = new Effects(scene);
 const stats = document.getElementById('stats')!;
-const flowFill = document.getElementById('flowfill') as HTMLElement;
+const boostFill = document.getElementById('flowfill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
 const pauseScreen = document.getElementById('pause')!;
 
@@ -96,7 +96,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   const skier = sim.skier;
   chunkRenderer.update(sim.terrain.chunkIndexAt(skier.z), sim.collected, sim.time);
   updateSkierView(skierView, skier, lastInput, delta);
-  updateCamera(camera, skier, sim.terrain, delta, sim.flow);
+  updateCamera(camera, skier, sim.terrain, delta, sim.boosting ? 1 : 0);
   fx.update(sim, lastInput, delta, events);
   for (const e of events) {
     if (e.type === 'nearMiss') audio.playWhoosh();
@@ -108,11 +108,14 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   sun.position.set(skier.x + 40, skier.y + 24, skier.z - 12);
   sun.target.position.set(skier.x, skier.y, skier.z);
 
-  audio.update(skier, lastInput);
+  audio.update(skier, lastInput, sim.boosting);
 
-  stats.textContent = `${Math.round(skier.speed * 3.6)} km/h · ${Math.round(distanceSkied(sim))} m · ${sim.score} pts`;
-  flowFill.style.width = `${sim.flow * 100}%`;
-  flowFill.style.background = `hsl(${185 + sim.flow * 135}, 95%, 62%)`;
+  // The run IS the score: speed and distance. The bar is the boost tank.
+  stats.textContent = `${Math.round(skier.speed * 3.6)} km/h · ${Math.round(distanceSkied(sim))} m`;
+  boostFill.style.width = `${sim.boost * 100}%`;
+  boostFill.style.background = sim.boosting
+    ? 'hsl(18, 100%, 58%)'
+    : `hsl(${35 + sim.boost * 10}, 95%, 58%)`;
   overlay.classList.toggle('visible', skier.tumbling > 0);
 
   renderer.render(scene, camera);

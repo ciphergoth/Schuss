@@ -7,6 +7,7 @@ interface AudioNodes {
   windGain: GainNode;
   windFilter: BiquadFilterNode;
   carveGain: GainNode;
+  boostGain: GainNode;
   noise: AudioBuffer;
 }
 
@@ -73,13 +74,21 @@ export class GameAudio {
     carveGain.gain.value = 0;
     source.connect(carveFilter).connect(carveGain).connect(master);
 
+    // Boost rumble: the same noise squeezed into a low rocket-ish band.
+    const boostFilter = ctx.createBiquadFilter();
+    boostFilter.type = 'lowpass';
+    boostFilter.frequency.value = 220;
+    const boostGain = ctx.createGain();
+    boostGain.gain.value = 0;
+    source.connect(boostFilter).connect(boostGain).connect(master);
+
     source.start();
-    return { ctx, master, windGain, windFilter, carveGain, noise };
+    return { ctx, master, windGain, windFilter, carveGain, boostGain, noise };
   }
 
-  update(state: SkierState, input: SkierInput): void {
+  update(state: SkierState, input: SkierInput, boosting = false): void {
     if (!this.nodes) return;
-    const { ctx, windGain, windFilter, carveGain } = this.nodes;
+    const { ctx, windGain, windFilter, carveGain, boostGain } = this.nodes;
     const t = ctx.currentTime;
 
     const tumbling = state.tumbling > 0;
@@ -90,6 +99,7 @@ export class GameAudio {
     windGain.gain.setTargetAtTime(p.windGain, t, 0.08);
     windFilter.frequency.setTargetAtTime(p.windFreq, t, 0.08);
     carveGain.gain.setTargetAtTime(p.carveGain, t, 0.05);
+    boostGain.gain.setTargetAtTime(boosting ? 0.4 : 0, t, 0.05);
   }
 
   private playCrash(): void {

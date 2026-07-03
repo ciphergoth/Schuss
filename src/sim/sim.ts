@@ -16,19 +16,24 @@ export interface Sim {
   terrain: Terrain;
   skier: SkierState;
   time: number;
-  flow: number; // 0..1 — earned by skiing well, spent as a drag-cutting boost
-  score: number; // style points
+  boost: number; // 0..1 tank — rewards fill it, burning it is the speed
+  boosting: boolean; // burning right now (render/audio read this)
   nearMissCooldown: number;
   collected: Set<string>; // pickup ids gathered this run
 }
 
-// Flow tuning: reward loop over penalty loop.
-const FLOW_DECAY = 0.05; // per second
-const CARVE_TRICKLE = 0.04; // per second of hard carving at speed
+// The SSX economy: the run is measured in speed and distance, and every
+// reward exists to feed the boost tank.
+const BOOST_GEM = 0.25;
+const BOOST_COIN = 0.07;
+const BOOST_NEAR_MISS = 0.08;
+const BOOST_LANDING_PER_AIR = 0.12; // per second of landed hangtime
+const BOOST_LANDING_MAX = 0.25;
+const BOOST_DRAIN = 0.3; // per second while burning
 const NEAR_MISS_RING = 1.1; // meters beyond a collision that still count
 const NEAR_MISS_MIN_SPEED = 12;
 const NEAR_MISS_COOLDOWN = 0.6;
-const MIN_STYLISH_AIR = 0.25; // seconds; shorter hops don't score
+const MIN_STYLISH_AIR = 0.25; // seconds; shorter hops don't reward
 const PICKUP_RADIUS = 1.3;
 
 export function createSim(seed: number): Sim {
@@ -39,11 +44,15 @@ export function createSim(seed: number): Sim {
     terrain,
     skier,
     time: 0,
-    flow: 0,
-    score: 0,
+    boost: 0,
+    boosting: false,
     nearMissCooldown: 0,
     collected: new Set(),
   };
+}
+
+function earnBoost(sim: Sim, amount: number): void {
+  sim.boost = Math.min(1, sim.boost + amount);
 }
 
 export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
@@ -52,18 +61,20 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   const airBefore = s.airTime;
   const wasTumbling = s.tumbling > 0;
 
-  stepSkier(s, sim.terrain, input, SIM_DT, sim.flow);
+  // Burn boost only where it acts: on the snow, on your feet.
+  sim.boosting = (input.boost ?? false) && sim.boost > 0 && s.airTime === 0 && s.tumbling === 0;
+  if (sim.boosting) sim.boost = Math.max(0, sim.boost - BOOST_DRAIN * SIM_DT);
+
+  stepSkier(s, sim.terrain, input, SIM_DT, sim.boosting);
   sim.time += SIM_DT;
   sim.nearMissCooldown = Math.max(0, sim.nearMissCooldown - SIM_DT);
 
   if (s.tumbling > 0 && !wasTumbling) {
-    sim.flow = 0;
     events.push({ type: 'tumble' });
   }
 
   if (airBefore > MIN_STYLISH_AIR && s.airTime === 0 && s.tumbling === 0) {
-    sim.score += Math.round(airBefore * 50 * (1 + sim.flow));
-    sim.flow = Math.min(1, sim.flow + Math.min(0.25, airBefore * 0.15));
+    earnBoost(sim, Math.min(BOOST_LANDING_MAX, airBefore * BOOST_LANDING_PER_AIR));
     events.push({ type: 'landing', airTime: airBefore });
   }
 
@@ -72,8 +83,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     for (const obstacle of sim.terrain.obstaclesNear(s.z)) {
       const d = Math.hypot(obstacle.x - s.x, obstacle.z - s.z);
       if (d < obstacle.radius + SKIER_RADIUS + NEAR_MISS_RING) {
-        sim.flow = Math.min(1, sim.flow + 0.15);
-        sim.score += Math.round(25 * (1 + sim.flow));
+        earnBoost(sim, BOOST_NEAR_MISS);
         sim.nearMissCooldown = NEAR_MISS_COOLDOWN;
         events.push({ type: 'nearMiss', x: obstacle.x, z: obstacle.z });
         break;
@@ -81,8 +91,8 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     }
   }
 
-  // Pickups: coins along the racing line, gems floating in kicker flight
-  // arcs. Collection is 3D — gems genuinely require being up there.
+  // Pickups: coins along the floor, gems floating in kicker flight arcs.
+  // Collection is 3D — gems genuinely require being up there.
   if (s.tumbling === 0) {
     for (const pickup of sim.terrain.pickupsNear(s.z)) {
       if (sim.collected.has(pickup.id)) continue;
@@ -91,17 +101,11 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
       const dy = pickup.y - (s.y + 1.0); // roughly chest height
       if (dx * dx + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS && Math.abs(dy) < 1.5) {
         sim.collected.add(pickup.id);
-        sim.score += pickup.gem ? 50 : 10;
-        sim.flow = Math.min(1, sim.flow + (pickup.gem ? 0.15 : 0.04));
+        earnBoost(sim, pickup.gem ? BOOST_GEM : BOOST_COIN);
         events.push({ type: 'pickup', x: pickup.x, z: pickup.z, gem: pickup.gem });
       }
     }
   }
-
-  if (grounded && s.speed > 15 && Math.abs(input.steer) > 0.5) {
-    sim.flow = Math.min(1, sim.flow + CARVE_TRICKLE * SIM_DT);
-  }
-  sim.flow = Math.max(0, sim.flow - FLOW_DECAY * SIM_DT);
 
   return events;
 }

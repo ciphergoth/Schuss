@@ -33,6 +33,10 @@ export function setupInput(onRestart: () => void): InputSource {
   const touches = new Map<number, { x: number; y: number }>(); // non-mouse pointers
   let mouse: { x: number; y: number } | null = null; // last known cursor position
   let mouseBrake = false;
+  let mouseBoost = false; // right button held
+
+  // Right mouse button is boost; keep the context menu out of the way.
+  window.addEventListener('contextmenu', (e) => e.preventDefault());
   let chargeStart: number | null = null;
   let pendingJump = 0;
 
@@ -56,8 +60,12 @@ export function setupInput(onRestart: () => void): InputSource {
   });
 
   window.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse') mouseBrake = true;
-    else touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (e.pointerType === 'mouse') {
+      if (e.button === 2) mouseBoost = true;
+      else mouseBrake = true;
+    } else {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
   });
   window.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') {
@@ -67,8 +75,12 @@ export function setupInput(onRestart: () => void): InputSource {
     }
   });
   const release = (e: PointerEvent) => {
-    if (e.pointerType === 'mouse') mouseBrake = false;
-    else touches.delete(e.pointerId);
+    if (e.pointerType === 'mouse') {
+      if (e.button === 2) mouseBoost = false;
+      else mouseBrake = false;
+    } else {
+      touches.delete(e.pointerId);
+    }
   };
   window.addEventListener('pointerup', release);
   window.addEventListener('pointercancel', release);
@@ -93,7 +105,8 @@ export function setupInput(onRestart: () => void): InputSource {
             : 0;
     const charge =
       chargeStart === null ? 0 : Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS);
-    return { steer, stance, charge };
+    const boost = mouseBoost || key('ShiftLeft', 'ShiftRight');
+    return { steer, stance, charge, boost };
   };
 
   return {
