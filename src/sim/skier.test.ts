@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SIM_DT, Sim, createSim, distanceSkied, stepSim } from './sim';
 import { SkierInput } from './skier';
 
-const COAST: SkierInput = { steer: 0, brake: false };
+const COAST: SkierInput = { steer: 0, stance: 0 };
 
 function run(sim: Sim, seconds: number, input: SkierInput): void {
   for (let i = 0; i < Math.round(seconds / SIM_DT); i++) stepSim(sim, input);
@@ -22,7 +22,7 @@ describe('skier', () => {
     const a = createSim(9);
     const b = createSim(9);
     for (let i = 0; i < 1200; i++) {
-      const input: SkierInput = { steer: i % 240 < 120 ? 1 : -1, brake: i % 500 < 50 };
+      const input: SkierInput = { steer: i % 240 < 120 ? 1 : -1, stance: i % 500 < 50 ? 1 : 0 };
       stepSim(a, input);
       stepSim(b, input);
     }
@@ -33,19 +33,53 @@ describe('skier', () => {
   it('steering right curves the path toward +x', () => {
     const sim = createSim(1);
     run(sim, 3, COAST);
-    run(sim, 1, { steer: 1, brake: false });
+    run(sim, 1, { steer: 1, stance: 0 });
     expect(sim.skier.heading).toBeGreaterThan(0.5);
     expect(sim.skier.x).toBeGreaterThan(1);
   });
 
-  it('braking slows the skier down', () => {
+  it('snowplow slows the skier down', () => {
     const free = createSim(1);
     const braked = createSim(1);
     run(free, 3, COAST);
     run(braked, 3, COAST);
     run(free, 2, COAST);
-    run(braked, 2, { steer: 0, brake: true });
+    run(braked, 2, { steer: 0, stance: 1 });
     expect(braked.skier.speed).toBeLessThan(free.skier.speed - 3);
+  });
+
+  it('half snowplow brakes less than full snowplow', () => {
+    const half = createSim(1);
+    const full = createSim(1);
+    run(half, 3, COAST);
+    run(full, 3, COAST);
+    run(half, 2, { steer: 0, stance: 0.5 });
+    run(full, 2, { steer: 0, stance: 1 });
+    expect(full.skier.speed).toBeLessThan(half.skier.speed);
+  });
+
+  it('tuck raises top speed', () => {
+    const coasting = createSim(1);
+    const tucked = createSim(1);
+    // Start well uphill of the start line: the slope there has no interior
+    // trees, so a long straight run can't crash.
+    coasting.skier.z = 800;
+    tucked.skier.z = 800;
+    run(coasting, 20, COAST);
+    run(tucked, 20, { steer: 0, stance: -1 });
+    expect(coasting.skier.crashed).toBe(false);
+    expect(tucked.skier.crashed).toBe(false);
+    expect(tucked.skier.speed).toBeGreaterThan(coasting.skier.speed + 3);
+  });
+
+  it('tuck reduces turn authority', () => {
+    const neutral = createSim(1);
+    const tucked = createSim(1);
+    run(neutral, 3, COAST);
+    run(tucked, 3, COAST);
+    run(neutral, 1, { steer: 1, stance: 0 });
+    run(tucked, 1, { steer: 1, stance: -1 });
+    expect(tucked.skier.heading).toBeLessThan(neutral.skier.heading * 0.75);
   });
 
   it('crashes into a tree and stays down', () => {

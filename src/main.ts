@@ -32,7 +32,7 @@ const hud = document.getElementById('hud')!;
 const overlay = document.getElementById('overlay')!;
 
 let sim = createSim(seed);
-let lastInput: SkierInput = { steer: 0, brake: false };
+let lastInput: SkierInput = { steer: 0, stance: 0 };
 const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
 const getInput = setupInput(
   () => {
@@ -75,7 +75,7 @@ function frame(): void {
 
   const skier = sim.skier;
   chunkRenderer.update(sim.terrain.chunkIndexAt(skier.z));
-  updateSkierView(skierView, skier, sim.terrain, input.steer);
+  updateSkierView(skierView, skier, sim.terrain, input, delta);
   updateCamera(camera, skier, sim.terrain, delta);
 
   hud.textContent = `${Math.round(skier.speed * 3.6)} km/h · ${Math.round(distanceSkied(sim))} m`;

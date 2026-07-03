@@ -2,7 +2,7 @@ import { Terrain } from './terrain';
 
 export interface SkierInput {
   steer: number; // -1 (left) .. 1 (right)
-  brake: boolean;
+  stance: number; // -1 (full tuck) .. 0 (neutral) .. 1 (full snowplow)
 }
 
 export interface SkierState {
@@ -14,9 +14,11 @@ export interface SkierState {
 }
 
 const G = 9.81;
-const FRICTION = 0.05; // rolling snow friction coefficient
-const BRAKE_FRICTION = 0.6;
-const DRAG = 0.0035; // quadratic air drag; sets top speed around 29 m/s
+const FRICTION = 0.05; // neutral-stance snow friction coefficient
+const PLOW_FRICTION = 0.6; // at full snowplow
+const DRAG = 0.0035; // neutral quadratic air drag; top speed around 29 m/s
+const TUCK_DRAG_CUT = 0.5; // full tuck halves drag: top speed around 41 m/s
+const TUCK_TURN_CUT = 0.4; // full tuck costs 40% of turn authority
 const TURN_RATE = 1.6; // rad/s at full turning authority
 export const SKIER_RADIUS = 0.4;
 
@@ -32,8 +34,12 @@ export function stepSkier(
 ): void {
   if (state.crashed) return;
 
-  // Turning authority ramps up with speed: skis can't pivot while stationary.
-  const turnFactor = Math.min(state.speed / 4, 1);
+  const plow = Math.max(0, input.stance);
+  const tuck = Math.max(0, -input.stance);
+
+  // Turning authority ramps up with speed (skis can't pivot while stationary)
+  // and drops in a tuck (speed is a trade against control).
+  const turnFactor = Math.min(state.speed / 4, 1) * (1 - TUCK_TURN_CUT * tuck);
   state.heading += TURN_RATE * turnFactor * input.steer * dt;
 
   const dirX = Math.sin(state.heading);
@@ -41,9 +47,12 @@ export function stepSkier(
 
   // Gravity component along the direction of travel, minus snow friction and
   // air drag. Friction can stop the skier but never pushes them backwards.
+  // Snowplow scales friction up; tuck cuts drag.
   const [gx, gz] = terrain.gradient(state.x, state.z);
   const slopeAccel = -G * (gx * dirX + gz * dirZ);
-  const friction = (input.brake ? BRAKE_FRICTION : FRICTION) * G + DRAG * state.speed * state.speed;
+  const friction =
+    (FRICTION + plow * (PLOW_FRICTION - FRICTION)) * G +
+    DRAG * (1 - TUCK_DRAG_CUT * tuck) * state.speed * state.speed;
   state.speed = Math.max(0, state.speed + (slopeAccel - friction) * dt);
 
   state.x += dirX * state.speed * dt;

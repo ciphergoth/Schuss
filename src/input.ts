@@ -1,27 +1,27 @@
 import { SkierInput } from './sim/skier';
 
-// Analog steering from pointer x: a small dead zone around the screen center,
-// then a linear ramp that saturates at SATURATION of the half-viewport width,
-// so full carve doesn't require reaching the screen edge.
+// Analog axis from a pointer coordinate: a small dead zone around the viewport
+// center, then a linear ramp that saturates at SATURATION of the half-extent,
+// so full deflection doesn't require reaching the screen edge.
 const DEAD_ZONE = 0.06;
 const SATURATION = 0.55;
 
-export function steerFromPointerX(clientX: number, viewportWidth: number): number {
-  const half = viewportWidth / 2;
-  const raw = (clientX - half) / (half * SATURATION);
+export function pointerAxis(clientPos: number, viewportExtent: number): number {
+  const half = viewportExtent / 2;
+  const raw = (clientPos - half) / (half * SATURATION);
   const magnitude = Math.abs(raw);
   if (magnitude < DEAD_ZONE) return 0;
   return Math.sign(raw) * Math.min((magnitude - DEAD_ZONE) / (1 - DEAD_ZONE), 1);
 }
 
-// Mouse: position steers, held button brakes. Touch: first finger steers,
-// a second finger brakes. Keyboard still works and wins while held.
-// Any pointer press restarts after a wipeout.
+// Mouse: x steers, y sets stance (top = tuck, bottom = snowplow), held button
+// is full snowplow. Touch: first finger does the same, a second finger is full
+// snowplow. Keyboard still works and wins while held. Any pointer press
+// restarts after a wipeout.
 export function setupInput(onRestart: () => void, isCrashed: () => boolean): () => SkierInput {
   const down = new Set<string>();
-  const touches = new Map<number, number>(); // pointerId -> clientX, non-mouse pointers
-  let mouseSteer = 0;
-  let mouseActive = false;
+  const touches = new Map<number, { x: number; y: number }>(); // non-mouse pointers
+  let mouse: { x: number; y: number } | null = null; // last known cursor position
   let mouseBrake = false;
 
   window.addEventListener('keydown', (e) => {
@@ -36,14 +36,13 @@ export function setupInput(onRestart: () => void, isCrashed: () => boolean): () 
       return;
     }
     if (e.pointerType === 'mouse') mouseBrake = true;
-    else touches.set(e.pointerId, e.clientX);
+    else touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
   });
   window.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') {
-      mouseActive = true;
-      mouseSteer = steerFromPointerX(e.clientX, window.innerWidth);
+      mouse = { x: e.clientX, y: e.clientY };
     } else if (touches.has(e.pointerId)) {
-      touches.set(e.pointerId, e.clientX);
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
   });
   const release = (e: PointerEvent) => {
@@ -54,24 +53,24 @@ export function setupInput(onRestart: () => void, isCrashed: () => boolean): () 
   window.addEventListener('pointercancel', release);
 
   return () => {
-    const keySteer =
-      (down.has('ArrowRight') || down.has('KeyD') ? 1 : 0) -
-      (down.has('ArrowLeft') || down.has('KeyA') ? 1 : 0);
+    const key = (...codes: string[]) => codes.some((c) => down.has(c));
+    const keySteer = (key('ArrowRight', 'KeyD') ? 1 : 0) - (key('ArrowLeft', 'KeyA') ? 1 : 0);
+    const keyStance =
+      (key('Space', 'ArrowDown', 'KeyS') ? 1 : 0) - (key('ArrowUp', 'KeyW') ? 1 : 0);
+
     const firstTouch = touches.values().next();
+    const pointer = !firstTouch.done ? firstTouch.value : mouse;
+
     const steer =
-      keySteer !== 0
-        ? keySteer
-        : !firstTouch.done
-          ? steerFromPointerX(firstTouch.value, window.innerWidth)
-          : mouseActive
-            ? mouseSteer
+      keySteer !== 0 ? keySteer : pointer ? pointerAxis(pointer.x, window.innerWidth) : 0;
+    const stance =
+      keyStance !== 0
+        ? keyStance
+        : mouseBrake || touches.size >= 2
+          ? 1
+          : pointer
+            ? pointerAxis(pointer.y, window.innerHeight)
             : 0;
-    const brake =
-      down.has('Space') ||
-      down.has('ArrowDown') ||
-      down.has('KeyS') ||
-      mouseBrake ||
-      touches.size >= 2;
-    return { steer, brake };
+    return { steer, stance };
   };
 }
