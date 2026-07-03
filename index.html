@@ -23,19 +23,24 @@
         line-height: 1.5;
         user-select: none;
       }
-      #flowbar {
-        width: 170px;
-        height: 9px;
-        margin-top: 4px;
-        border-radius: 5px;
-        background: rgba(10, 20, 50, 0.35);
+      #boostbar {
+        position: fixed;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 42vh;
+        border-radius: 7px;
+        background: rgba(10, 20, 50, 0.4);
         overflow: hidden;
+        display: flex;
+        align-items: flex-end;
       }
-      #flowfill {
-        height: 100%;
-        width: 0;
-        border-radius: 5px;
-        transition: width 80ms linear;
+      #boostfill {
+        width: 100%;
+        height: 0;
+        border-radius: 7px;
+        transition: height 80ms linear;
       }
       #overlay {
         position: fixed;
@@ -99,8 +104,8 @@
   <body>
     <div id="hud">
       <div id="stats"></div>
-      <div id="flowbar"><div id="flowfill"></div></div>
     </div>
+    <div id="boostbar"><div id="boostfill"></div></div>
     <div id="overlay">Wipeout!</div>
     <div id="pause">
       <div class="panel">
@@ -119,12 +124,10 @@
             <td>Snowplow brake (or &darr;/S)</td>
           </tr>
           <tr>
-            <td>Space (hold, release)</td>
-            <td>Charge a jump, pop at the crest</td>
-          </tr>
-          <tr>
-            <td>Shift / right mouse</td>
-            <td>Burn boost &mdash; gems, coins &amp; airtime fill the tank</td>
+            <td>Space / Shift / right mouse</td>
+            <td>
+              Hold: burn boost &amp; crouch &middot; release: jump. Coins &amp; gems fill the tank
+            </td>
           </tr>
           <tr>
             <td>R</td>

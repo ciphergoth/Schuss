@@ -8,10 +8,11 @@ site, no server.
 Design rules: punishment is light — obstacle hits cost a 1.3s tumble and most
 of your speed, never the run; the walls contain you physically (rideable
 banks that steepen), no fences or fail states. The economy is SSX Tricky's:
-the run is measured in speed and distance, and every reward (gems, coins,
-near-misses, landed air) exists to fill the BOOST TANK. Burning it (Shift /
-right mouse) is hard acceleration with flames, rainbow trail, FOV slam, and
-rumble. Reward loop over penalty loop.
+the run is measured in speed and distance (HUD is SI: m/s and m), and the
+BOOST TANK (vertical bar, left edge) fills only from deliberate rewards —
+coins and gems (tricks later); racing alone earns nothing. Burning it is hard
+acceleration with flames, rainbow trail, FOV slam, and rumble. Reward loop
+over penalty loop.
 
 Terrain is a pure height function: a curving centerline (straight near the
 start and uphill of it, for gentle run-ins and predictable physics tests)
@@ -100,9 +101,9 @@ friction braking).
 - Touch: first finger works like the mouse position, second finger = full
   snowplow
 - Keyboard fallback: arrows or A/D steer; up/W tucks, Space/S/down snowplows
-- Jump: hold Space to charge (skier crouches), release to pop — bigger with a
-  longer hold (up to 0.8s). Jump is independent of braking.
-- Boost: hold Shift or right mouse button to burn the tank (grounded only).
+- Boost/jump is ONE button, SSX-style (Space, Shift, or right mouse): holding
+  burns the tank (grounded only) and preloads a jump (skier crouches);
+  releasing pops — bigger with a longer hold (up to 0.8s).
 - Esc or ? pauses (freezes the sim, suspends audio) and shows the key guide
 - R starts a fresh run
 - M toggles sound (sound starts on the first input, per browser autoplay rules)

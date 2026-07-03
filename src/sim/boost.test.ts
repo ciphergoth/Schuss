@@ -22,7 +22,7 @@ function teleport(sim: Sim, x: number, z: number, speed: number): void {
 }
 
 describe('boost economy', () => {
-  it('near-missing an obstacle at speed earns boost', () => {
+  it('near-misses celebrate but pay no boost', () => {
     const sim = createSim(1);
     let oi = 5;
     while (sim.terrain.obstaclesForChunk(oi).length === 0) oi++;
@@ -32,15 +32,28 @@ describe('boost economy', () => {
     const events = runCollecting(sim, 0.5);
     expect(sim.skier.tumbling).toBe(0);
     expect(events.some((e) => e.type === 'nearMiss')).toBe(true);
-    expect(sim.boost).toBeGreaterThan(0.05);
+    expect(sim.boost).toBe(0);
   });
 
-  it('landing real air time earns boost', () => {
+  it('merely racing never fills the tank', () => {
     const sim = createSim(1);
-    teleport(sim, 0, 800, 25); // straight obstacle-free run-in, fast
-    stepSim(sim, { steer: 0, stance: 0, jump: 1 }); // full-charge jump
-    const events = runCollecting(sim, 4);
+    teleport(sim, 0, 800, 25); // straight run-in: rollers, launches, landings
+    stepSim(sim, { steer: 0, stance: 0, jump: 1 }); // even a deliberate jump
+    const events = runCollecting(sim, 8);
     expect(events.some((e) => e.type === 'landing')).toBe(true);
+    expect(sim.boost).toBe(0); // fuel requires coins, gems, or (later) tricks
+  });
+
+  it('coins fill the tank', () => {
+    const sim = createSim(1);
+    // Find a coin cluster and ski straight through it.
+    let coin = null;
+    for (let index = 1; index < 30 && !coin; index++) {
+      coin = sim.terrain.pickupsForChunk(index).find((p) => !p.gem) ?? null;
+    }
+    expect(coin).not.toBeNull();
+    teleport(sim, coin!.x, coin!.z + 2, 12);
+    runCollecting(sim, 1);
     expect(sim.boost).toBeGreaterThan(0.05);
   });
 

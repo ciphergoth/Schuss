@@ -22,13 +22,12 @@ export interface Sim {
   collected: Set<string>; // pickup ids gathered this run
 }
 
-// The SSX economy: the run is measured in speed and distance, and every
-// reward exists to feed the boost tank.
+// The SSX economy: the run is measured in speed and distance, and the tank
+// fills ONLY from deliberate rewards — coins (detours), gems (kicker flights),
+// and later tricks. Merely racing earns nothing: near-misses and plain
+// landings celebrate with events/fx but pay no boost.
 const BOOST_GEM = 0.25;
 const BOOST_COIN = 0.07;
-const BOOST_NEAR_MISS = 0.08;
-const BOOST_LANDING_PER_AIR = 0.12; // per second of landed hangtime
-const BOOST_LANDING_MAX = 0.25;
 const BOOST_DRAIN = 0.3; // per second while burning
 const NEAR_MISS_RING = 1.1; // meters beyond a collision that still count
 const NEAR_MISS_MIN_SPEED = 12;
@@ -74,7 +73,6 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   }
 
   if (airBefore > MIN_STYLISH_AIR && s.airTime === 0 && s.tumbling === 0) {
-    earnBoost(sim, Math.min(BOOST_LANDING_MAX, airBefore * BOOST_LANDING_PER_AIR));
     events.push({ type: 'landing', airTime: airBefore });
   }
 
@@ -83,7 +81,6 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     for (const obstacle of sim.terrain.obstaclesNear(s.z)) {
       const d = Math.hypot(obstacle.x - s.x, obstacle.z - s.z);
       if (d < obstacle.radius + SKIER_RADIUS + NEAR_MISS_RING) {
-        earnBoost(sim, BOOST_NEAR_MISS);
         sim.nearMissCooldown = NEAR_MISS_COOLDOWN;
         events.push({ type: 'nearMiss', x: obstacle.x, z: obstacle.z });
         break;

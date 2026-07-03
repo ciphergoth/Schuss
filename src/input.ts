@@ -33,9 +33,8 @@ export function setupInput(onRestart: () => void): InputSource {
   const touches = new Map<number, { x: number; y: number }>(); // non-mouse pointers
   let mouse: { x: number; y: number } | null = null; // last known cursor position
   let mouseBrake = false;
-  let mouseBoost = false; // right button held
 
-  // Right mouse button is boost; keep the context menu out of the way.
+  // Right mouse button is boost+charge; keep the context menu out of the way.
   window.addEventListener('contextmenu', (e) => e.preventDefault());
   let chargeStart: number | null = null;
   let pendingJump = 0;
@@ -49,19 +48,24 @@ export function setupInput(onRestart: () => void): InputSource {
     chargeStart = null;
   };
 
+  // SSX-style single button: holding burns boost AND preloads the jump;
+  // releasing pops. Space, Shift, and the right mouse button all are it.
+  const isBoostKey = (code: string) =>
+    code === 'Space' || code === 'ShiftLeft' || code === 'ShiftRight';
+
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyR') onRestart();
-    if (e.code === 'Space') beginCharge();
+    if (isBoostKey(e.code)) beginCharge();
     down.add(e.code);
   });
   window.addEventListener('keyup', (e) => {
-    if (e.code === 'Space') releaseCharge();
+    if (isBoostKey(e.code)) releaseCharge();
     down.delete(e.code);
   });
 
   window.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse') {
-      if (e.button === 2) mouseBoost = true;
+      if (e.button === 2) beginCharge();
       else mouseBrake = true;
     } else {
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -76,7 +80,7 @@ export function setupInput(onRestart: () => void): InputSource {
   });
   const release = (e: PointerEvent) => {
     if (e.pointerType === 'mouse') {
-      if (e.button === 2) mouseBoost = false;
+      if (e.button === 2) releaseCharge();
       else mouseBrake = false;
     } else {
       touches.delete(e.pointerId);
@@ -105,8 +109,7 @@ export function setupInput(onRestart: () => void): InputSource {
             : 0;
     const charge =
       chargeStart === null ? 0 : Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS);
-    const boost = mouseBoost || key('ShiftLeft', 'ShiftRight');
-    return { steer, stance, charge, boost };
+    return { steer, stance, charge, boost: chargeStart !== null };
   };
 
   return {

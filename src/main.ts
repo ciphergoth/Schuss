@@ -38,7 +38,7 @@ const camera = createCamera();
 const skierView = createSkierView(scene);
 const fx = new Effects(scene);
 const stats = document.getElementById('stats')!;
-const boostFill = document.getElementById('flowfill') as HTMLElement;
+const boostFill = document.getElementById('boostfill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
 const pauseScreen = document.getElementById('pause')!;
 
@@ -110,9 +110,10 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
 
   audio.update(skier, lastInput, sim.boosting);
 
-  // The run IS the score: speed and distance. The bar is the boost tank.
-  stats.textContent = `${Math.round(skier.speed * 3.6)} km/h · ${Math.round(distanceSkied(sim))} m`;
-  boostFill.style.width = `${sim.boost * 100}%`;
+  // The run IS the score: speed and distance, full SI. The vertical bar on
+  // the left is the boost tank, SSX-style.
+  stats.textContent = `${Math.round(skier.speed)} m/s · ${Math.round(distanceSkied(sim))} m`;
+  boostFill.style.height = `${sim.boost * 100}%`;
   boostFill.style.background = sim.boosting
     ? 'hsl(18, 100%, 58%)'
     : `hsl(${35 + sim.boost * 10}, 95%, 58%)`;
