@@ -44,6 +44,12 @@ export interface Jump {
   halfWidth: number; // lateral half-size of the full-height core
 }
 
+// The speed the golden path is designed around: gem arcs are computed from
+// the flight you fly arriving at a kicker at this speed. Faster overshoots
+// the early gems slightly, slower undershoots the late ones — arrive on-plan
+// and the whole arc threads.
+export const PLAN_SPEED = 20;
+
 // Kicker geometry: a concave ramp (steepening toward the lip) then a sheer
 // drop. Kickers are features, not toll booths: each occupies a slice of the
 // floor at a seeded offset, something you steer toward to take the air.
@@ -101,6 +107,15 @@ export class Terrain {
     return Math.atan2(this.centerX(z - 1) - this.centerX(z + 1), 2);
   }
 
+  // THE GOLDEN PATH: the intended line through the course, as an offset from
+  // the centerline. Every generator derives from it — kickers sit on it, the
+  // crud-free corridor follows it, coins trace it, gem arcs assume you fly
+  // off its kickers at PLAN_SPEED. Ski it and the course pays; leave it and
+  // crud, distance, and missed rewards are the price.
+  planOffset(z: number): number {
+    return (this.noise1(z / 90, 6) - 0.5) * 2 * (this.channelHalfWidth(z) - 6);
+  }
+
   // Height of the track's spine: mean grade plus big rollers. Sharp enough
   // (amplitude vs wavelength) that crests genuinely launch a fast skier —
   // these are the track's built-in kickers.
@@ -110,17 +125,21 @@ export class Terrain {
 
   // A ski jump every few chunks, deterministic per seed. The whole ramp fits
   // inside its chunk, so height() only ever consults one chunk's jump.
+  private hasJumpSeed(index: number): boolean {
+    return index >= 3 && hash2(this.seed, index, 31337) < 0.25;
+  }
+
   jumpForChunk(index: number): Jump | null {
-    if (index < 3) return null;
-    if (hash2(this.seed, index, 31337) >= 0.25) return null;
+    // No consecutive jump chunks: a fast flight covers up to ~40m, so
+    // back-to-back kickers could be overflown entirely — the plan never
+    // schedules a feature you can accidentally skip.
+    if (!this.hasJumpSeed(index) || this.hasJumpSeed(index - 1)) return null;
     const zLip = -index * CHUNK_LENGTH - 24;
     const halfWidth = 3.0 + hash2(this.seed, index, 31338) * 1.5;
     const maxOffset = Math.max(0, this.channelHalfWidth(zLip) - halfWidth - JUMP_EDGE - 0.5);
-    return {
-      zLip,
-      xOffset: (hash2(this.seed, index, 31339) * 2 - 1) * maxOffset,
-      halfWidth,
-    };
+    // The kicker sits on the golden path: following the plan lines you up.
+    const xOffset = Math.max(-maxOffset, Math.min(maxOffset, this.planOffset(zLip)));
+    return { zLip, xOffset, halfWidth };
   }
 
   private jumpHeight(d: number, z: number): number {
@@ -164,9 +183,8 @@ export class Terrain {
     if (z < -80 && this.jumpHeight(d, z) === 0 && !this.inJumpLane(d, z)) {
       const n = this.noise2(x / 13, z / 13, 5);
       patch = smoothstep(Math.min(1, Math.max(0, (n - 0.62) / 0.1)));
-      // The guaranteed clean line: a lane that wanders across the floor.
-      const lane = (this.noise1(z / 90, 6) - 0.5) * 2 * (this.channelHalfWidth(z) - 6);
-      const laneDist = Math.abs(d - lane);
+      // The guaranteed clean corridor IS the golden path.
+      const laneDist = Math.abs(d - this.planOffset(z));
       patch *= smoothstep(Math.min(1, Math.max(0, (laneDist - 3.5) / 2)));
     }
     return Math.max(wall, patch);
@@ -262,39 +280,49 @@ export class Terrain {
 
     const pickups: Pickup[] = [];
     if (index > 0) {
+      // Coins are temptations, not breadcrumbs: figuring out the golden path
+      // is gameplay (read the clean snow, sight the kicker gates), so coins
+      // sit in sparse clusters OFF the plan — a paid detour, not a guide.
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 104729) * 2 ** 31));
-      const zMid = -index * CHUNK_LENGTH - CHUNK_LENGTH / 2;
-      const sweep = this.channelHalfWidth(zMid) - 4; // wide zones = wide weaves
-      const from = (rng() * 2 - 1) * sweep;
-      const to = (rng() * 2 - 1) * sweep;
-      const count = 7;
-      for (let k = 0; k < count; k++) {
-        const t = k / (count - 1);
-        const z = -index * CHUNK_LENGTH - 4 - t * (CHUNK_LENGTH - 8);
-        const x = this.centerX(z) + from + (to - from) * smoothstep(t);
-        pickups.push({ id: `${index}:${k}`, x, z, y: this.height(x, z) + 1.1, gem: false });
+      if (rng() < 0.7) {
+        const zCluster = -index * CHUNK_LENGTH - 8 - rng() * (CHUNK_LENGTH - 16);
+        const side = rng() < 0.5 ? -1 : 1;
+        const detour = side * (4.5 + rng() * 4.5);
+        for (let k = 0; k < 3; k++) {
+          const z = zCluster - k * 3;
+          const bound = this.channelHalfWidth(z) - 3;
+          const x =
+            this.centerX(z) + Math.max(-bound, Math.min(bound, this.planOffset(z) + detour));
+          pickups.push({ id: `${index}:${k}`, x, z, y: this.height(x, z) + 1.1, gem: false });
+        }
       }
 
       const jump = this.jumpForChunk(index);
       if (jump) {
+        // Gems sit on the exact ballistic arc of a skier who takes this
+        // kicker on-plan at PLAN_SPEED, mirroring the sim's launch caps.
         const core = this.centerX(jump.zLip) + jump.xOffset;
-        const yLip = this.height(core, jump.zLip + 0.05);
-        // Along the ballistic corridor off the lip: reachable at cruise
-        // speed, above anything a grounded skier can touch.
-        const arc: [number, number][] = [
-          [3, 0.2],
-          [6, -0.1],
-          [9, -0.6],
-        ];
-        arc.forEach(([dz, dy], k) => {
+        const yLip = this.height(core, jump.zLip + 0.02);
+        const riseTowardLip =
+          (this.height(core, jump.zLip + 0.02) - this.height(core, jump.zLip + 1)) / 0.98;
+        let v = PLAN_SPEED;
+        let vy = Math.min(riseTowardLip, 0.35) * PLAN_SPEED;
+        if (vy > 0) {
+          const scale = v / Math.hypot(v, vy);
+          v *= scale;
+          vy *= scale;
+        }
+        const heading = this.trackHeading(jump.zLip);
+        for (let k = 0; k < 3; k++) {
+          const t = 0.16 * (k + 1);
           pickups.push({
             id: `${index}:g${k}`,
-            x: core,
-            z: jump.zLip - dz,
-            y: yLip + dy,
+            x: core + Math.sin(heading) * v * t,
+            z: jump.zLip - Math.cos(heading) * v * t,
+            y: yLip + vy * t - 4.905 * t * t,
             gem: true,
           });
-        });
+        }
       }
     }
     this.chunkPickups.set(index, pickups);

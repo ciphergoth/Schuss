@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SIM_DT, Sim, SimEvent, createSim, stepSim } from './sim';
 import { SKIER_RADIUS, stepSkier } from './skier';
+import { PLAN_SPEED } from './terrain';
 
 const COAST = { steer: 0, stance: 0 };
 
@@ -44,15 +45,18 @@ describe('flow', () => {
     expect(sim.score).toBeGreaterThan(0);
   });
 
-  it('flying off a kicker through the gem arc pays out big', () => {
+  it('skiing the golden path at plan speed threads the gem arc', () => {
     const sim = createSim(1);
     let index = 3;
     while (!sim.terrain.jumpForChunk(index)) index++;
     const { zLip, xOffset } = sim.terrain.jumpForChunk(index)!;
-    teleport(sim, sim.terrain.centerX(zLip) + xOffset, zLip + 12, 20);
+    // On the kicker line at the speed the course is designed around.
+    sim.skier.heading = sim.terrain.trackHeading(zLip + 16);
+    teleport(sim, sim.terrain.centerX(zLip) + xOffset, zLip + 16, PLAN_SPEED);
     const events = runCollecting(sim, 3);
-    expect(events.some((e) => e.type === 'pickup' && e.gem)).toBe(true);
-    expect(sim.score).toBeGreaterThanOrEqual(50);
+    const gems = events.filter((e) => e.type === 'pickup' && e.gem).length;
+    expect(gems).toBeGreaterThanOrEqual(2); // the arc genuinely threads
+    expect(sim.score).toBeGreaterThanOrEqual(100);
   });
 
   it('a tumble zeroes flow', () => {

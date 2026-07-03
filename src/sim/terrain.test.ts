@@ -112,12 +112,10 @@ describe('terrain', () => {
     }
   });
 
-  it('lays pickup lines within the channel', () => {
+  it('keeps all pickups within the channel', () => {
     const t = new Terrain(1);
-    for (const index of [1, 4, 9]) {
-      const pickups = t.pickupsForChunk(index);
-      expect(pickups.length).toBeGreaterThan(4);
-      for (const p of pickups) {
+    for (let index = 1; index < 20; index++) {
+      for (const p of t.pickupsForChunk(index)) {
         expect(Math.abs(p.x - t.centerX(p.z))).toBeLessThan(t.channelHalfWidth(p.z) + 1);
       }
     }
@@ -204,6 +202,37 @@ describe('terrain', () => {
         }
       }
     }
+  });
+
+  it('kickers sit on the golden path and never come consecutively', () => {
+    const t = new Terrain(1);
+    let found = 0;
+    for (let i = 3; i < 60; i++) {
+      const jump = t.jumpForChunk(i);
+      if (!jump) continue;
+      found++;
+      expect(t.jumpForChunk(i + 1)).toBeNull(); // no overfly-able features
+      const maxOffset = t.channelHalfWidth(jump.zLip) - jump.halfWidth - 2.3;
+      const plan = Math.max(-maxOffset, Math.min(maxOffset, t.planOffset(jump.zLip)));
+      expect(Math.abs(jump.xOffset - plan)).toBeLessThan(0.6);
+    }
+    expect(found).toBeGreaterThan(3);
+  });
+
+  it('coins are sparse off-plan temptations, not a breadcrumb trail', () => {
+    const t = new Terrain(1);
+    let offPlan = 0;
+    let coins = 0;
+    for (let index = 1; index < 20; index++) {
+      const chunkCoins = t.pickupsForChunk(index).filter((p) => !p.gem);
+      expect(chunkCoins.length).toBeLessThanOrEqual(3); // clusters, not a line
+      coins += chunkCoins.length;
+      for (const p of chunkCoins) {
+        if (Math.abs(p.x - (t.centerX(p.z) + t.planOffset(p.z))) > 2.5) offPlan++;
+      }
+    }
+    expect(coins).toBeGreaterThan(10); // they do exist
+    expect(offPlan / coins).toBeGreaterThan(0.6); // and mostly pay you to leave the plan
   });
 
   it('gradient matches height differences', () => {
