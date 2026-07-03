@@ -179,6 +179,33 @@ describe('terrain', () => {
     }
   });
 
+  it('crud never walls off the course: a clean line always exists', () => {
+    const t = new Terrain(1);
+    for (let z = -100; z > -2000; z -= 10) {
+      const c = t.centerX(z);
+      const half = t.channelHalfWidth(z) - 1;
+      let cleanest = Infinity;
+      for (let d = -half; d <= half; d += 0.5) {
+        cleanest = Math.min(cleanest, t.stickinessAt(c + d, z));
+      }
+      expect(cleanest).toBeLessThan(0.05);
+    }
+  });
+
+  it('kicker approaches are crud-free', () => {
+    const t = new Terrain(1);
+    for (let index = 3; index < 40; index++) {
+      const jump = t.jumpForChunk(index);
+      if (!jump) continue;
+      for (let u = 0; u <= 30; u += 2) {
+        for (const dd of [-jump.halfWidth, 0, jump.halfWidth]) {
+          const z = jump.zLip + u;
+          expect(t.stickinessAt(t.centerX(z) + jump.xOffset + dd, z)).toBe(0);
+        }
+      }
+    }
+  });
+
   it('gradient matches height differences', () => {
     const t = new Terrain(11);
     const [gx, gz] = t.gradient(5, -73);

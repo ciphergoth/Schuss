@@ -22,10 +22,15 @@ const MASTER_LEVEL = 0.6;
 export class GameAudio {
   private nodes: AudioNodes | null = null;
   private muted = false;
+  private gamePaused = false;
   private wasTumbling = false;
 
   constructor() {
     const unlock = () => {
+      // The autoplay unlock must not defeat the game pause: without this
+      // guard, any keypress or click resumed the context behind the pause
+      // screen (including the Escape that paused it).
+      if (this.gamePaused) return;
       if (!this.nodes) this.nodes = this.build();
       else if (this.nodes.ctx.state === 'suspended') void this.nodes.ctx.resume();
     };
@@ -187,6 +192,7 @@ export class GameAudio {
   // Game pause: silence everything by suspending the context (also stops the
   // wind loop from burning CPU), resume picks up exactly where it left off.
   setPaused(paused: boolean): void {
+    this.gamePaused = paused;
     if (!this.nodes) return;
     if (paused) void this.nodes.ctx.suspend();
     else void this.nodes.ctx.resume();

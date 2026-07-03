@@ -136,16 +136,38 @@ export class Terrain {
     return JUMP_LIP_HEIGHT * rise * rise * fade;
   }
 
+  // Is this point on the clean approach to (or the ramp of) a kicker? Crud
+  // must never gate a jump you've committed to. The approach lane extends
+  // uphill past the ramp, possibly into the previous chunk.
+  private inJumpLane(d: number, z: number): boolean {
+    const index = this.chunkIndexAt(z);
+    for (const i of [index, index + 1]) {
+      const jump = this.jumpForChunk(i);
+      if (!jump) continue;
+      const u = z - jump.zLip;
+      if (u < 0 || u > JUMP_RAMP_LENGTH + 22) continue;
+      if (Math.abs(d - jump.xOffset) < jump.halfWidth + 2) return true;
+    }
+    return false;
+  }
+
   // Slow crud: 0 = fast racing snow, 1 = full sticky. The banks are made of
   // it (drifting wide costs speed, never stops you), and seeded patches
-  // dapple the floor as the thing you steer around. Kicker ramps stay clean.
+  // dapple the floor as the thing you steer around. Three guarantees:
+  // kicker ramps and their approaches stay clean, and a clean racing line
+  // always snakes through — crud never walls off the whole course. (Crud
+  // BELOW a kicker's flight path is fair game: jump it.)
   stickinessAt(x: number, z: number): number {
     const d = x - this.centerX(z);
     const wall = Math.min(1, Math.max(0, (Math.abs(d) - this.channelHalfWidth(z)) / 4));
     let patch = 0;
-    if (z < -80 && this.jumpHeight(d, z) === 0) {
+    if (z < -80 && this.jumpHeight(d, z) === 0 && !this.inJumpLane(d, z)) {
       const n = this.noise2(x / 13, z / 13, 5);
       patch = smoothstep(Math.min(1, Math.max(0, (n - 0.62) / 0.1)));
+      // The guaranteed clean line: a lane that wanders across the floor.
+      const lane = (this.noise1(z / 90, 6) - 0.5) * 2 * (this.channelHalfWidth(z) - 6);
+      const laneDist = Math.abs(d - lane);
+      patch *= smoothstep(Math.min(1, Math.max(0, (laneDist - 3.5) / 2)));
     }
     return Math.max(wall, patch);
   }
@@ -190,10 +212,10 @@ export class Terrain {
     if (index > 1) {
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 7919) * 2 ** 31));
       const jump = this.jumpForChunk(index);
-      // Obstacles are rare spice now — slow crud is the main steering
-      // challenge. A touch more of them in wide stretches.
-      const wide = this.channelHalfWidth(zTop - CHUNK_LENGTH / 2) > BASE_HALF_WIDTH + 2;
-      const count = index < 5 ? 0 : Math.min(1 + Math.floor(index / 10), 3) + (wide ? 1 : 0);
+      // Obstacles are nearly extinct: at most one, in roughly a third of the
+      // chunks past the opening stretch. Crud is the steering challenge; the
+      // course gets decorated with fun instead later.
+      const count = index >= 6 && hash2(this.seed, index, 857) < 0.3 ? 1 : 0;
       for (let t = 0; t < count; t++) {
         const z = zTop - rng() * CHUNK_LENGTH;
         const d = (rng() * 2 - 1) * (this.channelHalfWidth(z) - 2.5);
