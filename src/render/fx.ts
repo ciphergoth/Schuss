@@ -170,6 +170,7 @@ export class Effects {
   private gold = new THREE.Color(0xffd34d);
   private cyan = new THREE.Color(0x5df2ff);
   private flame = new THREE.Color(0xff7a2a);
+  private magenta = new THREE.Color(0xff3ddc);
 
   constructor(scene: THREE.Scene) {
     this.particles = new Particles(scene);
@@ -227,10 +228,21 @@ export class Effects {
       } else if (e.type === 'pickup') {
         this.particles.spawn(
           new THREE.Vector3(e.x, s.y + 1.1, e.z),
-          new THREE.Vector3(0, e.gem ? 4 : 2.5, 0),
-          e.gem ? 4 : 2.5,
-          e.gem ? 40 : 12,
-          e.gem ? this.cyan : this.gold
+          new THREE.Vector3(0, 2.5, 0),
+          2.5,
+          12,
+          this.gold
+        );
+      } else if (e.type === 'bonus') {
+        // A star burst worthy of the grab: bigger and pinker for x5.
+        const big = e.mult >= 5;
+        this.particles.spawn(
+          new THREE.Vector3(e.x, s.y + 1.2, e.z), // the skier is at the star
+
+          new THREE.Vector3(0, big ? 5 : 4, 0),
+          big ? 6 : 4.5,
+          big ? 60 : 35,
+          big ? this.magenta : this.gold
         );
       } else {
         // Near-miss: a puff plucked off the obstacle you grazed.

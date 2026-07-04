@@ -107,8 +107,11 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   for (const e of events) {
     if (e.type === 'nearMiss') audio.playWhoosh();
     else if (e.type === 'landing') audio.playThump(e.airTime);
-    else if (e.type === 'pickup') audio.playDing(e.gem);
-    else if (e.type === 'trick') {
+    else if (e.type === 'pickup') audio.playDing();
+    else if (e.type === 'bonus') {
+      audio.playBonus(e.mult);
+      showTrick(`×${e.mult}!`, e.mult >= 5 ? '#ff3ddc' : '#ffd34d', 0.9);
+    } else if (e.type === 'trick') {
       audio.playTrick(e.spins + e.flips);
       const parts = [];
       if (e.spins >= 1) parts.push(`${e.spins * 360}°`);
@@ -121,7 +124,8 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       const mixed = e.spins >= 1 && e.flips >= 1;
       const big = e.spins >= 2 || e.flips >= 2;
       const word = mixed ? 'INCREDIBLE!' : big ? 'OUTSTANDING!' : 'NICE!';
-      showTrick(`${parts.join(' + ')} — ${word}`, '#7dff8a', 1.2);
+      const mult = e.mult > 1 ? ` ×${e.mult}` : '';
+      showTrick(`${parts.join(' + ')}${mult} — ${word}`, '#7dff8a', 1.2);
     } else if (e.type === 'tumble' && e.trick) {
       showTrick('SPUN OUT', '#ff6a5a', 1.0);
     }
@@ -148,12 +152,14 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   if (sim.time >= trickBannerUntil) {
     const spinDeg = Math.round((Math.abs(skier.spin) * 180) / Math.PI);
     const flipDeg = Math.round((Math.abs(skier.flip) * 180) / Math.PI);
-    if (skier.tumbling === 0 && (spinDeg >= 20 || flipDeg >= 20)) {
+    const armed = sim.trickMult > 1 && skier.airTime > 0;
+    if (skier.tumbling === 0 && (spinDeg >= 20 || flipDeg >= 20 || armed)) {
       const res = (a: number) => Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
       const clean =
         (spinDeg < 20 || res(skier.spin) < 0.7) && (flipDeg < 20 || res(skier.flip) < 0.55);
       const committed = spinDeg >= 300 || flipDeg >= 300;
       const parts = [];
+      if (armed) parts.push(`×${sim.trickMult}`);
       if (spinDeg >= 20) parts.push(`${spinDeg}°`);
       if (flipDeg >= 20) parts.push(`flip ${flipDeg}°`);
       trickText.textContent = `${parts.join(' · ')}${clean && committed ? ' ✓' : ''}`;

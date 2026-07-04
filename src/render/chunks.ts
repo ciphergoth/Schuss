@@ -16,6 +16,21 @@ const CHUNKS_BEHIND = 2;
 const SNOW_FLOOR = new THREE.Color(0xf4f9ff);
 const SNOW_CRUD = new THREE.Color(0x8494cf); // slow crud: dusty periwinkle
 
+// Flat five-pointed star, the classic prize shape.
+function starGeometry(radius: number): THREE.ShapeGeometry {
+  const shape = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? radius : radius * 0.45;
+    const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r;
+    if (i === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  shape.closePath();
+  return new THREE.ShapeGeometry(shape);
+}
+
 // Candy-striped marker: a cylinder with horizontal color bands baked into
 // vertex colors.
 function stripedPole(
@@ -41,7 +56,7 @@ function stripedPole(
 
 export class ChunkRenderer {
   private chunks = new Map<number, THREE.Group>();
-  private pickupMeshes = new Map<string, THREE.Mesh>();
+  private pickupMeshes = new Map<string, THREE.Object3D>();
   private snow = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 1,
@@ -67,7 +82,18 @@ export class ChunkRenderer {
   private red = new THREE.Color(0xff3b30);
   private white = new THREE.Color(0xffffff);
   private orange = new THREE.Color(0xff8b1a);
-  private gem = new THREE.MeshBasicMaterial({ color: 0x5df2ff });
+  private goldStar = new THREE.MeshBasicMaterial({ color: 0xffd34d, side: THREE.DoubleSide });
+  private magenta = new THREE.MeshBasicMaterial({ color: 0xff3ddc, side: THREE.DoubleSide });
+  private goldHalo = new THREE.MeshBasicMaterial({
+    color: 0xffe9a8,
+    transparent: true,
+    opacity: 0.55,
+  });
+  private magentaHalo = new THREE.MeshBasicMaterial({
+    color: 0xff9df0,
+    transparent: true,
+    opacity: 0.55,
+  });
   private neons = NEON_COLORS.map((c) => new THREE.MeshBasicMaterial({ color: c }));
   private balloons = BALLOON_COLORS.map(
     (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7 })
@@ -93,6 +119,7 @@ export class ChunkRenderer {
           if (obj instanceof THREE.Mesh) obj.geometry.dispose();
         });
         for (const p of this.terrain.pickupsForChunk(i)) this.pickupMeshes.delete(p.id);
+        for (const b of this.terrain.bonusesForChunk(i)) this.pickupMeshes.delete(b.id);
         this.chunks.delete(i);
       }
     }
@@ -210,15 +237,33 @@ export class ChunkRenderer {
       group.add(mesh);
     }
 
-    // Coins along the racing line, bigger cyan gems in the kicker arcs.
+    // Coins along the floor.
     for (const p of this.terrain.pickupsForChunk(index)) {
-      const mesh = p.gem
-        ? new THREE.Mesh(new THREE.OctahedronGeometry(0.65, 0), this.gem)
-        : new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.1, 12), this.gold);
-      if (!p.gem) mesh.rotation.z = Math.PI / 2;
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.1, 12), this.gold);
+      mesh.rotation.z = Math.PI / 2;
       mesh.position.set(p.x, p.y, p.z);
       group.add(mesh);
       this.pickupMeshes.set(p.id, mesh);
+    }
+
+    // Trick-bonus stars, high over the kicker: gold x3, bigger magenta x5,
+    // each with a halo ring so they read as prizes from the approach.
+    for (const b of this.terrain.bonusesForChunk(index)) {
+      const big = b.mult === 5;
+      const holder = new THREE.Group();
+      const star = new THREE.Mesh(
+        starGeometry(big ? 1.25 : 0.9),
+        big ? this.magenta : this.goldStar
+      );
+      holder.add(star);
+      const halo = new THREE.Mesh(
+        new THREE.TorusGeometry(big ? 1.7 : 1.25, 0.07, 8, 32),
+        big ? this.magentaHalo : this.goldHalo
+      );
+      holder.add(halo);
+      holder.position.set(b.x, b.y, b.z);
+      group.add(holder);
+      this.pickupMeshes.set(b.id, holder);
     }
 
     // The absurd part: a city close and tall enough to actually see — some

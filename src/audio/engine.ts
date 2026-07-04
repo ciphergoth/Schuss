@@ -184,21 +184,15 @@ export class GameAudio {
     src.stop(t + 0.2);
   }
 
-  // Pickup: a bright two-note ding; gems get a triumphant third note.
-  playDing(gem = false): void {
+  // Coin pickup: a bright two-note ding.
+  playDing(): void {
     if (!this.nodes) return;
     const { ctx, master } = this.nodes;
     const t = ctx.currentTime;
-    const notes: readonly (readonly [number, number])[] = gem
-      ? [
-          [0, 880],
-          [0.07, 1318],
-          [0.14, 1760],
-        ]
-      : [
-          [0, 880],
-          [0.07, 1318],
-        ];
+    const notes: readonly (readonly [number, number])[] = [
+      [0, 880],
+      [0.07, 1318],
+    ];
     for (const [offset, freq] of notes) {
       const osc = ctx.createOscillator();
       osc.type = 'triangle';
@@ -219,6 +213,25 @@ export class GameAudio {
     if (!this.nodes) return;
     if (paused) void this.nodes.ctx.suspend();
     else void this.nodes.ctx.resume();
+  }
+
+  // Bonus star grabbed: a proper fanfare, grander for x5.
+  playBonus(mult: number): void {
+    if (!this.nodes) return;
+    const { ctx, master } = this.nodes;
+    const t = ctx.currentTime;
+    const notes = mult >= 5 ? [523, 659, 784, 1046, 1318] : [523, 659, 784, 1046];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.09, t + i * 0.07);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.22);
+      osc.connect(gain).connect(master);
+      osc.start(t + i * 0.07);
+      osc.stop(t + i * 0.07 + 0.24);
+    });
   }
 
   // Landed trick: an ascending arpeggio, one extra note for a full turn+.

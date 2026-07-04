@@ -34,8 +34,19 @@ export interface Pickup {
   id: string;
   x: number;
   z: number;
-  y: number; // absolute height; gems float in flight arcs, coins hug the floor
-  gem: boolean; // gems are the airborne reward: worth more, need a jump
+  y: number; // absolute height; coins hug the floor
+}
+
+// SSX-style trick bonuses: stars floating HIGH above kicker lips. x3 takes a
+// fast approach or a pop; x5 demands speed AND a full-charge jump. Grabbing
+// one arms a multiplier for the next landed trick — so big jumps are pure
+// upside, never a way to overfly your reward.
+export interface TrickBonus {
+  id: string;
+  x: number;
+  z: number;
+  y: number;
+  mult: 3 | 5;
 }
 
 export interface Jump {
@@ -64,6 +75,7 @@ function smoothstep(t: number): number {
 export class Terrain {
   private chunkObstacles = new Map<number, Obstacle[]>();
   private chunkPickups = new Map<number, Pickup[]>();
+  private chunkBonuses = new Map<number, TrickBonus[]>();
 
   constructor(readonly seed: number) {}
 
@@ -272,17 +284,14 @@ export class Terrain {
     return obstacles;
   }
 
-  // Coins sweep across the racing line; gems hang in the flight arc past
-  // each kicker lip — jump as you come off and thread them for the reward.
+  // Coins sweep across the racing line in sparse clusters OFF the plan —
+  // temptations, not breadcrumbs; figuring out the golden path is gameplay.
   pickupsForChunk(index: number): Pickup[] {
     const cached = this.chunkPickups.get(index);
     if (cached) return cached;
 
     const pickups: Pickup[] = [];
     if (index > 0) {
-      // Coins are temptations, not breadcrumbs: figuring out the golden path
-      // is gameplay (read the clean snow, sight the kicker gates), so coins
-      // sit in sparse clusters OFF the plan — a paid detour, not a guide.
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 104729) * 2 ** 31));
       if (rng() < 0.7) {
         const zCluster = -index * CHUNK_LENGTH - 8 - rng() * (CHUNK_LENGTH - 16);
@@ -293,35 +302,7 @@ export class Terrain {
           const bound = this.channelHalfWidth(z) - 3;
           const x =
             this.centerX(z) + Math.max(-bound, Math.min(bound, this.planOffset(z) + detour));
-          pickups.push({ id: `${index}:${k}`, x, z, y: this.height(x, z) + 1.1, gem: false });
-        }
-      }
-
-      const jump = this.jumpForChunk(index);
-      if (jump) {
-        // Gems sit on the exact ballistic arc of a skier who takes this
-        // kicker on-plan at PLAN_SPEED, mirroring the sim's launch caps.
-        const core = this.centerX(jump.zLip) + jump.xOffset;
-        const yLip = this.height(core, jump.zLip + 0.02);
-        const riseTowardLip =
-          (this.height(core, jump.zLip + 0.02) - this.height(core, jump.zLip + 1)) / 0.98;
-        let v = PLAN_SPEED;
-        let vy = Math.min(riseTowardLip, 0.35) * PLAN_SPEED;
-        if (vy > 0) {
-          const scale = v / Math.hypot(v, vy);
-          v *= scale;
-          vy *= scale;
-        }
-        const heading = this.trackHeading(jump.zLip);
-        for (let k = 0; k < 3; k++) {
-          const t = 0.16 * (k + 1);
-          pickups.push({
-            id: `${index}:g${k}`,
-            x: core + Math.sin(heading) * v * t,
-            z: jump.zLip - Math.cos(heading) * v * t,
-            y: yLip + vy * t - 4.905 * t * t,
-            gem: true,
-          });
+          pickups.push({ id: `${index}:${k}`, x, z, y: this.height(x, z) + 1.1 });
         }
       }
     }
@@ -336,5 +317,38 @@ export class Terrain {
       pickups.push(...this.pickupsForChunk(i));
     }
     return pickups;
+  }
+
+  // Trick-bonus stars above each kicker: x3 where a fast, clean approach
+  // peaks; x5 higher and further — full charge jump at the lip, at speed, or
+  // you are not getting it. Both sit along the lip's flight direction.
+  bonusesForChunk(index: number): TrickBonus[] {
+    const cached = this.chunkBonuses.get(index);
+    if (cached) return cached;
+
+    const bonuses: TrickBonus[] = [];
+    const jump = this.jumpForChunk(index);
+    if (jump) {
+      const core = this.centerX(jump.zLip) + jump.xOffset;
+      const yLip = this.height(core, jump.zLip + 0.02);
+      const heading = this.trackHeading(jump.zLip);
+      const along = (dist: number) => ({
+        x: core + Math.sin(heading) * dist,
+        z: jump.zLip - Math.cos(heading) * dist,
+      });
+      bonuses.push({ id: `b${index}:3`, ...along(7), y: yLip + 3.2, mult: 3 });
+      bonuses.push({ id: `b${index}:5`, ...along(10), y: yLip + 5.6, mult: 5 });
+    }
+    this.chunkBonuses.set(index, bonuses);
+    return bonuses;
+  }
+
+  bonusesNear(z: number): TrickBonus[] {
+    const center = this.chunkIndexAt(z);
+    const bonuses: TrickBonus[] = [];
+    for (let i = center - 1; i <= center + 1; i++) {
+      bonuses.push(...this.bonusesForChunk(i));
+    }
+    return bonuses;
   }
 }

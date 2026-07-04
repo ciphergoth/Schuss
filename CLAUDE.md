@@ -10,7 +10,12 @@ of your speed, never the run; the walls contain you physically (rideable
 banks that steepen), no fences or fail states. The economy is SSX Tricky's:
 the run is measured in speed and distance (HUD is SI: m/s and m), and the
 BOOST TANK (tall vertical bar, left edge; big and slow on both ends) fills
-only from deliberate rewards — coins, gems, and above all TRICKS. The mouse
+only from deliberate rewards — coins (off-plan detours) and above all
+TRICKS, multiplied by BONUS STARS: a gold x3 and magenta x5 hang high over
+every kicker's flight path (the x5 needs a full-charge jump at speed);
+grabbing one arms a multiplier for the next landed trick, spent on
+touchdown whether you tricked or not. Big jumps are pure upside — the old
+gem arcs sat on the default flight path and punished jumping over them. The mouse
 is REQUIRED and never changes meaning (x steers / aims the landing, y is
 stance, buttons brake/boost); WASD exists only for tricks: in real air (past
 MIN_TRICK_AIR — never roller hops) A/D spins, W frontflips, S backflips, and

@@ -164,17 +164,23 @@ describe('terrain', () => {
     expect(max - min).toBeGreaterThan(5); // real variety, not a constant
   });
 
-  it('gems hang in the flight arc past kicker lips, above grounded reach', () => {
-    const t = new Terrain(1);
-    let index = 3;
-    while (!t.jumpForChunk(index)) index++;
-    const gems = t.pickupsForChunk(index).filter((p) => p.gem);
-    expect(gems.length).toBe(3);
-    for (const g of gems) {
-      expect(g.z).toBeLessThan(t.jumpForChunk(index)!.zLip);
-      // Well above the post-lip floor: you need to be flying.
-      expect(g.y - t.height(g.x, g.z)).toBeGreaterThan(1.6);
+  it('every kicker hangs a x3 and a x5 star past its lip, deterministically', () => {
+    const a = new Terrain(1);
+    const b = new Terrain(1);
+    let found = 0;
+    for (let index = 3; index < 40; index++) {
+      expect(a.bonusesForChunk(index)).toEqual(b.bonusesForChunk(index));
+      const jump = a.jumpForChunk(index);
+      const stars = a.bonusesForChunk(index);
+      if (!jump) {
+        expect(stars).toEqual([]);
+        continue;
+      }
+      found++;
+      expect(stars.map((s) => s.mult).sort()).toEqual([3, 5]);
+      for (const s of stars) expect(s.z).toBeLessThan(jump.zLip); // past the lip
     }
+    expect(found).toBeGreaterThan(3);
   });
 
   it('crud never walls off the course: a clean line always exists', () => {
@@ -224,7 +230,7 @@ describe('terrain', () => {
     let offPlan = 0;
     let coins = 0;
     for (let index = 1; index < 20; index++) {
-      const chunkCoins = t.pickupsForChunk(index).filter((p) => !p.gem);
+      const chunkCoins = t.pickupsForChunk(index);
       expect(chunkCoins.length).toBeLessThanOrEqual(3); // clusters, not a line
       coins += chunkCoins.length;
       for (const p of chunkCoins) {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SIM_DT, Sim, SimEvent, createSim, stepSim } from './sim';
 import { SKIER_RADIUS, SkierInput } from './skier';
-import { PLAN_SPEED } from './terrain';
 
 const COAST = { steer: 0, stance: 0 };
 
@@ -41,7 +40,7 @@ describe('boost economy', () => {
     stepSim(sim, { steer: 0, stance: 0, jump: 1 }); // even a deliberate jump
     const events = runCollecting(sim, 8);
     expect(events.some((e) => e.type === 'landing')).toBe(true);
-    expect(sim.boost).toBe(0); // fuel requires coins, gems, or (later) tricks
+    expect(sim.boost).toBe(0); // fuel requires coins or tricks
   });
 
   it('coins fill the tank', () => {
@@ -49,7 +48,7 @@ describe('boost economy', () => {
     // Find a coin cluster and ski straight through it.
     let coin = null;
     for (let index = 1; index < 30 && !coin; index++) {
-      coin = sim.terrain.pickupsForChunk(index).find((p) => !p.gem) ?? null;
+      coin = sim.terrain.pickupsForChunk(index)[0] ?? null;
     }
     expect(coin).not.toBeNull();
     teleport(sim, coin!.x, coin!.z + 2, 12);
@@ -57,18 +56,50 @@ describe('boost economy', () => {
     expect(sim.boost).toBeGreaterThan(0.05);
   });
 
-  it('skiing the golden path at plan speed threads the gem arc', () => {
+  it('a bonus star arms a multiplier that pays out on the next landed trick', () => {
+    const sim = createSim(1);
+    // A kicker whose landing zone is obstacle-free: the flight coasts ~25m.
+    let index = 3;
+    while (
+      !sim.terrain.jumpForChunk(index) ||
+      sim.terrain.obstaclesForChunk(index).length > 0 ||
+      sim.terrain.obstaclesForChunk(index + 1).length > 0
+    ) {
+      index++;
+    }
+    const star = sim.terrain.bonusesForChunk(index).find((b) => b.mult === 3)!;
+    // Fly through the star, then spin a 360 and land it.
+    const s = sim.skier;
+    s.x = star.x;
+    s.z = star.z + 2;
+    s.y = star.y - 0.6; // through the x3's window but sinking below the x5's
+    s.heading = sim.terrain.trackHeading(star.z);
+    s.speed = 15;
+    s.vy = 0;
+    s.airTime = 0.4;
+    const events: SimEvent[] = [];
+    while (sim.skier.airTime > 0 && Math.abs(s.spin) < 2 * Math.PI - 0.15) {
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
+    }
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    expect(events.some((e) => e.type === 'bonus' && e.mult === 3)).toBe(true);
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick && trick.type === 'trick' && trick.mult).toBe(3);
+    expect(sim.boost).toBeCloseTo(0.45, 5); // 0.15 x3 — a plain 360, tripled
+    expect(sim.trickMult).toBe(1); // spent on touchdown
+  });
+
+  it('the x5 star hangs higher than the x3', () => {
     const sim = createSim(1);
     let index = 3;
     while (!sim.terrain.jumpForChunk(index)) index++;
-    const { zLip, xOffset } = sim.terrain.jumpForChunk(index)!;
-    // On the kicker line at the speed the course is designed around.
-    sim.skier.heading = sim.terrain.trackHeading(zLip + 16);
-    teleport(sim, sim.terrain.centerX(zLip) + xOffset, zLip + 16, PLAN_SPEED);
-    const events = runCollecting(sim, 3);
-    const gems = events.filter((e) => e.type === 'pickup' && e.gem).length;
-    expect(gems).toBeGreaterThanOrEqual(2); // the arc genuinely threads
-    expect(sim.boost).toBeGreaterThan(0.2); // two gems' worth in the tank
+    const stars = sim.terrain.bonusesForChunk(index);
+    const b3 = stars.find((b) => b.mult === 3)!;
+    const b5 = stars.find((b) => b.mult === 5)!;
+    expect(b5.y).toBeGreaterThan(b3.y + 1.5);
+    // Both far above the snow beneath them: grounded skiers can't graze them.
+    expect(b3.y - sim.terrain.height(b3.x, b3.z)).toBeGreaterThan(2.5);
+    expect(b5.y - sim.terrain.height(b5.x, b5.z)).toBeGreaterThan(4);
   });
 
   it('a tumble still fires its event but keeps the tank', () => {
