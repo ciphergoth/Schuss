@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SIM_DT, Sim, createSim, distanceSkied, stepSim } from './sim';
 import { SkierInput, stepSkier } from './skier';
-import { WALL_WIDTH } from './terrain';
+import { SECTION_LENGTH, WALL_WIDTH } from './terrain';
 
 const COAST: SkierInput = { steer: 0, stance: 0 };
 
@@ -30,7 +30,50 @@ describe('skier', () => {
     expect(sim.skier.tumbling).toBe(0);
     expect(sim.skier.speed).toBeGreaterThan(5);
     expect(distanceSkied(sim)).toBeGreaterThan(15);
-    expect(sim.skier.x).toBe(0); // heading never changed, so no lateral motion
+    // Gravity now reads the cross-slope (mogul texture included), so the
+    // line breathes by millimeters — but it must not wander.
+    expect(Math.abs(sim.skier.x)).toBeLessThan(0.1);
+  });
+
+  it('a banked sweeper carries a hands-off rider around the turn at speed', () => {
+    // Before the gravity-turn force, this ride scrubbed 23 -> 15 m/s off
+    // the walls; the superelevation now does the steering.
+    const sim = createSim(1);
+    const t = sim.terrain;
+    let sweeper = 1;
+    while (t.sectionType(sweeper) !== 'sweeper') sweeper++;
+    const z0 = -sweeper * SECTION_LENGTH - 60;
+    const s = sim.skier;
+    s.z = z0;
+    s.x = t.centerX(z0);
+    s.y = t.height(s.x, z0);
+    s.heading = t.trackHeading(z0);
+    s.speed = 23;
+    sim.nextSectorZ = -1e9;
+    let maxOver = -99;
+    for (let i = 0; i < Math.round(3.5 / SIM_DT); i++) {
+      stepSim(sim, COAST);
+      maxOver = Math.max(maxOver, Math.abs(s.x - t.centerX(s.z)) - t.channelHalfWidth(s.z));
+    }
+    expect(sim.skier.tumbling).toBe(0);
+    expect(sim.skier.speed).toBeGreaterThan(20); // the bank held the pace
+    expect(maxOver).toBeLessThan(2); // and the line, without wall-bouncing
+  });
+
+  it('gravity carves a wall-parallel rider back down to the floor', () => {
+    const sim = createSim(1);
+    const t = sim.terrain;
+    const z0 = -520; // the narrows: steep, close walls
+    const s = sim.skier;
+    s.z = z0;
+    s.x = t.centerX(z0) - t.channelHalfWidth(z0) - 4; // 4m up the left bank
+    s.y = t.height(s.x, z0);
+    s.heading = t.trackHeading(z0); // riding parallel: nothing steers home
+    s.speed = 14;
+    sim.nextSectorZ = -1e9;
+    for (let i = 0; i < Math.round(1.5 / SIM_DT); i++) stepSim(sim, COAST);
+    const over = Math.abs(s.x - t.centerX(s.z)) - t.channelHalfWidth(s.z);
+    expect(over).toBeLessThan(1); // back at the floor inside 1.5s
   });
 
   it('is deterministic for a given seed and input sequence', () => {

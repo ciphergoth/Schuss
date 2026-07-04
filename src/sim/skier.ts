@@ -45,6 +45,11 @@ const BOOST_ACCEL = 5.5; // m/s^2 while burning the tank — rocket territory
 const MAX_STEER_OFFSET = 1.15; // radians of target offset at full deflection
 const STEER_GAIN = 4; // per second: how eagerly heading chases the target
 const TURN_RATE = 2.6; // rad/s ceiling on heading change
+// Gravity's cross-heading component rotates the velocity, not just the
+// speed: banked floors carry you around their turn, walls nose you back to
+// the floor, and a traverse bleeds toward the fall line. dHeading/dt =
+// aPerp/speed, capped so crawling speeds pivot instead of whipping.
+const GRAVITY_TURN_CAP = 1.0; // rad/s
 export const SKIER_RADIUS = 0.4;
 
 // Don't go airborne over every pebble: the terrain has to fall away from the
@@ -289,13 +294,21 @@ export function stepSkier(
   // stationary); a tuck narrows the target range inside steerToward.
   steerToward(state, terrain, input, TURN_RATE * Math.min(state.speed / 4, 1), dt);
 
+  // The banked-turn force: the slope's pull perpendicular to the skis
+  // rotates the heading (see GRAVITY_TURN_CAP). This is what makes a
+  // superelevated sweeper actually steer you and a wall ride carve back
+  // down instead of relying on the recovery bias alone.
+  const [gx, gz] = terrain.gradient(state.x, state.z);
+  const aPerp = -G * (gx * Math.cos(state.heading) + gz * Math.sin(state.heading));
+  state.heading +=
+    Math.max(-GRAVITY_TURN_CAP, Math.min(GRAVITY_TURN_CAP, aPerp / Math.max(state.speed, 2))) * dt;
+
   const dirX = Math.sin(state.heading);
   const dirZ = -Math.cos(state.heading);
 
   // Gravity component along the direction of travel, minus snow friction and
   // air drag. Friction can stop the skier but never pushes them backwards.
   // Snowplow scales friction up; tuck cuts drag.
-  const [gx, gz] = terrain.gradient(state.x, state.z);
   const slopeAccel = -G * (gx * dirX + gz * dirZ);
   const muG = (FRICTION + plow * (PLOW_FRICTION - FRICTION)) * G;
   const stickiness = terrain.stickinessAt(state.x, state.z);

@@ -76,12 +76,16 @@ sine S-turns with the floor superelevated into the bend — carving the bank
 is the racing line). Sections never repeat back-to-back, blend over their
 last 60m, and section 0 is always cruise (gentle openings, predictable
 physics tests). Banking is curvature-driven everywhere, so any bend tilts
-its floor a little. Kickers come in S/M/L (ramp 10/14/19m, lip
+its floor a little — and the physics honors it: gravity's cross-heading
+component rotates a grounded skier's velocity (capped at 1 rad/s), so a
+superelevated sweeper carries a hands-off rider around its S-turns at full
+pace and a wall ride carves back down to the floor. Kickers come in S/M/L (ramp 10/14/19m, lip
 1.5/2.2/3.2m), 30% of M/L are step-downs (the landing scooped out for
 float and a soft catch), the first kicker of a run is always a flat M, and
 the trick-bonus stars sit per-size on the popped-at-the-lip flight arc
-(STAR_TABLE, tuned by simulated flights). Hip kickers wait on a physics
-addition — a heightfield yaw alone can't redirect a kinematic skier. The
+(STAR_TABLE, tuned by simulated flights). Hip kickers are unlocked now
+that cross-slope gravity turns the skier (a yawed ramp face can genuinely
+throw the ride sideways) but are not yet built. The
 section framework is where moving hazards and finish lines will plug in.
 The render layer
 draws the course as a ribbon clipped just past the bounce barrier, so the
