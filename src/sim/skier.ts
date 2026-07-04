@@ -1,12 +1,13 @@
 import { Terrain, WALL_WIDTH } from './terrain';
 
 export interface SkierInput {
-  steer: number; // -1 (left) .. 1 (right)
-  stance: number; // -1 (full tuck) .. 0 (neutral) .. 1 (full snowplow)
+  steer: number; // -1 (left) .. 1 (right); the mouse, always
+  stance: number; // -1 (full tuck) .. 0 (neutral) .. 1 (full snowplow); the mouse, always
   jump?: number; // one-shot: 0..1 charge strength released this step
   charge?: number; // 0..1 jump charge currently held; render feedback only
   boost?: boolean; // burn the tank (Shift / right mouse)
-  trick?: boolean; // the brake control, held airborne: steer spins instead of aims
+  trickSpin?: number; // -1..1 from the dedicated trick keys (A/D)
+  trickFlip?: number; // -1..1 from the dedicated trick keys (W = back, S = front)
 }
 
 export interface SkierState {
@@ -75,15 +76,14 @@ const TUMBLE_SPEED_KEEP = 0.25;
 const TUMBLE_FRICTION = 0.35;
 const AIR_TURN_FACTOR = 0.5; // reduced but real steering mid-air
 
-// Tricks are opt-in twice over: you must hold the dedicated TRICK button AND
-// be in real air (kickers, big launches — not incidental roller hops). While
-// it's held, all four directions are trick inputs: steer/x spins, stance/y
-// flips (up = backflip). Button up, steering gently aims your landing. The
-// landing judges committed rotation — bring it round to whole turns or
-// tumble; small rotation always bails safe. Spins are lenient (landing a bit
-// sideways is skiable); flips commit early (landing pitched 90 degrees is a
-// faceplant, not a stumble). Travel flies straight while tricking.
-const MIN_TRICK_AIR = 0.35; // seconds aloft before the trick button engages
+// Tricks live on their own keys (WASD), which do nothing else — the mouse
+// NEVER changes meaning: it steers on snow and aims your landing in the air,
+// even mid-trick. Trick keys only engage in real air (kickers, big launches —
+// not incidental roller hops). The landing judges committed rotation — bring
+// it round to whole turns or tumble; small rotation always bails safe. Spins
+// are lenient (landing a bit sideways is skiable); flips commit early
+// (landing pitched 90 degrees is a faceplant, not a stumble).
+const MIN_TRICK_AIR = 0.35; // seconds aloft before the trick keys engage
 const SPIN_RATE = 6; // rad/s of trick yaw
 const FLIP_RATE = 5; // rad/s of trick pitch
 export const TRICK_COMMIT = 3.3; // radians of spin (~half-turn) before you must complete
@@ -201,20 +201,15 @@ export function stepSkier(
   }
 
   if (state.airTime > 0) {
-    // Ballistic: gravity on vy, air drag on speed. Trick button held in real
-    // air: both axes belong to the trick (x spins, y flips) and stance stops
-    // meaning tuck. Otherwise steering gently aims your landing.
-    const tricking = (input.trick ?? false) && state.airTime > MIN_TRICK_AIR;
-    const airTuck = tricking ? 0 : Math.max(0, -input.stance);
-    if (tricking) {
-      // Wide dead zone: analog cursor hover noise must not integrate into
-      // rotation over a whole flight — only deliberate deflection tricks.
-      const deadband = (v: number) =>
-        Math.abs(v) > 0.35 ? (Math.sign(v) * (Math.abs(v) - 0.35)) / 0.65 : 0;
-      state.spin += SPIN_RATE * deadband(input.steer) * dt;
-      state.flip += FLIP_RATE * deadband(input.stance) * dt;
-    } else {
-      steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
+    // Ballistic: gravity on vy, air drag on speed. The mouse keeps its
+    // everyday meaning — gently aiming the landing, tucking for drag — while
+    // the dedicated trick keys rotate you, and only in real air. Digital keys
+    // need no hover deadband.
+    const airTuck = Math.max(0, -input.stance);
+    steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
+    if (state.airTime > MIN_TRICK_AIR) {
+      state.spin += SPIN_RATE * (input.trickSpin ?? 0) * dt;
+      state.flip += FLIP_RATE * (input.trickFlip ?? 0) * dt;
     }
     state.speed = Math.max(
       0,

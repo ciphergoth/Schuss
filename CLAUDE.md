@@ -10,18 +10,18 @@ of your speed, never the run; the walls contain you physically (rideable
 banks that steepen), no fences or fail states. The economy is SSX Tricky's:
 the run is measured in speed and distance (HUD is SI: m/s and m), and the
 BOOST TANK (tall vertical bar, left edge; big and slow on both ends) fills
-only from deliberate rewards — coins, gems, and above all TRICKS. Tricks are
-opt-in twice over: hold the dedicated TRICK button (F) while airborne off a
-REAL jump (past MIN_TRICK_AIR — never roller hops). While F is held, all four
-directions are trick inputs: left/right spins, up/down flips (up = backflip);
-stance stops meaning tuck. Without F, air steering gently aims your landing.
-Land within tolerance of whole rotations for big boost (flips pay more than
-spins); past commit still mid-rotation and you tumble — spins commit at a
-half-turn, flips at ~70 degrees (a 90-degree-pitched landing is a faceplant,
-not a stumble); under commit always bails safe. A live degree readout (green
-✓ when lined up) plus NICE!/SPUN OUT banners make it legible. Racing alone
-earns nothing. Burning is hard acceleration with flames, rainbow trail, FOV
-slam, rumble. Reward loop over penalty loop.
+only from deliberate rewards — coins, gems, and above all TRICKS. The mouse
+is REQUIRED and never changes meaning (x steers / aims the landing, y is
+stance, buttons brake/boost); WASD exists only for tricks: in real air (past
+MIN_TRICK_AIR — never roller hops) A/D spins, W backflips, S frontflips, and
+you can aim with the mouse mid-trick. Land within tolerance of whole
+rotations for big boost (flips pay more than spins); past commit still
+mid-rotation and you tumble — spins commit at a half-turn, flips at ~70
+degrees (a 90-degree-pitched landing is a faceplant, not a stumble); under
+commit always bails safe. A live degree readout (green ✓ when lined up) plus
+NICE!/SPUN OUT banners make it legible. Racing alone earns nothing. Burning
+is hard acceleration with flames, rainbow trail, FOV slam, rumble. Reward
+loop over penalty loop.
 
 Terrain is a pure height function: a curving centerline (straight near the
 start and uphill of it, for gentle run-ins and predictable physics tests)
@@ -109,7 +109,8 @@ friction braking).
   y sets stance (top = tuck, bottom = snowplow); hold button for full snowplow
 - Touch: first finger works like the mouse position, second finger = full
   snowplow
-- Keyboard fallback: arrows or A/D steer; up/W tucks, Space/S/down snowplows
+- WASD: trick keys ONLY (in real air: A/D spin, W backflip, S frontflip).
+  There is no keyboard steering — the mouse is required.
 - Boost/jump is ONE button, SSX-style (Space, Shift, or right mouse): holding
   burns the tank (grounded only) and preloads a jump (skier crouches);
   releasing pops — bigger with a longer hold (up to 0.8s).

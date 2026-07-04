@@ -92,29 +92,25 @@ export function setupInput(onRestart: () => void): InputSource {
 
   const current = (): SkierInput => {
     const key = (...codes: string[]) => codes.some((c) => down.has(c));
-    const keySteer = (key('ArrowRight', 'KeyD') ? 1 : 0) - (key('ArrowLeft', 'KeyA') ? 1 : 0);
-    const keyStance = (key('ArrowDown', 'KeyS') ? 1 : 0) - (key('ArrowUp', 'KeyW') ? 1 : 0);
 
+    // The mouse is required and NEVER changes meaning: x steers, y is stance,
+    // buttons brake/boost. WASD exists only for tricks — unambiguous digital
+    // keys, active only in real air (the sim gates them).
     const firstTouch = touches.values().next();
     const pointer = !firstTouch.done ? firstTouch.value : mouse;
 
-    const steer =
-      keySteer !== 0 ? keySteer : pointer ? pointerAxis(pointer.x, window.innerWidth) : 0;
+    const steer = pointer ? pointerAxis(pointer.x, window.innerWidth) : 0;
     const stance =
-      keyStance !== 0
-        ? keyStance
-        : mouseBrake || touches.size >= 2
-          ? 1
-          : pointer
-            ? pointerAxis(pointer.y, window.innerHeight)
-            : 0;
+      mouseBrake || touches.size >= 2
+        ? 1
+        : pointer
+          ? pointerAxis(pointer.y, window.innerHeight)
+          : 0;
     const charge =
       chargeStart === null ? 0 : Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS);
-    // Dedicated trick button: while held in the air, all four pointer/steer
-    // directions become trick inputs (x = spin, y = flip). A dedicated key is
-    // deliberately unambiguous — mouse directions never are.
-    const trick = key('KeyF');
-    return { steer, stance, charge, boost: chargeStart !== null, trick };
+    const trickSpin = (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0);
+    const trickFlip = (key('KeyS') ? 1 : 0) - (key('KeyW') ? 1 : 0); // W = backflip
+    return { steer, stance, charge, boost: chargeStart !== null, trickSpin, trickFlip };
   };
 
   return {

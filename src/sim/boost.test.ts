@@ -114,7 +114,7 @@ describe('boost economy', () => {
     // Spin until just short of a full turn (no boost button needed), then
     // stop and ride it down.
     while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
-      events.push(...stepSim(sim, { steer: 1, stance: 0, trick: true }));
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
     }
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBe(0);
@@ -129,7 +129,7 @@ describe('boost economy', () => {
     const events: SimEvent[] = [];
     // Spin well past the half-turn commit, then land sideways.
     while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 4.0) {
-      events.push(...stepSim(sim, { steer: 1, stance: 0, trick: true }));
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
     }
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBeGreaterThan(0);
@@ -142,7 +142,7 @@ describe('boost economy', () => {
     launch(sim);
     // A brief quarter-ish turn, then bail — must land safely, no reward.
     for (let i = 0; i < 10 && sim.skier.airTime > 0; i++)
-      stepSim(sim, { steer: 1, stance: 0, trick: true });
+      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 });
     const events: SimEvent[] = [];
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBe(0);
@@ -154,7 +154,7 @@ describe('boost economy', () => {
     launch(sim);
     const events: SimEvent[] = [];
     while (sim.skier.airTime > 0 && Math.abs(sim.skier.flip) < 2 * Math.PI - 0.12) {
-      events.push(...stepSim(sim, { steer: 0, stance: -1, trick: true }));
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickFlip: -1 }));
     }
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBe(0);
@@ -168,7 +168,7 @@ describe('boost economy', () => {
     launch(sim);
     const events: SimEvent[] = [];
     while (sim.skier.airTime > 0 && Math.abs(sim.skier.flip) < Math.PI) {
-      events.push(...stepSim(sim, { steer: 0, stance: -1, trick: true }));
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickFlip: -1 }));
     }
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBeGreaterThan(0);
@@ -180,13 +180,13 @@ describe('boost economy', () => {
     const sim = createSim(1);
     launch(sim);
     while (sim.skier.airTime > 0 && Math.abs(sim.skier.flip) < 0.9) {
-      stepSim(sim, { steer: 0, stance: -1, trick: true });
+      stepSim(sim, { steer: 0, stance: 0, trickFlip: -1 });
     }
     while (sim.skier.airTime > 0) stepSim(sim, COAST);
     expect(sim.skier.tumbling).toBe(0);
   });
 
-  it('steering in the air without the trick button aims, never spins', () => {
+  it('mouse steering in the air aims, never spins (tricks live on WASD)', () => {
     const sim = createSim(1);
     launch(sim);
     const headingBefore = sim.skier.heading;
@@ -216,7 +216,7 @@ describe('boost economy', () => {
     // Even holding hard steer + tuck, nothing rotates until you've been up
     // long enough to be off a real jump.
     while (sim.skier.airTime > 0 && sim.skier.airTime < 0.34) {
-      stepSim(sim, { steer: 1, stance: -1, boost: true, trick: true });
+      stepSim(sim, { steer: 1, stance: -1, boost: true, trickSpin: 1, trickFlip: -1 });
       expect(sim.skier.spin).toBe(0);
     }
     expect(sim.skier.airTime).toBeGreaterThan(0.3); // did reach real air
