@@ -167,6 +167,7 @@ friction braking).
 - Boost/jump is ONE button, SSX-style (Space, Shift, or right mouse): holding
   burns the tank (grounded only) and preloads a jump (skier crouches);
   releasing pops — bigger with a longer hold (up to 0.8s).
-- Esc or ? pauses (freezes the sim, suspends audio) and shows the key guide
+- Esc or ? pauses (freezes the sim, suspends audio) and shows the key guide;
+  the game starts paused, so the guide doubles as the title screen
 - R starts a fresh run
 - M toggles sound (sound starts on the first input, per browser autoplay rules)

@@ -80,6 +80,10 @@ window.addEventListener('keydown', (e) => {
 
 const audio = new GameAudio();
 
+// The game opens paused: the key guide doubles as the title screen, and the
+// run doesn't start rolling until the player is actually looking.
+setPaused(true);
+
 window.__game = {
   get sim() {
     return sim;
