@@ -391,13 +391,24 @@ export class Effects {
           this.powder
         );
       } else if (e.type === 'trick') {
-        // Landed trick: a two-tone burst at the skis, and for the showpieces
-        // a firework volley in the sky ahead — star-colored when a
-        // multiplier cashed in, rainbow for a mixed combo.
+        // The flight holds its breath (no continuous fx mid-air), so the
+        // landing is the exhale: a two-tone burst at the skis plus a glitter
+        // release sized by the rotation — rainbow-fanned for a mixed combo —
+        // and for the showpieces a firework volley in the sky ahead,
+        // star-colored when a multiplier cashed in.
         const count = Math.min(70, Math.round((e.spins + e.flips) * 45));
         this.particles.spawn(skierPos, new THREE.Vector3(0, 4.5, 0), 5, count, this.gold);
         this.particles.spawn(skierPos, new THREE.Vector3(0, 3.5, 0), 4, count, this.cyan);
         const mixed = e.spins >= 1 && e.flips >= 1;
+        const fan = mixed ? NEON_PALETTE : [this.cyan];
+        for (let k = 0; k < fan.length; k++) {
+          this.sparks.burst(
+            new THREE.Vector3(s.x, s.y + 0.8, s.z),
+            5 + k,
+            Math.min(40, Math.round((e.spins + e.flips) * 14)),
+            fan[k]!
+          );
+        }
         if (e.mult >= 3) {
           const star = e.mult >= 5 ? this.magenta : this.gold;
           this.volley(sim, e.mult, [star, this.white], e.mult >= 5 ? 2.5 : 1.5);
@@ -460,41 +471,25 @@ export class Effects {
     }
 
     // An armed star orbits the skier as a ring of sparkles — you carry the
-    // multiplier visibly until a trick spends it. In the air the ring slides
-    // back off the body: nothing may cover the figure while you're reading
-    // your own rotation to land.
-    if (sim.trickMult > 1) {
+    // multiplier visibly until a trick spends it. Airborne it goes silent
+    // with everything else: a jump is when the continuous effects hold
+    // their breath, and the landing is the pop.
+    if (sim.trickMult > 1 && grounded) {
       const color = sim.trickMult >= 5 ? this.magenta : this.gold;
-      const airborne = s.airTime > 0;
-      const back = airborne ? 2.4 : 0;
       for (let k = 0; k < 2; k++) {
         const a = sim.time * 7 + k * Math.PI;
         this.sparks.spawn(
           new THREE.Vector3(
-            s.x - dirX * back + Math.cos(a) * 0.9,
-            s.y + (airborne ? 0.4 : 1.1) + Math.sin(a * 0.7) * 0.4,
-            s.z - dirZ * back + Math.sin(a) * 0.9
+            s.x + Math.cos(a) * 0.9,
+            s.y + 1.1 + Math.sin(a * 0.7) * 0.4,
+            s.z + Math.sin(a) * 0.9
           ),
-          new THREE.Vector3(-dirX * back, 0.8, -dirZ * back),
+          new THREE.Vector3(0, 0.8, 0),
           0.4,
           1,
           color
         );
       }
-    }
-
-    // Mid-air rotation is a comet: hue-cycling glitter streaming BEHIND the
-    // flight path — a tail, never a veil over the skier.
-    if (s.airTime > 0 && (Math.abs(s.spin) > 0.25 || Math.abs(s.flip) > 0.25)) {
-      const hue = (sim.time * 1.4 + (Math.abs(s.spin) + Math.abs(s.flip)) * 0.18) % 1;
-      this.scratch.setHSL(hue, 0.95, 0.62);
-      this.sparks.spawn(
-        new THREE.Vector3(s.x - dirX * 2.6, s.y + 0.3, s.z - dirZ * 2.6),
-        new THREE.Vector3(-dirX * 4, 0.2, -dirZ * 4),
-        1.6,
-        3,
-        this.scratch
-      );
     }
 
     // Charging a jump: a golden ring of sparks converges on the skis and

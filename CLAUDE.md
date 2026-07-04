@@ -49,8 +49,11 @@ sky/fog/lights) under a waving aurora that blazes in the night zone; a
 glowing neon arc spans the track at every 250m sector line; paid sectors
 and star-multiplied tricks launch firework volleys over the course (grander
 for jackpots); an armed star orbits the skier as sparkles in its own color
-and dyes the flow trail; mid-air rotation streams a hue-cycling glitter
-comet; kicker approaches are lit like runways and every bonus star rides a
+and dyes the flow trail. In the AIR the continuous effects hold their
+breath — nothing but the skier's own glow (emissive materials, hot cyan
+skis) so the rotation stays readable — and the landing is the exhale: a
+glitter release sized by the trick, rainbow-fanned for mixes. Kicker
+approaches are lit like runways and every bonus star rides a
 light beam up from the snow. The mix celebrates alongside: firework booms
 with crackle mirror the fx layer's fuse rhythm, an airy whoosh climbs in
 pitch as mid-air rotation accrues, an armed star shimmers (quicker and
