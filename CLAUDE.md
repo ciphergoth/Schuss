@@ -59,7 +59,10 @@ light beam up from the snow. The mix celebrates alongside: firework booms
 with crackle mirror the fx layer's fuse rhythm, an airy whoosh climbs in
 pitch as mid-air rotation accrues, an armed star shimmers (quicker and
 higher for x5), multiplied tricks add a glissando run to the fanfare, and
-each zone crossing lands a soft two-note swell. Reward loop over penalty
+each zone crossing lands a soft two-note swell. (An armed star used to
+shimmer continuously — it read as a second, out-of-time music box over
+the soundtrack and was cut; the grab fanfare and HUD/trail carry that
+state.) Reward loop over penalty
 loop.
 
 Terrain is a pure height function with SECTION personalities: every 400m

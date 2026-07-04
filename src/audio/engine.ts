@@ -32,8 +32,6 @@ export class GameAudio {
   private wasTumbling = false;
   private prevSpin = 0;
   private prevFlip = 0;
-  private nextSparkle = 0; // armed-star shimmer scheduler
-  private sparkleStep = 0;
   private lastZone = 0;
 
   constructor() {
@@ -129,14 +127,7 @@ export class GameAudio {
     };
   }
 
-  update(
-    state: SkierState,
-    input: SkierInput,
-    boosting = false,
-    stickiness = 0,
-    trickMult = 1,
-    zone = 0
-  ): void {
+  update(state: SkierState, input: SkierInput, boosting = false, stickiness = 0, zone = 0): void {
     // Zone crossings are tracked even before the graph exists, so the first
     // chime doesn't fire late; everything else needs live nodes.
     if (zone !== this.lastZone) {
@@ -176,22 +167,9 @@ export class GameAudio {
     const turned = Math.abs(state.spin) + Math.abs(state.flip);
     spinGain.gain.setTargetAtTime(rotating ? 0.22 : 0, t, rotating ? 0.05 : 0.12);
     spinFilter.frequency.setTargetAtTime(Math.min(2400, 650 + turned * 170), t, 0.05);
-
-    // An armed star shimmers softly until it is spent — quicker and higher
-    // for the x5, so you can hear what you're carrying.
-    if (trickMult > 1 && t >= this.nextSparkle) {
-      this.nextSparkle = t + (trickMult >= 5 ? 0.22 : 0.34);
-      const notes = trickMult >= 5 ? [2637, 3136, 3520] : [2093, 2637];
-      const osc = ctx.createOscillator();
-      osc.type = 'triangle';
-      osc.frequency.value = notes[this.sparkleStep++ % notes.length]!;
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.05, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
-      osc.connect(gain).connect(this.nodes.master);
-      osc.start(t);
-      osc.stop(t + 0.18);
-    }
+    // (The armed star used to shimmer continuously here — it fought the
+    // soundtrack like a second, out-of-time music box. The grab fanfare and
+    // the HUD/trail carry the armed state now; the mix stays clean.)
   }
 
   private playCrash(): void {

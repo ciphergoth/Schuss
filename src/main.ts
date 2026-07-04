@@ -210,7 +210,6 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     lastInput,
     sim.boosting,
     sim.terrain.stickinessAt(skier.x, skier.z),
-    sim.trickMult,
     Math.floor(Math.max(0, -skier.z) / ZONE_LENGTH)
   );
 
