@@ -419,14 +419,22 @@ export class Effects {
         );
         this.sparks.burst(new THREE.Vector3(e.x, s.y + 1.1, e.z), 3, 8, this.gold);
       } else if (e.type === 'bonus') {
-        // A star grab: shockwave ring plus a burst worthy of it, bigger and
-        // pinker for x5.
+        // A star grab: a fast shockwave ring at the star (clears the body in
+        // a blink) while the lingering glitter dumps behind and below the
+        // flight — the grab is usually the START of a trick, and nothing may
+        // sit on the figure while you rotate.
         const big = e.mult >= 5;
-        const at = new THREE.Vector3(e.x, s.y + 1.2, e.z);
         const color = big ? this.magenta : this.gold;
-        this.particles.spawn(at, new THREE.Vector3(0, big ? 5 : 4, 0), big ? 6 : 4.5, 30, color);
-        this.sparks.burst(at, big ? 9 : 7, big ? 70 : 45, color);
-        this.sparks.ring(at, big ? 14 : 10, 28, this.white);
+        this.sparks.ring(new THREE.Vector3(e.x, s.y + 1.2, e.z), big ? 14 : 10, 28, this.white);
+        const behind = new THREE.Vector3(e.x - dirX * 2.2, s.y - 0.4, e.z - dirZ * 2.2);
+        this.particles.spawn(behind, new THREE.Vector3(-dirX * 4, -1.5, -dirZ * 4), 4, 30, color);
+        this.sparks.spawn(
+          behind,
+          new THREE.Vector3(-dirX * 5, -1, -dirZ * 5),
+          big ? 5 : 4,
+          big ? 40 : 26,
+          color
+        );
       } else if (e.type === 'nearMiss') {
         // Near-miss: a puff plucked off the obstacle you grazed.
         this.particles.spawn(

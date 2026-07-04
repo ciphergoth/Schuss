@@ -22,7 +22,8 @@ export interface SkierView {
   torso: THREE.Group;
   legs: [Leg, Leg]; // [left, right]
   skis: [THREE.Mesh, THREE.Mesh]; // [left, right]
-  pose: { tuck: number; plow: number }; // smoothed toward the input stance
+  pose: { tuck: number; plow: number; glow: number }; // smoothed render state
+  glowMats: { mat: THREE.MeshStandardMaterial; intensity: number }[];
 }
 
 function limb(width: number, length: number, material: THREE.Material): THREE.Mesh {
@@ -47,6 +48,20 @@ export function createSkierView(scene: THREE.Scene): SkierView {
   const pants = new THREE.MeshStandardMaterial({ color: 0x1c2a4a, roughness: 0.9 });
   const skin = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.9 });
   const skiMaterial = new THREE.MeshStandardMaterial({ color: 0x223a8f, roughness: 0.5 });
+
+  // In real air the skier lights up from within — reading your own rotation
+  // against a dark sky (or a fireworks barrage) is how tricks get landed,
+  // so the figure must outshine everything behind it. The skis glow hottest:
+  // they're the needle you read the angle from.
+  jacket.emissive = new THREE.Color(0xff6a4a);
+  pants.emissive = new THREE.Color(0x4a7aff);
+  skiMaterial.emissive = new THREE.Color(0x2ee6ff);
+  const glowMats = [
+    { mat: jacket, intensity: 0.55 },
+    { mat: pants, intensity: 0.7 },
+    { mat: skiMaterial, intensity: 1.3 },
+  ];
+  for (const { mat } of glowMats) mat.emissiveIntensity = 0;
 
   const group = new THREE.Group();
   const pelvis = new THREE.Group();
@@ -84,7 +99,7 @@ export function createSkierView(scene: THREE.Scene): SkierView {
     if (obj instanceof THREE.Mesh) obj.castShadow = true;
   });
   scene.add(group);
-  return { group, pelvis, torso, legs, skis, pose: { tuck: 0, plow: 0 } };
+  return { group, pelvis, torso, legs, skis, pose: { tuck: 0, plow: 0, glow: 0 }, glowMats };
 }
 
 export function updateSkierView(
@@ -108,6 +123,14 @@ export function updateSkierView(
   // Ease the pose toward the input stance, frame-rate independently. Airborne,
   // the knees come up regardless of stance.
   const k = 1 - Math.exp(-12 * dt);
+
+  // The air glow: on fast in real air, off fast on the snow (and off while
+  // tumbling — the crash reads better unlit).
+  const glowTarget = state.airTime > 0.2 && state.tumbling === 0 ? 1 : 0;
+  view.pose.glow += (glowTarget - view.pose.glow) * k;
+  for (const { mat, intensity } of view.glowMats) {
+    mat.emissiveIntensity = view.pose.glow * intensity;
+  }
   const tuckTarget = state.airTime > 0 ? Math.max(0.6, -input.stance) : Math.max(0, -input.stance);
   pose.tuck += (tuckTarget - pose.tuck) * k;
   pose.plow += (Math.max(0, input.stance) - pose.plow) * k;
