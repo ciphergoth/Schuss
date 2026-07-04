@@ -110,7 +110,10 @@ export function setupInput(onRestart: () => void): InputSource {
             : 0;
     const charge =
       chargeStart === null ? 0 : Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS);
-    return { steer, stance, charge, boost: chargeStart !== null };
+    // The brake control doubles as the trick button: it has no other meaning
+    // in the air, so holding it there is unambiguous intent to spin.
+    const trick = mouseBrake || key('ArrowDown', 'KeyS') || touches.size >= 2;
+    return { steer, stance, charge, boost: chargeStart !== null, trick };
   };
 
   return {

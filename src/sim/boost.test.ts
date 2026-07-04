@@ -114,7 +114,7 @@ describe('boost economy', () => {
     // Spin until just short of a full turn (no boost button needed), then
     // stop and ride it down.
     while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
-      events.push(...stepSim(sim, { steer: 1, stance: 0 }));
+      events.push(...stepSim(sim, { steer: 1, stance: 0, trick: true }));
     }
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBe(0);
@@ -129,7 +129,7 @@ describe('boost economy', () => {
     const events: SimEvent[] = [];
     // Spin well past the half-turn commit, then land sideways.
     while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 4.0) {
-      events.push(...stepSim(sim, { steer: 1, stance: 0 }));
+      events.push(...stepSim(sim, { steer: 1, stance: 0, trick: true }));
     }
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBeGreaterThan(0);
@@ -141,11 +141,25 @@ describe('boost economy', () => {
     const sim = createSim(1);
     launch(sim);
     // A brief quarter-ish turn, then bail — must land safely, no reward.
-    for (let i = 0; i < 10 && sim.skier.airTime > 0; i++) stepSim(sim, { steer: 1, stance: 0 });
+    for (let i = 0; i < 10 && sim.skier.airTime > 0; i++)
+      stepSim(sim, { steer: 1, stance: 0, trick: true });
     const events: SimEvent[] = [];
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBe(0);
     expect(events.some((e) => e.type === 'trick')).toBe(false);
+  });
+
+  it('steering in the air without the trick button aims, never spins', () => {
+    const sim = createSim(1);
+    launch(sim);
+    const headingBefore = sim.skier.heading;
+    // Aim right for half a second of flight (holding it the whole flight
+    // would carry you clear across the course and off the far barrier).
+    for (let i = 0; i < Math.round(0.5 / SIM_DT); i++) stepSim(sim, { steer: 1, stance: 0 });
+    expect(sim.skier.spin).toBe(0); // no rotation without the button
+    expect(sim.skier.heading).toBeGreaterThan(headingBefore + 0.2); // but it steered
+    while (sim.skier.airTime > 0) stepSim(sim, COAST);
+    expect(sim.skier.tumbling).toBe(0);
   });
 
   it('the bug: tucking + boosting through real air never flips you out', () => {
@@ -165,7 +179,7 @@ describe('boost economy', () => {
     // Even holding hard steer + tuck, nothing rotates until you've been up
     // long enough to be off a real jump.
     while (sim.skier.airTime > 0 && sim.skier.airTime < 0.34) {
-      stepSim(sim, { steer: 1, stance: -1, boost: true });
+      stepSim(sim, { steer: 1, stance: -1, boost: true, trick: true });
       expect(sim.skier.spin).toBe(0);
     }
     expect(sim.skier.airTime).toBeGreaterThan(0.3); // did reach real air

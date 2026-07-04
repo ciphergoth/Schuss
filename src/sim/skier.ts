@@ -6,6 +6,7 @@ export interface SkierInput {
   jump?: number; // one-shot: 0..1 charge strength released this step
   charge?: number; // 0..1 jump charge currently held; render feedback only
   boost?: boolean; // burn the tank (Shift / right mouse)
+  trick?: boolean; // the brake control, held airborne: steer spins instead of aims
 }
 
 export interface SkierState {
@@ -74,13 +75,15 @@ const TUMBLE_SPEED_KEEP = 0.25;
 const TUMBLE_FRICTION = 0.35;
 const AIR_TURN_FACTOR = 0.5; // reduced but real steering mid-air
 
-// Tricks: only REAL air (kickers, big launches — not incidental roller hops)
-// becomes a trick stage, and only steering spins you. Flips are dormant for
-// now: driving them from the stance axis meant tucking-for-speed silently
-// flipped you off every roller and wiped you out. The landing judges a
-// committed spin — bring it round to a whole turn or tumble; small rotation
-// is always safe. Travel flies straight while spinning: style costs line.
-const MIN_TRICK_AIR = 0.35; // seconds aloft before steering becomes spin
+// Tricks are opt-in twice over: you must hold the TRICK button (the brake
+// control, which has no airborne meaning) AND be in real air (kickers, big
+// launches — not incidental roller hops). Then steering spins you; button up,
+// steering gently aims your landing as normal. Flips are dormant for now:
+// driving them from the always-held tuck stance silently flipped you off
+// every roller and wiped you out. The landing judges a committed spin —
+// bring it round to a whole turn or tumble; small rotation is always safe.
+// Travel flies straight while spinning: style costs line.
+const MIN_TRICK_AIR = 0.35; // seconds aloft before the trick button engages
 const SPIN_RATE = 6; // rad/s of trick yaw
 export const TRICK_COMMIT = 3.3; // radians (~a half-turn): below this a landing is always clean
 export const SPIN_TOLERANCE = 0.7; // radians from a whole turn to land clean
@@ -196,11 +199,10 @@ export function stepSkier(
 
   if (state.airTime > 0) {
     // Ballistic: gravity on vy, air drag on speed (tuck still matters).
-    // Brief hops keep gentle heading control (aim your landing); once you've
-    // been aloft past MIN_TRICK_AIR — i.e. off a real jump — steering spins
-    // you instead. Incidental air is therefore never a trick.
+    // Trick button held in real air: steering spins you. Otherwise steering
+    // keeps gentle heading control so you can aim your landing.
     const airTuck = Math.max(0, -input.stance);
-    if (state.airTime > MIN_TRICK_AIR) {
+    if (input.trick && state.airTime > MIN_TRICK_AIR) {
       // Wide dead zone: analog cursor hover noise must not integrate into
       // rotation over a whole flight — only deliberate deflection spins.
       const deadband = (v: number) =>
