@@ -1,5 +1,6 @@
 import { SkierInput, SkierState } from '../sim/skier';
 import { mix } from './params';
+import { Music } from './music';
 
 interface AudioNodes {
   ctx: AudioContext;
@@ -25,6 +26,7 @@ const MASTER_LEVEL = 0.6;
 // input can unlock it).
 export class GameAudio {
   private nodes: AudioNodes | null = null;
+  private music: Music | null = null;
   private muted = false;
   private gamePaused = false;
   private wasTumbling = false;
@@ -112,6 +114,7 @@ export class GameAudio {
     source.connect(spinFilter).connect(spinGain).connect(master);
 
     source.start();
+    this.music = new Music(ctx, master, noise);
     return {
       ctx,
       master,
@@ -157,6 +160,11 @@ export class GameAudio {
     carveGain.gain.setTargetAtTime(p.carveGain, t, 0.05);
     boostGain.gain.setTargetAtTime(boosting ? 0.4 : 0, t, 0.05);
     crudGain.gain.setTargetAtTime(p.crudGain, t, 0.04);
+
+    // The soundtrack's energy is the run's energy: speed opens it up, boost
+    // maxes it, a tumble drops it underwater.
+    const pace = Math.min(1, state.speed / 32) * 0.75 + (boosting ? 0.25 : 0);
+    this.music?.update(tumbling ? pace * 0.2 : pace);
 
     // The rotation whoosh opens only while rotation is actively accruing,
     // and its pitch climbs with the amount already turned.

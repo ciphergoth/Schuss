@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ski</title>
+    <!-- Arcade display face for the celebration text; falls back to
+         system-ui offline (font-display: swap). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bungee&display=swap" rel="stylesheet" />
     <style>
       html,
       body {
@@ -34,9 +39,8 @@
         pointer-events: none;
       }
       #score {
-        font-size: 34px;
-        font-weight: 800;
-        font-style: italic;
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 30px;
         font-variant-numeric: tabular-nums;
         letter-spacing: 1px;
       }
@@ -47,9 +51,8 @@
       }
       #mult {
         display: none;
-        font-size: 30px;
-        font-weight: 800;
-        font-style: italic;
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 26px;
         margin-top: 4px;
       }
       #mult.visible {
@@ -83,8 +86,8 @@
         justify-content: center;
         color: white;
         text-shadow: 0 2px 6px rgba(0, 0, 40, 0.8);
-        font-size: 42px;
-        font-style: italic;
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 38px;
         user-select: none;
         pointer-events: none;
       }
@@ -98,11 +101,11 @@
         right: 0;
         display: none;
         justify-content: center;
+        text-align: center;
         color: white;
         text-shadow: 0 2px 8px rgba(0, 0, 40, 0.9);
-        font-size: 46px;
-        font-style: italic;
-        font-weight: 700;
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 40px;
         letter-spacing: 1px;
         user-select: none;
         pointer-events: none;
@@ -132,8 +135,8 @@
       }
       #pause h1 {
         margin: 0 0 14px;
-        font-size: 30px;
-        font-style: italic;
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 26px;
       }
       #pause table {
         border-collapse: collapse;
