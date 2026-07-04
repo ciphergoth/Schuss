@@ -452,18 +452,22 @@ export class Effects {
     }
 
     // An armed star orbits the skier as a ring of sparkles — you carry the
-    // multiplier visibly until a trick spends it.
+    // multiplier visibly until a trick spends it. In the air the ring slides
+    // back off the body: nothing may cover the figure while you're reading
+    // your own rotation to land.
     if (sim.trickMult > 1) {
       const color = sim.trickMult >= 5 ? this.magenta : this.gold;
+      const airborne = s.airTime > 0;
+      const back = airborne ? 2.4 : 0;
       for (let k = 0; k < 2; k++) {
         const a = sim.time * 7 + k * Math.PI;
         this.sparks.spawn(
           new THREE.Vector3(
-            s.x + Math.cos(a) * 0.9,
-            s.y + 1.1 + Math.sin(a * 0.7) * 0.4,
-            s.z + Math.sin(a) * 0.9
+            s.x - dirX * back + Math.cos(a) * 0.9,
+            s.y + (airborne ? 0.4 : 1.1) + Math.sin(a * 0.7) * 0.4,
+            s.z - dirZ * back + Math.sin(a) * 0.9
           ),
-          new THREE.Vector3(0, 0.8, 0),
+          new THREE.Vector3(-dirX * back, 0.8, -dirZ * back),
           0.4,
           1,
           color
@@ -471,15 +475,15 @@ export class Effects {
       }
     }
 
-    // Mid-air rotation is a comet: hue-cycling glitter streams off the skier
-    // while a trick is actually turning.
+    // Mid-air rotation is a comet: hue-cycling glitter streaming BEHIND the
+    // flight path — a tail, never a veil over the skier.
     if (s.airTime > 0 && (Math.abs(s.spin) > 0.25 || Math.abs(s.flip) > 0.25)) {
       const hue = (sim.time * 1.4 + (Math.abs(s.spin) + Math.abs(s.flip)) * 0.18) % 1;
       this.scratch.setHSL(hue, 0.95, 0.62);
       this.sparks.spawn(
-        new THREE.Vector3(s.x, s.y + 0.9, s.z),
-        new THREE.Vector3(-dirX * 2, 0.4, -dirZ * 2),
-        2.4,
+        new THREE.Vector3(s.x - dirX * 2.6, s.y + 0.3, s.z - dirZ * 2.6),
+        new THREE.Vector3(-dirX * 4, 0.2, -dirZ * 4),
+        1.6,
         3,
         this.scratch
       );
