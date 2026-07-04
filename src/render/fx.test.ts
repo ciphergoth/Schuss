@@ -23,4 +23,25 @@ describe('effects', () => {
     fx.update(sim, { steer: 1, stance: 0 }, 1 / 60, []);
     expect(fx.particles.liveCount()).toBeGreaterThan(0);
   });
+
+  it('a jackpot sector queues fireworks that bloom over the next seconds', () => {
+    const fx = new Effects(new THREE.Scene());
+    const sim = createSim(1);
+    fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, [{ type: 'sector', speed: 28, points: 12000 }]);
+    expect(fx.pyro.liveCount()).toBe(0); // shells still on their fuses
+    let peak = 0;
+    for (let i = 0; i < 180; i++) {
+      fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, []);
+      peak = Math.max(peak, fx.pyro.liveCount());
+    }
+    expect(peak).toBeGreaterThan(300); // the barrage happened
+  });
+
+  it('an armed star trails sparkles until it is spent', () => {
+    const fx = new Effects(new THREE.Scene());
+    const sim = createSim(1);
+    sim.trickMult = 5;
+    fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, []);
+    expect(fx.sparks.liveCount()).toBeGreaterThan(0);
+  });
 });

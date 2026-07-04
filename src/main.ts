@@ -33,7 +33,8 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-const { scene, sun } = createScene();
+const sceneSetup = createScene();
+const { scene, sun } = sceneSetup;
 const camera = createCamera();
 const skierView = createSkierView(scene);
 const fx = new Effects(scene);
@@ -158,6 +159,10 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   // Keep the sun's shadow box centered on the skier.
   sun.position.set(skier.x + 40, skier.y + 24, skier.z - 12);
   sun.target.position.set(skier.x, skier.y, skier.z);
+
+  // Cross-fade the sky/fog/light palette for this stretch of course and
+  // keep the aurora waving overhead.
+  sceneSetup.update(skier.x, skier.y, skier.z, sim.time);
 
   audio.update(skier, lastInput, sim.boosting, sim.terrain.stickinessAt(skier.x, skier.z));
 

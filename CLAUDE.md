@@ -42,8 +42,16 @@ faceplant, not a stumble) — and under commit it's a safe bail that pays
 nothing (never a round-up to a paid 360). A live degree readout (green ✓ when lined up) plus
 NICE!/SPUN OUT banners make it legible. Racing alone never fills the tank —
 but past the first sector line it does score. Burning
-is hard acceleration with flames, rainbow trail, FOV slam, rumble. Reward
-loop over penalty loop.
+is hard acceleration with flames, rainbow trail, FOV slam, rumble. The
+spectacle scales with play: the course crosses a new color world every
+600m (dusk → neon night → rose dawn → emerald; palette.ts cross-fades
+sky/fog/lights) under a waving aurora that blazes in the night zone; a
+glowing neon arc spans the track at every 250m sector line; paid sectors
+and star-multiplied tricks launch firework volleys over the course (grander
+for jackpots); an armed star orbits the skier as sparkles in its own color
+and dyes the flow trail; mid-air rotation streams a hue-cycling glitter
+comet; kicker approaches are lit like runways and every bonus star rides a
+light beam up from the snow. Reward loop over penalty loop.
 
 Terrain is a pure height function: a curving centerline (straight near the
 start and uphill of it, for gentle run-ins and predictable physics tests)
@@ -80,11 +88,13 @@ src/
 │   └── sim.ts         - World state, fixed SIM_DT stepping, flow/score,
 │                        SimEvents (nearMiss/landing/tumble) for fx + audio
 ├── render/            - Three.js only
-│   ├── scene.ts       - Lights, sky, fog, shadow-casting sun
-│   ├── chunks.ts      - Track ribbon, bollards, arches, obstacles, pickups,
-│   │                    skyline/clouds; created and disposed as you ski
+│   ├── scene.ts       - Lights, dynamic sky/fog, aurora, shadow-casting sun
+│   ├── palette.ts     - Color zones: palettes cross-fading every 600m of course
+│   ├── chunks.ts      - Track ribbon, bollards, arches, sector gates, obstacles,
+│   │                    pickups, star beams, skyline/clouds; created and
+│   │                    disposed as you ski
 │   ├── skierView.ts   - Articulated skier model (posable legs/torso)
-│   ├── fx.ts          - Particles (spray/bursts) and the flow trail ribbon
+│   ├── fx.ts          - Particles (spray/sparks/fireworks), auras, flow trail
 │   └── camera.ts      - Third-person follow camera, speed/flow FOV kick
 └── audio/             - Web Audio only, fully synthesized (no audio assets)
     ├── params.ts      - Pure state -> synth parameter curves (unit tested)

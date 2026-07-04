@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, Terrain, WALL_WIDTH } from '../sim/terrain';
+import { SECTOR_LENGTH } from '../sim/sim';
 import { hash2, mulberry32 } from '../sim/rng';
 
 // The course renders as a ribbon that follows the centerline — beyond its
@@ -95,6 +96,30 @@ export class ChunkRenderer {
     opacity: 0.55,
   });
   private neons = NEON_COLORS.map((c) => new THREE.MeshBasicMaterial({ color: c }));
+  private gateGlows = NEON_COLORS.map(
+    (c) =>
+      new THREE.MeshBasicMaterial({
+        color: c,
+        transparent: true,
+        opacity: 0.35,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+  );
+  private beamGold = new THREE.MeshBasicMaterial({
+    color: 0xffd34d,
+    transparent: true,
+    opacity: 0.3,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  private beamMagenta = new THREE.MeshBasicMaterial({
+    color: 0xff3ddc,
+    transparent: true,
+    opacity: 0.3,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
   private balloons = BALLOON_COLORS.map(
     (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7 })
   );
@@ -123,10 +148,12 @@ export class ChunkRenderer {
         this.chunks.delete(i);
       }
     }
-    // Spin the discs; hide the ones already grabbed.
+    // Spin the discs, bob everything gently; hide the ones already grabbed.
     for (const [id, mesh] of this.pickupMeshes) {
       mesh.visible = !collected.has(id);
       mesh.rotation.y = time * 3;
+      const baseY = mesh.userData.baseY as number;
+      mesh.position.y = baseY + Math.sin(time * 2.2 + mesh.position.x) * 0.14;
     }
   }
 
@@ -185,7 +212,8 @@ export class ChunkRenderer {
 
     // Ski jumps announce themselves: a pair of tall neon poles at the lip
     // edges, one color per kicker, visible from hundreds of meters uphill so
-    // you can pick your line early.
+    // you can pick your line early — plus runway studs lighting the approach
+    // like an airstrip, funneling you onto the ramp.
     const jump = this.terrain.jumpForChunk(index);
     if (jump) {
       const neonGeo = new THREE.CylinderGeometry(0.22, 0.22, 11, 6);
@@ -196,6 +224,40 @@ export class ChunkRenderer {
         pole.position.set(x, this.terrain.height(x, jump.zLip) + 5.5, jump.zLip);
         group.add(pole);
       }
+      const studGeo = new THREE.SphereGeometry(0.2, 6, 6);
+      for (let u = 4; u <= 28; u += 6) {
+        const z = jump.zLip + u;
+        for (const side of [-1, 1]) {
+          const x = this.terrain.centerX(z) + jump.xOffset + side * (jump.halfWidth + 0.5);
+          const stud = new THREE.Mesh(studGeo, neon);
+          stud.position.set(x, this.terrain.height(x, z) + 0.2, z);
+          group.add(stud);
+        }
+      }
+    }
+
+    // Sector gates: a glowing neon arc spans the channel at every 250m pace
+    // line, so the scoring rhythm is built into the course. Cross one fast
+    // and the fireworks are yours (fx layer).
+    // A gate lives in the chunk whose [zTop, zTop - CHUNK_LENGTH) span holds
+    // it, boundary included at the top (matching chunkIndexAt).
+    for (
+      let k = Math.max(1, Math.ceil(-zTop / SECTOR_LENGTH));
+      k * SECTOR_LENGTH < -zTop + CHUNK_LENGTH;
+      k++
+    ) {
+      const zg = -k * SECTOR_LENGTH;
+      const cX = this.terrain.centerX(zg);
+      const floorY = this.terrain.height(cX, zg);
+      const radius = this.terrain.channelHalfWidth(zg) + 2.5;
+      const color = this.neons[k % this.neons.length]!;
+      const glow = this.gateGlows[k % this.gateGlows.length]!;
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.4, 8, 40, Math.PI), color);
+      arc.position.set(cX, floorY + 0.3, zg);
+      group.add(arc);
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(radius, 1.1, 8, 40, Math.PI), glow);
+      halo.position.copy(arc.position);
+      group.add(halo);
     }
 
     // A banner arch every few chunks.
@@ -242,12 +304,14 @@ export class ChunkRenderer {
       const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.1, 12), this.gold);
       mesh.rotation.z = Math.PI / 2;
       mesh.position.set(p.x, p.y, p.z);
+      mesh.userData.baseY = p.y;
       group.add(mesh);
       this.pickupMeshes.set(p.id, mesh);
     }
 
-    // Trick-bonus stars, high over the kicker: gold x3, bigger magenta x5,
-    // each with a halo ring so they read as prizes from the approach.
+    // Trick-bonus stars past the kicker lip: gold x3, bigger magenta x5,
+    // each with a halo ring, riding its own light beam up from the snow so
+    // the flight line reads from hundreds of meters out.
     for (const b of this.terrain.bonusesForChunk(index)) {
       const big = b.mult === 5;
       const holder = new THREE.Group();
@@ -262,8 +326,18 @@ export class ChunkRenderer {
       );
       holder.add(halo);
       holder.position.set(b.x, b.y, b.z);
+      holder.userData.baseY = b.y;
       group.add(holder);
       this.pickupMeshes.set(b.id, holder);
+
+      const snowY = this.terrain.height(b.x, b.z);
+      const beamLen = b.y - snowY;
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.09, 0.22, beamLen, 6),
+        big ? this.beamMagenta : this.beamGold
+      );
+      beam.position.set(b.x, snowY + beamLen / 2, b.z);
+      group.add(beam);
     }
 
     // The absurd part: a city close and tall enough to actually see — some
