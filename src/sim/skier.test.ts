@@ -35,6 +35,32 @@ describe('skier', () => {
     expect(Math.abs(sim.skier.x)).toBeLessThan(0.1);
   });
 
+  it('a tap barely parts the skis from downhill snow; a full charge flies', () => {
+    // The pop is an impulse on top of the terrain-following vy. On a grade
+    // the ground drops away ~speed * slope beneath the skier, so a tap must
+    // NOT buy free seconds of air just by breaking the kinematic glue.
+    const airAfter = (jump: number): number => {
+      const sim = createSim(1);
+      teleport(sim, 0, 700, 20); // straight run-in lab, vy matched to slope
+      run(sim, 0.5, COAST); // settle onto the snow
+      sim.charge = jump;
+      stepSim(sim, { steer: 0, stance: 0, jump: jump > 0 ? 1 : 0 });
+      let air = 0;
+      for (let i = 0; i < Math.round(1.5 / SIM_DT); i++) {
+        stepSim(sim, COAST);
+        if (sim.skier.airTime > 0) air += SIM_DT;
+      }
+      return air;
+    };
+    // Rollers grant some natural air on this stretch regardless; the spec
+    // is the DELTA the button buys.
+    const none = airAfter(0);
+    const tap = airAfter(0.02);
+    const full = airAfter(1);
+    expect(tap - none).toBeLessThan(0.2); // a tap buys a blink at most
+    expect(full - none).toBeGreaterThan(0.4); // a full charge buys real air
+  });
+
   it('a banked sweeper carries a hands-off rider around the turn at speed', () => {
     // Before the gravity-turn force, this ride scrubbed 23 -> 15 m/s off
     // the walls; the superelevation now does the steering.
@@ -153,10 +179,14 @@ describe('skier', () => {
     expect(tucked.skier.heading).toBeLessThan(neutral.skier.heading * 0.75);
   });
 
-  it('launches off rollers at speed and lands again', () => {
+  it('a charged jump launches and lands again', () => {
+    // Under leg-reach contact, roller curvature can no longer out-drop
+    // gravity by more than the legs absorb — incidental roller air is gone
+    // by design; real air comes from built edges and the charge.
     const sim = createSim(1);
-    // Tree-free slope uphill of the start line, fast in a tuck.
     teleport(sim, 0, 800, 30);
+    sim.charge = 1;
+    stepSim(sim, { steer: 0, stance: -1, jump: 1 });
     let sawAir = 0;
     let maxHeightAboveGround = 0;
     for (let i = 0; i < Math.round(15 / SIM_DT); i++) {
@@ -197,18 +227,26 @@ describe('skier', () => {
 
   it('a jump lands and stays landed on a straight stretch', () => {
     const sim = createSim(1);
-    teleport(sim, 0, 900, 18);
-    stepSim(sim, { steer: 0, stance: 0, jump: 0.5 });
-    // Fly the whole arc out.
+    teleport(sim, 0, 900, 12);
+    sim.charge = 0.5; // a full human jump
+    stepSim(sim, { steer: 0, stance: 0, jump: 1 });
+    // The leg band takes a few steps to be outrun; wait for real air, then
+    // fly the whole arc out.
+    for (let i = 0; i < 30 && sim.skier.airTime === 0; i++) stepSim(sim, COAST);
+    expect(sim.skier.airTime).toBeGreaterThan(0);
     for (let i = 0; i < Math.round(3 / SIM_DT) && sim.skier.airTime > 0; i++) {
       stepSim(sim, COAST);
     }
     expect(sim.skier.airTime).toBe(0);
-    // Immediately after touchdown the skier keeps ground contact.
-    for (let i = 0; i < 20; i++) {
+    // After touchdown: no perpetual bounce. (The leg band may still grant a
+    // brief legitimate hop over an edge — the old bug was landing into an
+    // endless relaunch loop.)
+    let airAfterLanding = 0;
+    for (let i = 0; i < Math.round(1 / SIM_DT); i++) {
       stepSim(sim, COAST);
-      expect(sim.skier.airTime).toBe(0);
+      if (sim.skier.airTime > 0) airAfterLanding += SIM_DT;
     }
+    expect(airAfterLanding).toBeLessThan(0.3);
   });
 
   it('airborne skiers hit obstacles they have not cleared', () => {
@@ -242,7 +280,11 @@ describe('skier', () => {
     const sim = createSim(1);
     teleport(sim, 0, 800, 20);
     const before = sim.skier.speed;
-    stepSim(sim, { steer: 0, stance: 0, jump: 1 });
+    // A real drop (jumps are no longer an energy faucet): fall 6m onto the
+    // descending face below.
+    sim.skier.y += 6;
+    sim.skier.vy = 0;
+    sim.skier.airTime = 0.01;
     for (let i = 0; i < Math.round(3 / SIM_DT) && sim.skier.airTime > 0; i++) {
       stepSim(sim, COAST);
     }
@@ -279,14 +321,18 @@ describe('skier', () => {
     expect(maxAir).toBeGreaterThan(0.5); // far beyond any roller hop
   });
 
-  it('a released jump charge pops the skier airborne', () => {
+  it('a released jump charge is an impulse on the glued velocity', () => {
     const sim = createSim(1);
     teleport(sim, 0, 800, 15);
+    stepSim(sim, COAST); // settle: vy is the terrain-following value
+    const glued = sim.skier.vy;
+    sim.charge = 1; // a full superhuman charge, banked
     stepSim(sim, { steer: 0, stance: 0, jump: 1 });
-    expect(sim.skier.airTime).toBeGreaterThan(0);
-    expect(sim.skier.vy).toBeGreaterThan(3);
+    // The pop adds ~5.4 on top of the glue — never a reset to an absolute.
+    // (airTime starts a few steps later, once the leg band is outrun.)
+    expect(sim.skier.vy - glued).toBeGreaterThan(4.8);
     run(sim, 0.3, COAST);
-    expect(sim.skier.airTime).toBeGreaterThan(0.2); // real hangtime, still up
+    expect(sim.skier.airTime).toBeGreaterThan(0.15); // real hangtime, still up
   });
 
   it('leaving the ground never adds energy: wall rides cannot moon-shot', () => {

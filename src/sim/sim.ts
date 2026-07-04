@@ -40,6 +40,9 @@ export interface Sim {
   time: number;
   boost: number; // 0..1 tank — rewards fill it, burning it is the speed
   boosting: boolean; // burning right now (render/audio read this)
+  charge: number; // jump charge, 0..1 of the bar; the sim owns it (sim-time,
+  // deterministic). 0..CHARGE_HUMAN fills freely; the superhuman half only
+  // fills while there is fuel burning. Released as vy = 5.4 * sqrt(charge).
   trickMult: number; // armed by a bonus star; multiplies the next trick's POINTS
   lastTrick: string | null; // signature of the last landed trick (repeat check)
   score: number; // the ledger of glory: trick points + sector pace, uncapped
@@ -76,6 +79,14 @@ const COMBO_MULT = 1.35; // spin AND flip landed in the same flight
 const REPEAT_FACTOR = 0.7; // same trick as last time: the judges are bored
 const BOOST_TRICK_CAP = 0.65; // per landing
 const BOOST_DRAIN = 0.15; // per second while burning
+// The jump bar: 6 seconds of hold to a full superhuman charge, with the
+// strongest HUMAN jump at the halfway marker (3s). Energy is linear in hold
+// time throughout — one law, no kink — so the human half is exactly the old
+// charge curve, and the half beyond the marker is paid for in boost: it
+// only fills while fuel is in the tank (the held button is already burning
+// it; that burn IS the price of superhuman legs).
+export const CHARGE_FULL_S = 6;
+export const CHARGE_HUMAN = 0.5;
 const NEAR_MISS_RING = 1.1; // meters beyond a collision that still count
 const NEAR_MISS_MIN_SPEED = 12;
 const NEAR_MISS_COOLDOWN = 0.6;
@@ -93,6 +104,7 @@ export function createSim(seed: number): Sim {
     time: 0,
     boost: 0,
     boosting: false,
+    charge: 0,
     trickMult: 1,
     lastTrick: null,
     score: 0,
@@ -114,10 +126,27 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   const wasTumbling = s.tumbling > 0;
 
   // Burn boost only where it acts: on the snow, on your feet.
-  sim.boosting = (input.boost ?? false) && sim.boost > 0 && s.airTime === 0 && s.tumbling === 0;
+  const grounded0 = s.airTime === 0 && s.tumbling === 0;
+  sim.boosting = (input.boost ?? false) && sim.boost > 0 && grounded0;
   if (sim.boosting) sim.boost = Math.max(0, sim.boost - BOOST_DRAIN * SIM_DT);
 
-  stepSkier(s, sim.terrain, input, SIM_DT, sim.boosting);
+  // The jump charge banks in sim time while the button is held on the snow.
+  // The human half is free; the superhuman half only fills while fuel burns.
+  if ((input.boost ?? false) && grounded0) {
+    const next = sim.charge + SIM_DT / CHARGE_FULL_S;
+    if (sim.charge < CHARGE_HUMAN) sim.charge = Math.min(CHARGE_HUMAN, next);
+    else if (sim.boost > 0) sim.charge = Math.min(1, next);
+  }
+  // Release: the banked charge becomes the pop (spent either way — a
+  // release mid-air fizzles). A crash always fumbles the charge.
+  let skierInput = input;
+  if ((input.jump ?? 0) > 0) {
+    skierInput = { ...input, jump: grounded0 ? sim.charge : 0 };
+    sim.charge = 0;
+  }
+  if (s.tumbling > 0) sim.charge = 0;
+
+  stepSkier(s, sim.terrain, skierInput, SIM_DT, sim.boosting);
   sim.time += SIM_DT;
   sim.nearMissCooldown = Math.max(0, sim.nearMissCooldown - SIM_DT);
 

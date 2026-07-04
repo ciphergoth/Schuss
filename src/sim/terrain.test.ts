@@ -175,9 +175,9 @@ describe('terrain', () => {
       const jump = t.jumpForChunk(i);
       if (!jump || jump.hip === 0) continue;
       found = true;
-      const b5 = t.bonusesForChunk(i).find((b) => b.mult === 5)!;
-      const straightX = t.centerX(b5.z) + jump.xOffset;
-      expect((b5.x - straightX) * jump.hip).toBeGreaterThan(6);
+      const b3 = t.bonusesForChunk(i).find((b) => b.mult === 3)!;
+      const straightX = t.centerX(b3.z) + jump.xOffset;
+      expect((b3.x - straightX) * jump.hip).toBeGreaterThan(6);
     }
     expect(found).toBe(true);
   });
@@ -390,7 +390,9 @@ describe('terrain', () => {
         continue;
       }
       found++;
-      expect(stars.map((s) => s.mult).sort()).toEqual([3, 5]);
+      // Hips carry only the x3 for now (their x5 awaits honest placement).
+      const expected = jump.hip !== 0 ? [3] : [3, 5];
+      expect(stars.map((s) => s.mult).sort()).toEqual(expected);
       for (const s of stars) expect(s.z).toBeLessThan(jump.zLip); // past the lip
     }
     expect(found).toBeGreaterThan(3);

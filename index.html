@@ -99,6 +99,16 @@
         border-radius: 5px;
         background: #ffd34d;
       }
+      /* The strongest human jump lives at the halfway marker; everything
+         above it is superhuman and costs boost. */
+      #chargemark {
+        position: absolute;
+        left: -2px;
+        right: -2px;
+        bottom: 50%;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.9);
+      }
       #overlay {
         position: fixed;
         top: 20%;
@@ -211,7 +221,10 @@
       <div id="mult"></div>
     </div>
     <div id="boostbar"><div id="boostfill"></div></div>
-    <div id="chargebar"><div id="chargefill"></div></div>
+    <div id="chargebar">
+      <div id="chargefill"></div>
+      <div id="chargemark"></div>
+    </div>
     <div id="overlay">Wipeout!</div>
     <div id="trick"></div>
     <div id="pause">
@@ -233,8 +246,9 @@
           <tr>
             <td>Space / Shift / right mouse</td>
             <td>
-              Hold: burn boost &amp; charge a jump (the gold bar fills over ~3s) &middot; release:
-              pop &mdash; a tap does nearly nothing, a full charge flies
+              Hold: burn boost &amp; charge a jump. The marker on the bar (~3s) is the strongest
+              HUMAN jump &mdash; past it the charge goes superhuman, and only fills while you have
+              boost to burn. Release to pop; a tap does nothing at all
             </td>
           </tr>
           <tr>

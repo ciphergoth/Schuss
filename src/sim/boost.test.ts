@@ -36,11 +36,12 @@ describe('boost economy', () => {
 
   it('merely racing never fills the tank', () => {
     const sim = createSim(1);
-    teleport(sim, 0, 800, 25); // straight run-in: rollers, launches, landings
-    stepSim(sim, { steer: 0, stance: 0, jump: 1 }); // even a deliberate jump
+    teleport(sim, 0, 800, 25); // straight run-in, fast
+    sim.charge = 0.5; // even a deliberate full-human jump...
+    stepSim(sim, { steer: 0, stance: 0, jump: 1 });
     const events = runCollecting(sim, 8);
     expect(events.some((e) => e.type === 'landing')).toBe(true);
-    expect(sim.boost).toBe(0); // fuel requires coins or tricks
+    expect(sim.boost).toBe(0); // ...earns no fuel: that takes coins or tricks
     expect(sim.score).toBe(0); // and the run-in is before the first sector
   });
 
@@ -113,7 +114,12 @@ describe('boost economy', () => {
   // Ride the kicker's line from uphill at a given speed, releasing a
   // full-charge jump when z first passes releaseAt (grounded). Returns the
   // bonus multipliers collected during the flight past the lip.
-  function rideKicker(speed: number, releaseOffset: number | null, venue?: number): number[] {
+  function rideKicker(
+    speed: number,
+    releaseOffset: number | null,
+    venue?: number,
+    charge = 1 // banked jump charge spent at the release (1 = superhuman)
+  ): number[] {
     const sim = createSim(1);
     let index = venue ?? 3;
     while (!sim.terrain.jumpForChunk(index)) index++;
@@ -126,21 +132,28 @@ describe('boost economy', () => {
     s.heading = t.trackHeading(z0);
     s.speed = speed;
     s.y = t.height(s.x, s.z);
+    // vy must match the slope (leg-band contact treats a zeroed vy as a
+    // step-function launch — the same artifact teleport() guards against).
+    const [gx, gz] = t.gradient(s.x, s.z);
+    s.vy = speed * (gx * Math.sin(s.heading) + gz * -Math.cos(s.heading));
     let fired = false;
     const mults: number[] = [];
     for (let i = 0; i < Math.round(8 / SIM_DT); i++) {
       const doJump =
         !fired && releaseOffset !== null && s.z <= jump.zLip + releaseOffset && s.airTime === 0;
-      if (doJump) fired = true;
+      if (doJump) {
+        fired = true;
+        sim.charge = charge; // banked as if held for the right stretch
+      }
       for (const e of stepSim(sim, { steer: 0, stance: 0, jump: doJump ? 1 : 0 })) {
         if (e.type === 'bonus') mults.push(e.mult);
       }
-      if (s.z < jump.zLip - 30) break;
+      if (s.z < jump.zLip - 60) break; // arc stars hang 30-50m downrange
     }
     return mults;
   }
 
-  it('star gating holds across kicker sizes: pop at speed, or nothing', () => {
+  it('star gating holds across kicker sizes: the x5 is superhuman + pace', () => {
     const sim = createSim(1);
     for (const kind of ['S', 'L'] as const) {
       let index = 3;
@@ -149,14 +162,17 @@ describe('boost economy', () => {
         if (jump && jump.kind === kind && jump.stepDown === 0 && jump.hip === 0) break;
         index++;
       }
-      // A full pop near the lip at race pace threads to the x5...
-      expect(rideKicker(24, 1, index)).toContain(5);
-      // ...but riding off the lip without popping earns nothing at all.
-      expect(rideKicker(21, null, index)).toEqual([]);
+      // A superhuman pop at boost pace threads to the x5...
+      expect(rideKicker(27, 1, index)).toContain(5);
+      // ...a human pop at cruise always pays (the x3, or on a plunge's
+      // free-speed grades even the x5)...
+      expect(rideKicker(21, 1, index, 0.5).length).toBeGreaterThan(0);
+      // ...and dawdling off the lip without a pop earns nothing at all.
+      expect(rideKicker(17, null, index, 0)).toEqual([]);
     }
   });
 
-  it('hip pads sling a fast pop across the track into both stars', () => {
+  it('hip pads sling a fast rider across the track into the x3', () => {
     const sim = createSim(1);
     let index = 3;
     while (true) {
@@ -164,24 +180,22 @@ describe('boost economy', () => {
       if (jump && jump.hip !== 0) break;
       index++;
     }
-    // Ride the pad hands-off at race pace and pop at the lip: the banked
-    // corner does the aiming, and the thrown line threads both stars.
-    const fast = rideKicker(25, 1, index);
-    expect(fast).toContain(3);
-    expect(fast).toContain(5);
-    // Too slow, no pop: slung sideways, paid nothing.
-    expect(rideKicker(17, null, index)).toEqual([]);
+    // Ride the pad hands-off at race pace: the banked corner does the
+    // aiming and the slung line threads the x3. (The hip x5 is withheld
+    // until the popped-off-the-curve flight is measured; see terrain.ts.)
+    expect(rideKicker(24, 1, index)).toContain(3);
+    // Too slow: slung sideways, paid nothing.
+    expect(rideKicker(17, null, index, 0)).toEqual([]);
   });
 
   it('the x5 rewards a jump timed at the lip, not a hop before the ramp', () => {
-    // Full-charge pop 1m before the lip, at speed: the flat fast arc threads
-    // both stars.
-    expect(rideKicker(26, 1)).toContain(5);
+    // Superhuman pop 1m before the lip, at boost pace: threads to the x5.
+    expect(rideKicker(27, 1)).toContain(5);
     // The same pop released before the ramp even starts crests early and
-    // sinks below the x5 line — the exploit this placement retires.
-    expect(rideKicker(26, 16)).not.toContain(5);
+    // sinks below the x5 arc — the exploit this placement retires.
+    expect(rideKicker(27, 16)).not.toContain(5);
     // And no pop at all gets neither: the natural lip launch drops away.
-    expect(rideKicker(21, null)).toEqual([]);
+    expect(rideKicker(21, null, undefined, 0)).toEqual([]);
   });
 
   it('a tumble still fires its event but keeps the tank', () => {

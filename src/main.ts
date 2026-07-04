@@ -146,7 +146,9 @@ const clock = new THREE.Clock();
 let accumulator = 0;
 
 function renderFrame(delta: number, events: SimEvent[] = []): void {
-  lastInput = input.peek();
+  // The sim owns the jump charge; inject it so the crouch pose and the
+  // charge-ring fx read the real meter.
+  lastInput = { ...input.peek(), charge: sim.charge };
   const skier = sim.skier;
   chunkRenderer.update(sim.terrain.chunkIndexAt(skier.z), sim.collected, sim.time);
   updateSkierView(skierView, skier, lastInput, delta);
@@ -239,13 +241,14 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   boostFill.style.background = sim.boosting
     ? 'hsl(18, 100%, 58%)'
     : `hsl(${35 + sim.boost * 10}, 95%, 58%)`;
-  // The jump charge bar lives beside the tank and only exists while the
-  // button is held: gold while filling, white when the pop is maxed.
-  const charge = lastInput.charge ?? 0;
+  // The jump charge bar lives beside the tank and only exists while charge
+  // is banked: gold through the human half, magenta past the marker
+  // (superhuman, paid in boost), white-hot at full.
+  const charge = sim.charge;
   chargeBar.classList.toggle('visible', charge > 0);
   if (charge > 0) {
     chargeFill.style.height = `${charge * 100}%`;
-    chargeFill.style.background = charge >= 1 ? '#ffffff' : '#ffd34d';
+    chargeFill.style.background = charge >= 1 ? '#ffffff' : charge > 0.5 ? '#ff3ddc' : '#ffd34d';
   }
   overlay.classList.toggle('visible', skier.tumbling > 0);
 

@@ -229,16 +229,24 @@ const HIP_THROW = 0.3;
 // slung rider still exits over a true lip; stars hang off the drifted exit.
 const HIP_DRIFT = 7.5;
 
-// Star placement per kicker size, tuned against simulated flight arcs (see
-// boost.test's rideKicker): distance past the lip along the flight line and
-// height above the lip. The x3 rewards any clean lip pop; the x5 is placed
-// where only a popped jump still at speed is flying.
-const STAR_TABLE: Record<JumpKind, { d3: number; h3: number; d5: number; h5: number }> = {
-  // The S flies low and flat, so its stars sit far rather than high.
-  S: { d3: 17, h3: 0.8, d5: 25, h5: 0.2 },
-  M: { d3: 13, h3: 1.6, d5: 24, h5: 0.5 },
-  L: { d3: 18, h3: 1.6, d5: 28, h5: 0.4 },
-};
+// Star placement is COMPUTED, not tabulated: each star sits on the reference
+// flight integrated against the real heightfield — the flight you fly
+// arriving at the lip on-plan and releasing the pop right there. The x3
+// rides the human-pop arc at cruise pace; the x5 rides the superhuman
+// (boost-charged) arc at race pace. Grade changes, section transitions and
+// hip drift are all automatically on-arc, and the placement stays correct
+// through physics changes because it IS the physics.
+const STAR3_SPEED = 20; // arrive at cruise...
+const STAR3_CHARGE = 0.5; // ...with a full human pop
+const STAR3_TIME = 1.5; // seconds into that flight
+const STAR5_SPEED = 25; // arrive at real race pace (boost territory)...
+const STAR5_CHARGE = 1; // ...with a superhuman, fuel-burned pop
+const STAR5_TIME = 1.9; // deep downrange: slower flights are meters under it
+const POP_MAX = 5.4; // mirrors skier.ts JUMP_POP_MAX
+const POP_CAP_RATIO = 0.35; // mirrors skier.ts LAUNCH_MAX_VY_RATIO
+// Hip flights converge onto the aim corridor's equilibrium line; this is
+// the measured effective angle of that line from the drifted exit.
+const HIP_ARC_ANGLE = 0.17;
 
 // Course curve: how fast the centerline wanders (amplitude is per-section).
 const CURVE_WAVELENGTH = 260;
@@ -413,12 +421,20 @@ export class Terrain {
     return (this.noise1(z / 90, 6) - 0.5) * 2 * Math.max(1, this.channelHalfWidth(z) - 6);
   }
 
-  // Height of the track's spine: mean grade, section drops (plunges,
-  // terraces) plus big rollers. Rollers are sharp enough that crests
-  // genuinely launch a fast skier — the track's built-in kickers.
+  // The smooth spine of the course: mean grade plus section drops (plunges,
+  // terraces), without the roller noise. Star placement measures flight
+  // heights in this frame — a popped arc is the same height RELATIVE TO THE
+  // SLOPE on a gentle cruise and a steep plunge alike.
+  spineY(z: number): number {
+    return GRADE * z - this.sectionDrop(z);
+  }
+
+  // Height of the track's spine plus big rollers. Under leg-reach contact
+  // rollers are rhythm, not flight — their curvature can't out-drop gravity
+  // by more than the legs absorb. Air belongs to built edges and the pop.
   private baseY(z: number): number {
     const rollers = this.sectionParam(z, (spec) => spec.rollerScale);
-    return GRADE * z - this.sectionDrop(z) + (this.noise1(z / 55, 2) - 0.5) * 2 * 3.2 * rollers;
+    return this.spineY(z) + (this.noise1(z / 55, 2) - 0.5) * 2 * 3.2 * rollers;
   }
 
   // Does this chunk roll a kicker? Odds depend on its section — some
@@ -457,9 +473,12 @@ export class Terrain {
     const variantRoll = hash2(this.seed, index, 7333);
     const stepDown = !opening && kind !== 'S' && variantRoll < 0.3 ? lipHeight * 1.6 : 0;
     // Hips throw toward the center so the slung flight stays over the floor;
-    // they need lateral room for the landing.
+    // they need lateral room for the landing, and they don't roll in
+    // plunges — the mid-plunge grade swing bends flights off any fixed
+    // sling line (plunges are for speed and big Ls anyway).
+    const inPlunge = this.sectionType(this.sectionIndexAt(zLip)) === 'plunge';
     const hip =
-      !opening && stepDown === 0 && halfChannel >= 13 && variantRoll > 0.75
+      !opening && !inPlunge && stepDown === 0 && halfChannel >= 13 && variantRoll > 0.75
         ? Math.abs(xOffset) > 1
           ? -Math.sign(xOffset)
           : hash2(this.seed, index, 9257) < 0.5
@@ -734,42 +753,77 @@ export class Terrain {
     const bonuses: TrickBonus[] = [];
     const jump = this.jumpForChunk(index);
     if (jump) {
-      const core = this.centerX(jump.zLip) + jump.xOffset;
-      // A hip's banked pad has already slid the rider across and slung the
-      // launch heading by the lip; its stars hang on the thrown line from
-      // the drifted exit point (where the curved core meets the lip).
-      const track = this.trackHeading(jump.zLip);
-      const originX = core + jump.hip * HIP_DRIFT * Math.cos(track);
-      const originZ = jump.zLip + jump.hip * HIP_DRIFT * Math.sin(track);
-      const yLip = this.height(originX, originZ + 0.02);
-      // The slung flight bends gently back toward the track after launch,
-      // so the far star sits on a shallower line than the near one
-      // (angles measured from simulated fast rides).
-      const along = (dist: number, angleScale = 1) => {
-        const heading = track + jump.hip * HIP_THROW * angleScale;
-        return {
-          x: originX + Math.sin(heading) * dist,
-          z: originZ - Math.cos(heading) * dist,
-        };
-      };
-      // Both stars sit ON the arc of a jump popped at the lip (which flies
-      // nearly flat past it), so the reward is for TIMING, not for hopping
-      // early — a pre-ramp hop crests before the lip and is meters below
-      // these by the time it reaches them. Difficulty is distance: the x5
-      // needs the lip pop AND real speed to still be up there. Placement
-      // scales with the kicker (see STAR_TABLE).
-      const stars = STAR_TABLE[jump.kind];
-      const h5 = jump.hip !== 0 ? stars.h5 - 0.5 : stars.h5;
-      bonuses.push({ id: `b${index}:3`, ...along(stars.d3), y: yLip + stars.h3, mult: 3 });
-      bonuses.push({
-        id: `b${index}:5`,
-        ...along(stars.d5, jump.hip !== 0 ? 0.6 : 1),
-        y: yLip + h5,
-        mult: 5,
-      });
+      bonuses.push({ id: `b${index}:3`, mult: 3, ...this.starOnArc(jump, 3) });
+      // Hips pay the x3 for riding the sling; their x5 is withheld until the
+      // popped-off-the-curve flight is measured well enough to place it
+      // honestly (the flat x5 reference arc is meters off a hip's reality).
+      if (jump.hip === 0) {
+        bonuses.push({ id: `b${index}:5`, mult: 5, ...this.starOnArc(jump, 5) });
+      }
     }
     this.chunkBonuses.set(index, bonuses);
     return bonuses;
+  }
+
+  // Integrate the reference flight off this kicker's lip and return the
+  // point on it where the star hangs. The reference rider arrives on the
+  // core line at the star's speed and releases the star's pop exactly at
+  // the lip; hips launch from the drifted exit along the aim corridor's
+  // equilibrium line. Ballistic at constant horizontal speed against the
+  // real heightfield — pure, deterministic, and immune to grade changes.
+  private starOnArc(jump: Jump, mult: 3 | 5): { x: number; z: number; y: number } {
+    const speed = mult === 3 ? STAR3_SPEED : STAR5_SPEED;
+    const charge = mult === 3 ? STAR3_CHARGE : STAR5_CHARGE;
+    const flightTime = mult === 3 ? STAR3_TIME : STAR5_TIME;
+    const track = this.trackHeading(jump.zLip);
+    const heading = track + jump.hip * HIP_ARC_ANGLE;
+    const core = this.centerX(jump.zLip) + jump.xOffset;
+    let x = core + jump.hip * HIP_DRIFT * Math.cos(track);
+    let z = jump.zLip + jump.hip * HIP_DRIFT * Math.sin(track);
+    // Launch state: the ramp's exit slope (sampled 1m back up the approach)
+    // carries the terrain part of vy, capped exactly like the sim's
+    // moon-shot guard, and the pop rides on top.
+    let y = this.height(x, z + 0.02);
+    // Exit slope per meter of approach, sampled along the (possibly hip-
+    // curved) CORE LINE the rider actually rides — never across the tilted
+    // pad. NEGATIVE on lips whose ramp doesn't out-climb the local grade
+    // (plunges); the real skier carries that glue into the pop, so does
+    // the reference.
+    const upX = this.centerX(jump.zLip + 1) + jump.xOffset + jumpDrift(jump, 1);
+    const rise = y - this.height(upX, jump.zLip + 1);
+    let vy = Math.min(speed * rise, speed * POP_CAP_RATIO) + POP_MAX * Math.sqrt(charge);
+    // The leg band delays the real launch by ~a tenth: the flight begins a
+    // little downstream, a little lower, already decayed.
+    const bandDelay = 0.12;
+    x += Math.sin(heading) * speed * bandDelay;
+    z -= Math.cos(heading) * speed * bandDelay;
+    y += (vy - 4.9 * bandDelay) * bandDelay;
+    vy -= 9.81 * bandDelay;
+    // Coarse march to the arc's own landing (or the horizon), then hang the
+    // star at the target time — or at 3/4 of the flight when the venue cuts
+    // the arc short, so short-flight lips keep their star meaningfully
+    // airborne instead of dumped in the landing zone. The horizontal path
+    // flies under the same guidance as a real neutral flight: heading eases
+    // toward the course line (which hipAim bends across the track), with
+    // the air-steering gain and rate cap mirrored from skier.ts.
+    const step = 0.05;
+    let h = heading;
+    const path: [number, number, number][] = [];
+    for (let t = 0; t < 2.5; t += step) {
+      const target = this.trackHeading(z) + this.hipAim(x, z);
+      const diff = Math.atan2(Math.sin(target - h), Math.cos(target - h));
+      h += Math.max(-1.3, Math.min(1.3, 4 * diff)) * step;
+      x += Math.sin(h) * speed * step;
+      z -= Math.cos(h) * speed * step;
+      y += vy * step;
+      vy -= 9.81 * step;
+      if (y <= this.height(x, z) + 0.5) break;
+      path.push([x, y, z]);
+    }
+    const target = Math.min(Math.round(flightTime / step), Math.ceil(path.length * 0.75));
+    const point = path[Math.max(0, target - 1)] ?? [x, y, z];
+    // The star centers where the chest passes (collection is y + 1).
+    return { x: point[0], z: point[2], y: point[1] + 1 };
   }
 
   bonusesNear(z: number): TrickBonus[] {

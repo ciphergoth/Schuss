@@ -3,9 +3,10 @@ import { Terrain, WALL_WIDTH } from './terrain';
 export interface SkierInput {
   steer: number; // -1 (left) .. 1 (right); the mouse, always
   stance: number; // -1 (full tuck) .. 0 (neutral) .. 1 (full snowplow); the mouse, always
-  jump?: number; // one-shot: 0..1 charge strength released this step
-  charge?: number; // 0..1 jump charge currently held; render feedback only
-  boost?: boolean; // burn the tank (Shift / right mouse)
+  jump?: number; // one-shot: from the input layer a release SIGNAL; the sim
+  // rewrites it to the banked charge before the skier sees it
+  charge?: number; // 0..1 charge for render feedback (main injects sim.charge)
+  boost?: boolean; // burn the tank / bank jump charge (the one held button)
   trickSpin?: number; // -1..1 from the dedicated trick keys (A/D)
   trickFlip?: number; // -1..1 from the trick keys: W = -1 = frontflip (nose
   // over), S = +1 = backflip (nose up) — push forward to flip forward
@@ -15,13 +16,14 @@ export interface SkierState {
   x: number;
   z: number;
   y: number; // world height; equals terrain height while grounded
-  vy: number; // vertical velocity; terrain-following while grounded
+  vy: number; // vertical velocity; terrain-following in full contact
   heading: number; // radians; 0 = straight downhill (-z), positive = toward +x
   speed: number; // horizontal m/s along the heading
   airTime: number; // seconds airborne this jump; 0 = grounded
   tumbling: number; // seconds of tumble remaining; 0 = on skis
   spin: number; // trick yaw accumulated this flight (radians)
   flip: number; // trick pitch accumulated this flight (radians)
+  gap: number; // ballistic daylight the legs are currently bridging (< LEG_REACH)
 }
 
 const G = 9.81;
@@ -52,20 +54,23 @@ const TURN_RATE = 2.6; // rad/s ceiling on heading change
 const GRAVITY_TURN_CAP = 1.0; // rad/s
 export const SKIER_RADIUS = 0.4;
 
-// Don't go airborne over every pebble: the terrain has to fall away from the
-// ballistic path by this much extra downward acceleration (m/s^2, on top of
-// gravity) before ground contact breaks. Compared per-step, scaled by dt.
-const LAUNCH_EXTRA_ACCEL = 6;
+// Contact is a position tolerance, not a force: the body is ballistic (never
+// pulled down harder than g), and the legs bridge up to LEG_REACH of daylight
+// between body and snow. A virtual gap integrates the true ballistic
+// separation; within reach the skis stay planted (suspension absorbing
+// moguls), past it the air is real. Replaces the old super-g glue.
+const LEG_REACH = 0.35;
 // Steepest launch the track's built features can produce (kicker lips are
 // ~0.31). Terrain steeper than this sheds the skier instead of ramping them:
 // banks are walls, not vert ramps.
 const LAUNCH_MAX_VY_RATIO = 0.35;
-// Jump: a released charge pops the skier off the snow. Deliberately modest —
-// a hop for line adjustments and a little extra off a lip; real air comes
-// from the terrain. Jump ENERGY is linear in hold time (the charge fraction),
-// so vy goes with its square root: a tap releases almost nothing, and the
-// full pop takes a several-second hold to bank (see MAX_CHARGE_MS).
-const JUMP_POP_MAX = 3.8;
+// Jump: a released charge pops the skier off the snow, as an impulse on top
+// of the current velocity. Energy is linear in hold time, so vy goes with
+// sqrt(charge): the human marker (charge 0.5, a 3s hold) releases 3.8 m/s —
+// the strongest human jump, exactly the old full pop — and the fuel-gated
+// superhuman half of the bar climbs to 5.4 (~1.5m of rise). The sim owns
+// the charge accounting (see sim.ts).
+const JUMP_POP_MAX = 5.4;
 // Invisible outer barrier where the bank steepens past ~55 degrees: hitting
 // it caroms you back into the course (grounded or flying). Banks up to there
 // are rideable; the near-vertical zone beyond is a wall, not a vert ramp.
@@ -119,6 +124,7 @@ export function createSkier(): SkierState {
     tumbling: 0,
     spin: 0,
     flip: 0,
+    gap: 0,
   };
 }
 
@@ -169,6 +175,7 @@ function collideObstacles(state: SkierState, terrain: Terrain): void {
     state.tumbling = TUMBLE_TIME;
     state.speed *= TUMBLE_SPEED_KEEP;
     state.airTime = 0;
+    state.gap = 0;
     const perpX = Math.cos(state.heading);
     const perpZ = Math.sin(state.heading);
     const side = perpX * -dx + perpZ * -dz >= 0 ? 1 : -1;
@@ -336,43 +343,59 @@ export function stepSkier(
   state.z += dirZ * state.speed * dt;
   bounceOffBounds(state, terrain);
 
-  // Stick to the terrain unless it falls away meaningfully faster than
-  // gravity can pull us down from the current vertical velocity — then we're
-  // airborne. The threshold keeps small bumps from popping the skier off the
-  // snow; real crests and jumps clear it easily.
+  // Contact by leg reach, not super-g glue: the body is ballistic, and the
+  // legs bridge daylight up to LEG_REACH before the air is real. The gap
+  // integrates true ballistic separation; concave ground closes it again
+  // (the suspension re-compressing — a non-event, no flutter, no landing).
+  // Nothing here ever pulls the skier down harder than gravity.
   const ground = terrain.height(state.x, state.z);
   const followVy = (ground - state.y) / dt;
   const ballisticVy = state.vy - G * dt;
-  if (followVy < ballisticVy - LAUNCH_EXTRA_ACCEL * dt) {
-    // The glued vy is a kinematic constraint, not paid-for momentum: riding
-    // up a steep bank it can dwarf anything the skier's kinetic energy could
-    // produce, and inheriting it raw launched skiers 100m over the course.
-    // Leaving the ground repartitions velocity, never adds it: the upward
-    // component is limited to the steepest built feature's envelope, and the
-    // total magnitude is capped at the pre-launch speed.
-    const vyLaunch = Math.min(ballisticVy, state.speed * LAUNCH_MAX_VY_RATIO);
-    if (vyLaunch > 0) {
-      const scale = state.speed / Math.hypot(state.speed, vyLaunch);
-      state.speed *= scale;
-      state.vy = vyLaunch * scale;
+  if (state.gap > 0 || ballisticVy > followVy) {
+    if (state.gap === 0) {
+      // Moment of separation. The glued vy is a kinematic constraint, not
+      // paid-for momentum: riding up a steep bank it can dwarf anything the
+      // skier's kinetic energy could produce (the moon-shot bug). Leaving
+      // the ground repartitions velocity, never adds it.
+      const vyLaunch = Math.min(ballisticVy, state.speed * LAUNCH_MAX_VY_RATIO);
+      if (vyLaunch > 0) {
+        const scale = state.speed / Math.hypot(state.speed, vyLaunch);
+        state.speed *= scale;
+        state.vy = vyLaunch * scale;
+      } else {
+        state.vy = ballisticVy;
+      }
     } else {
       state.vy = ballisticVy;
     }
-    state.y += state.vy * dt;
-    state.airTime = dt;
-    return;
+    state.gap += (state.vy - followVy) * dt;
+    if (state.gap >= LEG_REACH) {
+      // Legs at full stretch: the air is real, and the body was truly up
+      // here all along.
+      state.y = ground + state.gap;
+      state.gap = 0;
+      state.airTime = dt;
+      return;
+    }
+    if (state.gap <= 0) {
+      // The ground came back up to meet the skis: suspension absorbed it.
+      state.gap = 0;
+      state.vy = followVy;
+    }
+    state.y = ground;
+  } else {
+    state.gap = 0;
+    state.y = ground;
+    state.vy = followVy;
   }
-  state.y = ground;
-  state.vy = followVy;
 
-  // A released jump charge pops the skier off the snow. Energy scales with
-  // the charge, so velocity scales with its square root.
+  // A released jump charge pops the skier, as an impulse on top of the
+  // current velocity. No airTime is granted here: the leg band decides —
+  // a small pop's gap gets reabsorbed without ever counting as air, and a
+  // real pop blows through LEG_REACH within a few steps.
   const jump = input.jump ?? 0;
   if (jump > 0) {
-    state.vy = Math.max(state.vy, 0) + JUMP_POP_MAX * Math.sqrt(jump);
-    state.y += state.vy * dt;
-    state.airTime = dt;
-    return;
+    state.vy += JUMP_POP_MAX * Math.sqrt(jump);
   }
 
   collideObstacles(state, terrain);

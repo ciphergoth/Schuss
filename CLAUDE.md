@@ -20,12 +20,15 @@ settles — spent by the landed trick it multiplied or by a blown-trick
 tumble, kept through plain landings and crashes; a HUD ×N glows in the
 star's color while armed), and every 250m a SECTOR popup grades average pace on a savage curve
 (25·(avg−12)^2.2 — a full-boost sector outearns several tricks), so fuel
-burned into speed converts to points: tricks → fuel → speed → score. Both
-stars sit ON the arc of a jump popped at the kicker's lip, which flies
-nearly flat past it — gold x3 at 13m out, magenta x5 at 24m (needs the lip
-pop AND 21+ m/s to still be flying there); a hop before the ramp crests
-early and is meters below them, so the reward is timing, never jumping
-early. Near misses celebrate (whoosh, puff) but pay nothing. The mouse
+burned into speed converts to points: tricks → fuel → speed → score. Every
+star is COMPUTED onto a reference flight integrated against the real
+heightfield (terrain.starOnArc): the gold x3 rides the human-pop-at-cruise
+arc, the magenta x5 rides the superhuman-pop-at-boost-pace arc, 30-50m
+downrange — so slower or unpopped flights pass meters beneath it, early
+hops crest short, and placement survives physics changes because it IS the
+physics. Plunge venues gate softly (speed is free downhill there); hips
+carry only the x3 for now. Near misses celebrate (whoosh, puff) but pay
+nothing. The mouse
 is REQUIRED and never changes meaning (x steers / aims the landing, y is
 stance, buttons brake/boost); WASD exists only for tricks: in real air (past
 MIN_TRICK_AIR — never roller hops) A/D spins, W frontflips, S backflips, and
@@ -88,10 +91,12 @@ physics for real: the pad tilts to 0.38 cross-slope over a 20m run-up,
 its core (and lit runway) bends along the rider's measured ~7.5m drift
 line, neutral steering follows the pad's line (hipAim bends the course
 target the same way sweepers rotate trackHeading), and the launch leaves
-the lip slung ~0.3 rad across the track — stars hang on the thrown line
-from the drifted exit, x5 gated on pace exactly like flat kickers. Hips
-spawn where stepDowns don't (never both), throw toward the center, and
-need a 13m+ channel. Sweepers keep their first 5m of bank crud-free
+the lip slung across the track — the x3 hangs on the slung line (ride it
+at pace to collect); the hip x5 is WITHHELD until the popped-off-the-curve
+flight is measured well enough to place it honestly. Hips spawn where
+stepDowns don't (never both), throw toward the center, need a 13m+
+channel, and never roll in plunges (mid-plunge grade swings bend flights
+off any fixed sling line). Sweepers keep their first 5m of bank crud-free
 (bermRoom): with gravity carrying riders along banks, the berm is a
 line you choose. The
 section framework is where moving hazards and finish lines will plug in.
@@ -186,10 +191,19 @@ friction braking).
   push forward to flip forward, pull back to flip back).
   There is no keyboard steering — the mouse is required.
 - Boost/jump is ONE button, SSX-style (Space, Shift, or right mouse): holding
-  burns the tank (grounded only) and preloads a jump (skier crouches; a gold
-  charge bar beside the tank appears while held); releasing pops. Jump ENERGY
-  is linear in hold time — vy goes with sqrt(charge) — and a full charge
-  takes 3s, so a tap does nearly nothing.
+  burns the tank (grounded only) and banks jump charge (skier crouches; the
+  charge bar beside the tank appears while banked). The SIM owns the charge
+  (sim-time, deterministic): a 6s bar with the strongest HUMAN jump (3.8
+  m/s) at the halfway marker (~3s, always available) and the superhuman
+  half (to 5.4 m/s) only filling while fuel burns. Energy is linear in hold
+  time — vy = 5.4·sqrt(charge) — one law, no kink. Releasing pops as an
+  IMPULSE on the glued velocity; a tap does nothing at all.
+- Contact is a position tolerance, not a force: the body is ballistic
+  (never pulled down harder than g) and the legs bridge up to 0.35m of
+  daylight (skier.ts LEG_REACH virtual gap). Consequences by design: taps
+  and mogul flutter are absorbed, rollers are rhythm not flight, and real
+  air comes only from built edges (kicker lips, terraces, step-downs) and
+  the charged pop.
 - Esc or ? pauses (freezes the sim, suspends audio) and shows the key guide;
   the game starts paused, so the guide doubles as the title screen
 - R pauses onto a Y/N confirm (Y restarts, N or Esc resumes) — a stray

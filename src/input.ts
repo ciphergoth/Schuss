@@ -27,11 +27,9 @@ export interface InputSource {
 // the mouse position, a second finger is full snowplow. Keyboard steering and
 // stance still work and win while held. R starts a fresh run.
 //
-// Jump is its own control: hold Space to charge (the skier crouches and the
-// charge bar fills), release to pop. Energy is linear in hold time, and the
-// full pop takes a deliberate, several-second hold.
-const MAX_CHARGE_MS = 3000;
-
+// Jump: hold Space (or Shift / right mouse) to charge, release to pop. The
+// input layer only reports held/released — the SIM owns the charge meter
+// (sim-time and deterministic; see sim.ts CHARGE_FULL_S).
 export function setupInput(onRestart: () => void): InputSource {
   const down = new Set<string>();
   const touches = new Map<number, { x: number; y: number }>(); // non-mouse pointers
@@ -51,17 +49,16 @@ export function setupInput(onRestart: () => void): InputSource {
 
   // Right mouse button is boost+charge; keep the context menu out of the way.
   window.addEventListener('contextmenu', (e) => e.preventDefault());
-  let chargeStart: number | null = null;
-  let pendingJump = 0;
+  let holding = false;
+  let pendingJump = false; // a release happened; the sim spends its charge
 
   const beginCharge = () => {
-    if (chargeStart === null) chargeStart = performance.now();
+    holding = true;
   };
   const releaseCharge = () => {
-    if (chargeStart === null) return;
-    // No floor: a tap banks almost no energy and pops almost not at all.
-    pendingJump = Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS);
-    chargeStart = null;
+    if (!holding) return;
+    holding = false;
+    pendingJump = true;
   };
 
   // SSX-style single button: holding burns boost AND preloads the jump;
@@ -124,12 +121,10 @@ export function setupInput(onRestart: () => void): InputSource {
         : pointer
           ? pointerAxis(pointer.y, window.innerHeight)
           : 0;
-    const charge =
-      chargeStart === null ? 0 : Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS);
     const trickSpin = (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0);
     // Push forward to flip forward: W = frontflip, S (pull back) = backflip.
     const trickFlip = (key('KeyS') ? 1 : 0) - (key('KeyW') ? 1 : 0);
-    return { steer, stance, charge, boost: chargeStart !== null, trickSpin, trickFlip };
+    return { steer, stance, boost: holding, trickSpin, trickFlip };
   };
 
   return {
@@ -140,9 +135,9 @@ export function setupInput(onRestart: () => void): InputSource {
     },
     read: () => {
       const input = current();
-      if (pendingJump > 0) {
-        input.jump = pendingJump;
-        pendingJump = 0;
+      if (pendingJump) {
+        input.jump = 1; // a release signal; the sim supplies the magnitude
+        pendingJump = false;
       }
       return input;
     },
