@@ -18,8 +18,8 @@ export type SimEvent =
   | { type: 'nearMiss'; x: number; z: number }
   | { type: 'landing'; airTime: number }
   | { type: 'pickup'; x: number; z: number; gem: boolean }
-  | { type: 'trick'; spins: number; flips: number } // full turns, landed clean
-  | { type: 'tumble'; trick: boolean }; // trick: blown spin vs plain crash
+  | { type: 'trick'; spins: number; flips: number; flipBack: boolean } // landed clean
+  | { type: 'tumble'; trick: boolean }; // trick: blown rotation vs plain crash
 
 export interface Sim {
   terrain: Terrain;
@@ -38,8 +38,11 @@ export interface Sim {
 // The tank is big and slow on both ends: harder to fill, harder to deplete.
 const BOOST_GEM = 0.12;
 const BOOST_COIN = 0.035;
-const BOOST_PER_SPIN = 0.18; // per full 360 landed clean — the top earner
-const BOOST_PER_FLIP = 0.22; // flips pay more — they are scarier
+// Trick pay follows difficulty (slower rotation = more air needed = more
+// money): spin < frontflip < backflip.
+const BOOST_PER_SPIN = 0.15;
+const BOOST_PER_FRONTFLIP = 0.2;
+const BOOST_PER_BACKFLIP = 0.26;
 const BOOST_TRICK_CAP = 0.5; // per landing
 const BOOST_DRAIN = 0.15; // per second while burning
 const NEAR_MISS_RING = 1.1; // meters beyond a collision that still count
@@ -95,14 +98,13 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   if (airBefore > 0 && s.airTime === 0) {
     const turns = Math.round(Math.abs(s.spin) / (2 * Math.PI));
     const flipTurns = Math.round(Math.abs(s.flip) / (2 * Math.PI));
+    const flipBack = s.flip < 0; // W = backflip = negative pitch
     if (s.tumbling === 0) {
       if (airBefore > MIN_STYLISH_AIR) events.push({ type: 'landing', airTime: airBefore });
       if (turns >= 1 || flipTurns >= 1) {
-        earnBoost(
-          sim,
-          Math.min(BOOST_TRICK_CAP, turns * BOOST_PER_SPIN + flipTurns * BOOST_PER_FLIP)
-        );
-        events.push({ type: 'trick', spins: turns, flips: flipTurns });
+        const perFlip = flipBack ? BOOST_PER_BACKFLIP : BOOST_PER_FRONTFLIP;
+        earnBoost(sim, Math.min(BOOST_TRICK_CAP, turns * BOOST_PER_SPIN + flipTurns * perFlip));
+        events.push({ type: 'trick', spins: turns, flips: flipTurns, flipBack });
       }
     }
     s.spin = 0;

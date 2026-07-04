@@ -84,8 +84,12 @@ const AIR_TURN_FACTOR = 0.5; // reduced but real steering mid-air
 // are lenient (landing a bit sideways is skiable); flips commit early
 // (landing pitched 90 degrees is a faceplant, not a stumble).
 const MIN_TRICK_AIR = 0.35; // seconds aloft before the trick keys engage
-const SPIN_RATE = 6; // rad/s of trick yaw
-const FLIP_RATE = 5; // rad/s of trick pitch
+// Difficulty is rotation TIME: harder tricks turn slower, so they need more
+// air — and they pay more (see sim.ts). Easiest to hardest: spin, frontflip,
+// backflip.
+const SPIN_RATE = 6; // full 360 in ~1.05s
+const FRONTFLIP_RATE = 5; // ~1.26s per rotation
+const BACKFLIP_RATE = 4.2; // ~1.5s per rotation — the money trick
 export const TRICK_COMMIT = 3.3; // radians of spin (~half-turn) before you must complete
 export const FLIP_COMMIT = 1.2; // radians of flip (~70 deg) before you must complete
 export const SPIN_TOLERANCE = 0.7; // radians from a whole turn to land clean
@@ -209,7 +213,8 @@ export function stepSkier(
     steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
     if (state.airTime > MIN_TRICK_AIR) {
       state.spin += SPIN_RATE * (input.trickSpin ?? 0) * dt;
-      state.flip += FLIP_RATE * (input.trickFlip ?? 0) * dt;
+      const flipInput = input.trickFlip ?? 0; // negative = backflip (W)
+      state.flip += (flipInput < 0 ? BACKFLIP_RATE : FRONTFLIP_RATE) * flipInput * dt;
     }
     state.speed = Math.max(
       0,

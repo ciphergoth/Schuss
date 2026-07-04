@@ -112,7 +112,10 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       audio.playTrick(e.spins + e.flips);
       const parts = [];
       if (e.spins >= 1) parts.push(`${e.spins * 360}°`);
-      if (e.flips >= 1) parts.push(e.flips > 1 ? `${e.flips}x FLIP` : 'FLIP');
+      if (e.flips >= 1) {
+        const name = e.flipBack ? 'BACKFLIP' : 'FRONTFLIP';
+        parts.push(e.flips > 1 ? `${e.flips}x ${name}` : name);
+      }
       showTrick(`${parts.join(' + ')} — NICE!`, '#7dff8a', 1.2);
     } else if (e.type === 'tumble' && e.trick) {
       showTrick('SPUN OUT', '#ff6a5a', 1.0);

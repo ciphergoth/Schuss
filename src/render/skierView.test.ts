@@ -48,6 +48,19 @@ describe('skier rig', () => {
     expect(plowed.skis[1].position.x).toBeGreaterThan(neutral.skis[1].position.x + 0.05);
   });
 
+  it('positive spin turns the same way as positive heading (D spins right)', () => {
+    // Spin composes with heading in heading-space: a skier at heading 0 with
+    // spin s must face exactly like a skier at heading s. Adding spin in
+    // rotation-space instead mirrored the keys (the A/D swap bug).
+    const spun = createSkierView(new THREE.Scene());
+    const steered = createSkierView(new THREE.Scene());
+    const a = { ...createSkier(), spin: 0.5 };
+    const b = { ...createSkier(), heading: 0.5 };
+    updateSkierView(spun, a, { steer: 0, stance: 0 }, 1 / 60);
+    updateSkierView(steered, b, { steer: 0, stance: 0 }, 1 / 60);
+    expect(spun.group.rotation.y).toBeCloseTo(steered.group.rotation.y, 10);
+  });
+
   it('tumbling somersaults the skier and recovery lands upright', () => {
     const view = createSkierView(new THREE.Scene());
     const state = { ...createSkier(), tumbling: 0.6 };

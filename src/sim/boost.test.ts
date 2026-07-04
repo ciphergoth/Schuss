@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SIM_DT, Sim, SimEvent, createSim, stepSim } from './sim';
-import { SKIER_RADIUS } from './skier';
+import { SKIER_RADIUS, SkierInput } from './skier';
 import { PLAN_SPEED } from './terrain';
 
 const COAST = { steer: 0, stance: 0 };
@@ -149,18 +149,40 @@ describe('boost economy', () => {
     expect(events.some((e) => e.type === 'trick')).toBe(false);
   });
 
-  it('a full backflip (trick + stance up) lands and pays more than a spin', () => {
-    const sim = createSim(1);
-    launch(sim);
-    const events: SimEvent[] = [];
-    while (sim.skier.airTime > 0 && Math.abs(sim.skier.flip) < 2 * Math.PI - 0.12) {
-      events.push(...stepSim(sim, { steer: 0, stance: 0, trickFlip: -1 }));
-    }
-    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
-    expect(sim.skier.tumbling).toBe(0);
-    const trick = events.find((e) => e.type === 'trick');
-    expect(trick && trick.type === 'trick' && trick.flips).toBe(1);
-    expect(sim.boost).toBeGreaterThan(0.2); // 0.22 — outearns a 360's 0.18
+  it('harder tricks rotate slower: spin faster than frontflip faster than backflip', () => {
+    const rotate = (input: SkierInput) => {
+      const sim = createSim(1);
+      launch(sim);
+      for (let i = 0; i < Math.round(1 / SIM_DT); i++) stepSim(sim, input);
+      return Math.max(Math.abs(sim.skier.spin), Math.abs(sim.skier.flip));
+    };
+    const spun = rotate({ steer: 0, stance: 0, trickSpin: 1 });
+    const front = rotate({ steer: 0, stance: 0, trickFlip: 1 });
+    const back = rotate({ steer: 0, stance: 0, trickFlip: -1 });
+    expect(spun).toBeGreaterThan(front);
+    expect(front).toBeGreaterThan(back);
+  });
+
+  it('harder tricks pay more: backflip > frontflip > spin', () => {
+    const land = (input: SkierInput) => {
+      const sim = createSim(1);
+      launch(sim, 18, 3); // extra hangtime for the slow rotations
+      while (
+        sim.skier.airTime > 0 &&
+        Math.max(Math.abs(sim.skier.spin), Math.abs(sim.skier.flip)) < 2 * Math.PI - 0.12
+      ) {
+        stepSim(sim, input);
+      }
+      while (sim.skier.airTime > 0) stepSim(sim, COAST);
+      expect(sim.skier.tumbling).toBe(0);
+      return sim.boost;
+    };
+    const spin = land({ steer: 0, stance: 0, trickSpin: 1 });
+    const front = land({ steer: 0, stance: 0, trickFlip: 1 });
+    const back = land({ steer: 0, stance: 0, trickFlip: -1 });
+    expect(back).toBeGreaterThan(front);
+    expect(front).toBeGreaterThan(spin);
+    expect(spin).toBeGreaterThan(0.1);
   });
 
   it('landing mid-flip is a wipeout', () => {
