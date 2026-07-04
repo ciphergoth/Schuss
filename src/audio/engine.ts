@@ -9,6 +9,8 @@ interface AudioNodes {
   carveGain: GainNode;
   boostGain: GainNode;
   crudGain: GainNode;
+  spinGain: GainNode; // mid-air rotation whoosh
+  spinFilter: BiquadFilterNode;
   noise: AudioBuffer;
 }
 
@@ -26,6 +28,11 @@ export class GameAudio {
   private muted = false;
   private gamePaused = false;
   private wasTumbling = false;
+  private prevSpin = 0;
+  private prevFlip = 0;
+  private nextSparkle = 0; // armed-star shimmer scheduler
+  private sparkleStep = 0;
+  private lastZone = 0;
 
   constructor() {
     const unlock = () => {
@@ -93,13 +100,50 @@ export class GameAudio {
     crudGain.gain.value = 0;
     source.connect(crudFilter).connect(crudGain).connect(master);
 
+    // Rotation whoosh: an airy band that opens while a trick is actually
+    // turning and climbs in pitch as rotation accumulates — the audible
+    // tension of "bring it round or eat snow".
+    const spinFilter = ctx.createBiquadFilter();
+    spinFilter.type = 'bandpass';
+    spinFilter.frequency.value = 700;
+    spinFilter.Q.value = 2.5;
+    const spinGain = ctx.createGain();
+    spinGain.gain.value = 0;
+    source.connect(spinFilter).connect(spinGain).connect(master);
+
     source.start();
-    return { ctx, master, windGain, windFilter, carveGain, boostGain, crudGain, noise };
+    return {
+      ctx,
+      master,
+      windGain,
+      windFilter,
+      carveGain,
+      boostGain,
+      crudGain,
+      spinGain,
+      spinFilter,
+      noise,
+    };
   }
 
-  update(state: SkierState, input: SkierInput, boosting = false, stickiness = 0): void {
+  update(
+    state: SkierState,
+    input: SkierInput,
+    boosting = false,
+    stickiness = 0,
+    trickMult = 1,
+    zone = 0
+  ): void {
+    // Zone crossings are tracked even before the graph exists, so the first
+    // chime doesn't fire late; everything else needs live nodes.
+    if (zone !== this.lastZone) {
+      const ascended = zone > this.lastZone;
+      this.lastZone = zone;
+      if (ascended) this.playZoneShift(zone);
+    }
     if (!this.nodes) return;
-    const { ctx, windGain, windFilter, carveGain, boostGain, crudGain } = this.nodes;
+    const { ctx, windGain, windFilter, carveGain, boostGain, crudGain, spinGain, spinFilter } =
+      this.nodes;
     const t = ctx.currentTime;
 
     const tumbling = state.tumbling > 0;
@@ -113,6 +157,33 @@ export class GameAudio {
     carveGain.gain.setTargetAtTime(p.carveGain, t, 0.05);
     boostGain.gain.setTargetAtTime(boosting ? 0.4 : 0, t, 0.05);
     crudGain.gain.setTargetAtTime(p.crudGain, t, 0.04);
+
+    // The rotation whoosh opens only while rotation is actively accruing,
+    // and its pitch climbs with the amount already turned.
+    const rotating =
+      state.airTime > 0 &&
+      Math.abs(state.spin - this.prevSpin) + Math.abs(state.flip - this.prevFlip) > 1e-4;
+    this.prevSpin = state.spin;
+    this.prevFlip = state.flip;
+    const turned = Math.abs(state.spin) + Math.abs(state.flip);
+    spinGain.gain.setTargetAtTime(rotating ? 0.22 : 0, t, rotating ? 0.05 : 0.12);
+    spinFilter.frequency.setTargetAtTime(Math.min(2400, 650 + turned * 170), t, 0.05);
+
+    // An armed star shimmers softly until it is spent — quicker and higher
+    // for the x5, so you can hear what you're carrying.
+    if (trickMult > 1 && t >= this.nextSparkle) {
+      this.nextSparkle = t + (trickMult >= 5 ? 0.22 : 0.34);
+      const notes = trickMult >= 5 ? [2637, 3136, 3520] : [2093, 2637];
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = notes[this.sparkleStep++ % notes.length]!;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.05, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      osc.connect(gain).connect(this.nodes.master);
+      osc.start(t);
+      osc.stop(t + 0.18);
+    }
   }
 
   private playCrash(): void {
@@ -253,12 +324,15 @@ export class GameAudio {
     });
   }
 
-  // Landed trick: an ascending arpeggio, one extra note for a full turn+.
-  playTrick(turns: number): void {
+  // Landed trick: an ascending arpeggio, one extra note for a full turn+, a
+  // fifth for a mixed combo, and a glissando run on top when a star
+  // multiplier cashed in (longer for x5).
+  playTrick(turns: number, mult = 1, mixed = false): void {
     if (!this.nodes) return;
     const { ctx, master } = this.nodes;
     const t = ctx.currentTime;
     const notes = turns >= 1 ? [660, 880, 1108, 1318] : [660, 880, 1108];
+    if (mixed) notes.push(1661);
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       osc.type = 'triangle';
@@ -270,6 +344,95 @@ export class GameAudio {
       osc.start(t + i * 0.06);
       osc.stop(t + i * 0.06 + 0.18);
     });
+    if (mult >= 3) {
+      const runStart = t + notes.length * 0.06 + 0.08;
+      const steps = mult >= 5 ? 7 : 5;
+      for (let k = 0; k < steps; k++) {
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.value = 1318 * Math.pow(9 / 8, k);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.07, runStart + k * 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, runStart + k * 0.05 + 0.14);
+        osc.connect(gain).connect(master);
+        osc.start(runStart + k * 0.05);
+        osc.stop(runStart + k * 0.05 + 0.16);
+      }
+    }
+  }
+
+  // Firework volley: staggered booms (matching the fx layer's fuse rhythm)
+  // with a pitch-dropping thud under each and crackle raining after.
+  playFireworks(count: number, jackpot: boolean): void {
+    if (!this.nodes) return;
+    const { ctx, master, noise } = this.nodes;
+    const now = ctx.currentTime;
+    for (let n = 0; n < count; n++) {
+      const t = now + 0.18 + n * 0.14 + Math.random() * 0.25;
+      const boom = ctx.createBufferSource();
+      boom.buffer = noise;
+      const boomFilter = ctx.createBiquadFilter();
+      boomFilter.type = 'lowpass';
+      boomFilter.frequency.value = jackpot ? 520 : 420;
+      const boomGain = ctx.createGain();
+      boomGain.gain.setValueAtTime(jackpot ? 0.22 : 0.16, t);
+      boomGain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      boom.connect(boomFilter).connect(boomGain).connect(master);
+      boom.start(t);
+      boom.stop(t + 0.55);
+
+      const thud = ctx.createOscillator();
+      thud.type = 'sine';
+      thud.frequency.setValueAtTime(100, t);
+      thud.frequency.exponentialRampToValueAtTime(38, t + 0.3);
+      const thudGain = ctx.createGain();
+      thudGain.gain.setValueAtTime(0.14, t);
+      thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      thud.connect(thudGain).connect(master);
+      thud.start(t);
+      thud.stop(t + 0.4);
+
+      const crackles = 5 + Math.floor(Math.random() * 4);
+      for (let c = 0; c < crackles; c++) {
+        const tick = t + 0.06 + Math.random() * 0.45;
+        const crackle = ctx.createBufferSource();
+        crackle.buffer = noise;
+        const hp = ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 2600;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.035, tick);
+        g.gain.exponentialRampToValueAtTime(0.001, tick + 0.06);
+        crackle.connect(hp).connect(g).connect(master);
+        crackle.start(tick);
+        crackle.stop(tick + 0.08);
+      }
+    }
+  }
+
+  // Crossing into a new color world: a soft two-note swell, root rising
+  // with the zone, felt more than heard.
+  private playZoneShift(zone: number): void {
+    if (!this.nodes) return;
+    const { ctx, master } = this.nodes;
+    const t = ctx.currentTime;
+    const roots = [523, 587, 659, 784];
+    const root = roots[zone % roots.length]!;
+    for (const [ratio, level] of [
+      [1, 0.11],
+      [1.5, 0.07],
+    ] as const) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = root * ratio;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(level, t + 0.3);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+      osc.connect(gain).connect(master);
+      osc.start(t);
+      osc.stop(t + 1.2);
+    }
   }
 
   toggleMute(): void {

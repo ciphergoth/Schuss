@@ -51,7 +51,12 @@ and star-multiplied tricks launch firework volleys over the course (grander
 for jackpots); an armed star orbits the skier as sparkles in its own color
 and dyes the flow trail; mid-air rotation streams a hue-cycling glitter
 comet; kicker approaches are lit like runways and every bonus star rides a
-light beam up from the snow. Reward loop over penalty loop.
+light beam up from the snow. The mix celebrates alongside: firework booms
+with crackle mirror the fx layer's fuse rhythm, an airy whoosh climbs in
+pitch as mid-air rotation accrues, an armed star shimmers (quicker and
+higher for x5), multiplied tricks add a glissando run to the fanfare, and
+each zone crossing lands a soft two-note swell. Reward loop over penalty
+loop.
 
 Terrain is a pure height function: a curving centerline (straight near the
 start and uphill of it, for gentle run-ins and predictable physics tests)
@@ -98,7 +103,9 @@ src/
 │   └── camera.ts      - Third-person follow camera, speed/flow FOV kick
 └── audio/             - Web Audio only, fully synthesized (no audio assets)
     ├── params.ts      - Pure state -> synth parameter curves (unit tested)
-    └── engine.ts      - Noise/filter graph: wind, edge scrape, crash
+    └── engine.ts      - Noise/filter graph: wind, edge scrape, crash,
+                         rotation whoosh, firework booms, armed-star
+                         shimmer, zone-crossing swells
 ```
 
 Like the render layer, audio reads sim state each frame and never writes it.

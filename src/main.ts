@@ -3,6 +3,7 @@ import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/
 import { FLIP_TOLERANCE, SPIN_TOLERANCE, SkierInput } from './sim/skier';
 import { setupInput } from './input';
 import { createScene } from './render/scene';
+import { ZONE_LENGTH } from './render/palette';
 import { ChunkRenderer } from './render/chunks';
 import { createSkierView, updateSkierView } from './render/skierView';
 import { createCamera, updateCamera } from './render/camera';
@@ -120,16 +121,19 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       audio.playBonus(e.mult);
       showTrick(`×${e.mult}!`, e.mult >= 5 ? '#ff3ddc' : '#ffd34d', 0.9);
     } else if (e.type === 'trick') {
-      audio.playTrick(e.spins + e.flips);
+      // Praise ladder: INCREDIBLE is reserved for mixed combos; big
+      // same-type tricks are OUTSTANDING; a single rotation is NICE.
+      const mixed = e.spins >= 1 && e.flips >= 1;
+      audio.playTrick(e.spins + e.flips, e.mult, mixed);
+      // The showpieces get fireworks in the sky AND in the mix.
+      if (e.mult >= 3) audio.playFireworks(e.mult, e.mult >= 5);
+      else if (mixed) audio.playFireworks(3, false);
       const parts = [];
       if (e.spins >= 1) parts.push(`${e.spins * 360}°`);
       if (e.flips >= 1) {
         const name = e.flipBack ? 'BACKFLIP' : 'FRONTFLIP';
         parts.push(e.flips > 1 ? `${e.flips}x ${name}` : name);
       }
-      // Praise ladder: INCREDIBLE is reserved for mixed combos; big
-      // same-type tricks are OUTSTANDING; a single rotation is NICE.
-      const mixed = e.spins >= 1 && e.flips >= 1;
       const big = e.spins >= 2 || e.flips >= 2;
       const word = mixed ? 'INCREDIBLE!' : big ? 'OUTSTANDING!' : 'NICE!';
       const mult = e.mult > 1 ? ` ×${e.mult}` : '';
@@ -143,6 +147,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       // The pace grade: a fast sector is a jackpot, a slow one just a fact.
       if (e.points > 0) {
         audio.playSector(e.points >= 5000);
+        audio.playFireworks(e.points >= 5000 ? 7 : 3, e.points >= 5000);
         showTrick(
           `SECTOR ${Math.round(e.speed)} m/s — +${e.points.toLocaleString('en')}`,
           e.points >= 5000 ? '#ffd34d' : '#9fd4ff',
@@ -164,7 +169,14 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   // keep the aurora waving overhead.
   sceneSetup.update(skier.x, skier.y, skier.z, sim.time);
 
-  audio.update(skier, lastInput, sim.boosting, sim.terrain.stickinessAt(skier.x, skier.z));
+  audio.update(
+    skier,
+    lastInput,
+    sim.boosting,
+    sim.terrain.stickinessAt(skier.x, skier.z),
+    sim.trickMult,
+    Math.floor(Math.max(0, -skier.z) / ZONE_LENGTH)
+  );
 
   // Speed and distance top-left, the score ledger top-right, the vertical
   // bar on the left is the boost tank — SSX-style.
