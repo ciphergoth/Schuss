@@ -1,4 +1,4 @@
-# Ski game
+# Schuss!
 
 A 3D browser-based skiing game in the spirit of PS2-era SSX Tricky: an
 endless procedurally generated walled track — a banked ice channel floating

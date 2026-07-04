@@ -72,6 +72,9 @@ let confirming = false; // the R restart ask; a special flavor of paused
 let pausedBeforeConfirm = false;
 
 function setPaused(next: boolean): void {
+  // The guide opens as the title screen; once the player drops in, later
+  // pauses are just pauses.
+  if (paused && !next) document.getElementById('pausetitle')!.textContent = 'Paused';
   paused = next;
   pauseScreen.classList.toggle('visible', paused && !confirming);
   audio.setPaused(paused);
