@@ -58,11 +58,23 @@ higher for x5), multiplied tricks add a glissando run to the fanfare, and
 each zone crossing lands a soft two-note swell. Reward loop over penalty
 loop.
 
-Terrain is a pure height function: a curving centerline (straight near the
-start and uphill of it, for gentle run-ins and predictable physics tests)
-plus a U-channel cross-section whose width breathes (10-20m half-width; wide
-zones get obstacle slaloms and wider pickup weaves). Kickers are steerable
-features with the trick-bonus stars floating past their lips. The render layer
+Terrain is a pure height function with SECTION personalities: every 400m
+the course becomes one of cruise / narrows (7m half-width squeeze, empty
+and fast) / bowl (27m playground: obstacle slaloms, rich coins, kickers of
+every size) / plunge (the grade breaks away mid-section, big L kickers
+only) / steps (a staircase of launchable terraces) / sweeper (deliberate
+sine S-turns with the floor superelevated into the bend — carving the bank
+is the racing line). Sections never repeat back-to-back, blend over their
+last 60m, and section 0 is always cruise (gentle openings, predictable
+physics tests). Banking is curvature-driven everywhere, so any bend tilts
+its floor a little. Kickers come in S/M/L (ramp 10/14/19m, lip
+1.5/2.2/3.2m), 30% of M/L are step-downs (the landing scooped out for
+float and a soft catch), the first kicker of a run is always a flat M, and
+the trick-bonus stars sit per-size on the popped-at-the-lip flight arc
+(STAR_TABLE, tuned by simulated flights). Hip kickers wait on a physics
+addition — a heightfield yaw alone can't redirect a kinematic skier. The
+section framework is where moving hazards and finish lines will plug in.
+The render layer
 draws the course as a ribbon clipped just past the bounce barrier, so the
 walls stay low and the world beyond shows: neon edge poles, a city skyline
 with beacon-topped towers, hot-air balloons, clouds below.

@@ -113,9 +113,9 @@ describe('boost economy', () => {
   // Ride the kicker's line from uphill at a given speed, releasing a
   // full-charge jump when z first passes releaseAt (grounded). Returns the
   // bonus multipliers collected during the flight past the lip.
-  function rideKicker(speed: number, releaseOffset: number | null): number[] {
+  function rideKicker(speed: number, releaseOffset: number | null, venue?: number): number[] {
     const sim = createSim(1);
-    let index = 3;
+    let index = venue ?? 3;
     while (!sim.terrain.jumpForChunk(index)) index++;
     const jump = sim.terrain.jumpForChunk(index)!;
     const t = sim.terrain;
@@ -139,6 +139,22 @@ describe('boost economy', () => {
     }
     return mults;
   }
+
+  it('star gating holds across kicker sizes: pop at speed, or nothing', () => {
+    const sim = createSim(1);
+    for (const kind of ['S', 'L'] as const) {
+      let index = 3;
+      while (true) {
+        const jump = sim.terrain.jumpForChunk(index);
+        if (jump && jump.kind === kind && jump.stepDown === 0) break;
+        index++;
+      }
+      // A full pop near the lip at race pace threads to the x5...
+      expect(rideKicker(26, 1, index)).toContain(5);
+      // ...but riding off the lip without popping earns nothing at all.
+      expect(rideKicker(21, null, index)).toEqual([]);
+    }
+  });
 
   it('the x5 rewards a jump timed at the lip, not a hop before the ramp', () => {
     // Full-charge pop 1m before the lip, at speed: the flat fast arc threads

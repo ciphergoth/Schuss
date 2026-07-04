@@ -216,16 +216,19 @@ export class ChunkRenderer {
     // like an airstrip, funneling you onto the ramp.
     const jump = this.terrain.jumpForChunk(index);
     if (jump) {
-      const neonGeo = new THREE.CylinderGeometry(0.22, 0.22, 11, 6);
+      // Poles grow with the kicker: an L reads as a bigger event from afar.
+      const poleHeight = 8 + jump.lipHeight * 1.5;
+      const neonGeo = new THREE.CylinderGeometry(0.22, 0.22, poleHeight, 6);
       const neon = this.neons[index % this.neons.length]!;
       for (const side of [-1, 1]) {
         const x = this.terrain.centerX(jump.zLip) + jump.xOffset + side * (jump.halfWidth + 0.6);
         const pole = new THREE.Mesh(neonGeo, neon);
-        pole.position.set(x, this.terrain.height(x, jump.zLip) + 5.5, jump.zLip);
+        pole.position.set(x, this.terrain.height(x, jump.zLip) + poleHeight / 2, jump.zLip);
         group.add(pole);
       }
+      // Runway studs light the approach corridor.
       const studGeo = new THREE.SphereGeometry(0.2, 6, 6);
-      for (let u = 4; u <= 28; u += 6) {
+      for (let u = 4; u <= jump.rampLength + 14; u += 6) {
         const z = jump.zLip + u;
         for (const side of [-1, 1]) {
           const x = this.terrain.centerX(z) + jump.xOffset + side * (jump.halfWidth + 0.5);
