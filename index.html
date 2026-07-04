@@ -59,6 +59,25 @@
       #overlay.visible {
         display: flex;
       }
+      #trick {
+        position: fixed;
+        top: 30%;
+        left: 0;
+        right: 0;
+        display: none;
+        justify-content: center;
+        color: white;
+        text-shadow: 0 2px 8px rgba(0, 0, 40, 0.9);
+        font-size: 46px;
+        font-style: italic;
+        font-weight: 700;
+        letter-spacing: 1px;
+        user-select: none;
+        pointer-events: none;
+      }
+      #trick.visible {
+        display: flex;
+      }
       #pause {
         position: fixed;
         inset: 0;
@@ -107,6 +126,7 @@
     </div>
     <div id="boostbar"><div id="boostfill"></div></div>
     <div id="overlay">Wipeout!</div>
+    <div id="trick"></div>
     <div id="pause">
       <div class="panel">
         <h1>Paused</h1>
@@ -125,10 +145,11 @@
           </tr>
           <tr>
             <td>Space / Shift / right mouse</td>
-            <td>
-              Hold: burn boost &amp; crouch &middot; release: jump &middot; hold in the air: steer
-              spins, stance flips &mdash; land clean for boost
-            </td>
+            <td>Hold: burn boost &amp; crouch &middot; release: jump</td>
+          </tr>
+          <tr>
+            <td>Steer in the air (off a jump)</td>
+            <td>Spin &mdash; land facing forward (full 360s) for a big boost</td>
           </tr>
           <tr>
             <td>R</td>

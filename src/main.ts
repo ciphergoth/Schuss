@@ -41,12 +41,18 @@ const stats = document.getElementById('stats')!;
 const boostFill = document.getElementById('boostfill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
 const pauseScreen = document.getElementById('pause')!;
+const trickText = document.getElementById('trick')!;
+
+// A short-lived banner: live spin readout while airborne, result on landing.
+let trickBannerUntil = 0;
 
 let sim = createSim(seed);
 let lastInput: SkierInput = { steer: 0, stance: 0 };
 const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
 const input = setupInput(() => {
   sim = createSim(seed);
+  trickBannerUntil = 0; // sim.time resets to 0; don't let a stale banner linger
+  trickText.classList.remove('visible');
 });
 
 // Esc or ? pauses: the sim freezes, the cursor is yours, and the pause screen
@@ -102,7 +108,12 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     if (e.type === 'nearMiss') audio.playWhoosh();
     else if (e.type === 'landing') audio.playThump(e.airTime);
     else if (e.type === 'pickup') audio.playDing(e.gem);
-    else if (e.type === 'trick') audio.playTrick(e.spins + e.flips);
+    else if (e.type === 'trick') {
+      audio.playTrick(e.spins);
+      showTrick(`${e.spins * 360}° — NICE!`, '#7dff8a', 1.2);
+    } else if (e.type === 'tumble' && e.trick) {
+      showTrick('SPUN OUT', '#ff6a5a', 1.0);
+    }
   }
 
   // Keep the sun's shadow box centered on the skier.
@@ -120,7 +131,30 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     : `hsl(${35 + sim.boost * 10}, 95%, 58%)`;
   overlay.classList.toggle('visible', skier.tumbling > 0);
 
+  // Live spin readout while airborne past the trick threshold: shows the
+  // rotation and turns green once you're lined up to land it clean. Result
+  // banners (set by showTrick) take priority while they last.
+  if (sim.time >= trickBannerUntil) {
+    const deg = Math.round((Math.abs(skier.spin) * 180) / Math.PI);
+    if (skier.tumbling === 0 && deg >= 20) {
+      const residual = Math.abs(Math.atan2(Math.sin(skier.spin), Math.cos(skier.spin)));
+      const clean = residual < 0.7;
+      trickText.textContent = `${deg}°${clean && deg >= 300 ? ' ✓' : ''}`;
+      trickText.style.color = clean && deg >= 300 ? '#7dff8a' : '#ffffff';
+      trickText.classList.add('visible');
+    } else {
+      trickText.classList.remove('visible');
+    }
+  }
+
   renderer.render(scene, camera);
+}
+
+function showTrick(text: string, color: string, seconds: number): void {
+  trickText.textContent = text;
+  trickText.style.color = color;
+  trickText.classList.add('visible');
+  trickBannerUntil = sim.time + seconds;
 }
 
 window.__game.renderFrame = renderFrame;

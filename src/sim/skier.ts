@@ -74,13 +74,16 @@ const TUMBLE_SPEED_KEEP = 0.25;
 const TUMBLE_FRICTION = 0.35;
 const AIR_TURN_FACTOR = 0.5; // reduced but real steering mid-air
 
-// Tricks: holding the boost button in the air turns steer into spin and
-// stance into flip. The landing judges the rotation — land near-clean or
-// tumble. Travel flies straight while tricking: style costs line control.
+// Tricks: only REAL air (kickers, big launches — not incidental roller hops)
+// becomes a trick stage, and only steering spins you. Flips are dormant for
+// now: driving them from the stance axis meant tucking-for-speed silently
+// flipped you off every roller and wiped you out. The landing judges a
+// committed spin — bring it round to a whole turn or tumble; small rotation
+// is always safe. Travel flies straight while spinning: style costs line.
+const MIN_TRICK_AIR = 0.35; // seconds aloft before steering becomes spin
 const SPIN_RATE = 6; // rad/s of trick yaw
-const FLIP_RATE = 5; // rad/s of trick pitch
-export const SPIN_TOLERANCE = 0.7; // radians from clean at touchdown
-export const FLIP_TOLERANCE = 0.55;
+export const TRICK_COMMIT = 3.3; // radians (~a half-turn): below this a landing is always clean
+export const SPIN_TOLERANCE = 0.7; // radians from a whole turn to land clean
 
 export function createSkier(): SkierState {
   return {
@@ -193,16 +196,16 @@ export function stepSkier(
 
   if (state.airTime > 0) {
     // Ballistic: gravity on vy, air drag on speed (tuck still matters).
-    // Button held = trick mode: steer spins, stance flips, travel flies
-    // straight. Button up = gentle heading control toward the landing line.
+    // Brief hops keep gentle heading control (aim your landing); once you've
+    // been aloft past MIN_TRICK_AIR — i.e. off a real jump — steering spins
+    // you instead. Incidental air is therefore never a trick.
     const airTuck = Math.max(0, -input.stance);
-    if (input.boost) {
+    if (state.airTime > MIN_TRICK_AIR) {
       // Wide dead zone: analog cursor hover noise must not integrate into
-      // rotation over a whole flight — only deliberate deflection tricks.
+      // rotation over a whole flight — only deliberate deflection spins.
       const deadband = (v: number) =>
         Math.abs(v) > 0.35 ? (Math.sign(v) * (Math.abs(v) - 0.35)) / 0.65 : 0;
       state.spin += SPIN_RATE * deadband(input.steer) * dt;
-      state.flip += FLIP_RATE * deadband(input.stance) * dt;
     } else {
       steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
     }
@@ -245,11 +248,10 @@ export function stepSkier(
       if (horizontal > 0.1) state.heading = Math.atan2(vx, -vz);
       state.speed = horizontal;
 
-      // The landing judges the trick: mid-rotation at touchdown is a wipeout.
-      if (
-        Math.abs(residual(state.spin)) > SPIN_TOLERANCE ||
-        Math.abs(residual(state.flip)) > FLIP_TOLERANCE
-      ) {
+      // The landing judges a COMMITTED spin: only if you rotated past
+      // TRICK_COMMIT and touch down mid-turn is it a wipeout. Anything under
+      // that (incidental rotation, a small aimed nudge) always lands clean.
+      if (Math.abs(state.spin) > TRICK_COMMIT && Math.abs(residual(state.spin)) > SPIN_TOLERANCE) {
         state.tumbling = TUMBLE_TIME;
         state.speed *= TUMBLE_SPEED_KEEP;
       }

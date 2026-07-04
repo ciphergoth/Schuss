@@ -8,7 +8,7 @@ describe('effects', () => {
     const fx = new Effects(new THREE.Scene());
     const sim = createSim(1);
     expect(fx.particles.liveCount()).toBe(0);
-    fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, [{ type: 'tumble' }]);
+    fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, [{ type: 'tumble', trick: false }]);
     expect(fx.particles.liveCount()).toBeGreaterThan(50);
     for (let i = 0; i < 200; i++) fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, []);
     expect(fx.particles.liveCount()).toBe(0);

@@ -99,52 +99,76 @@ describe('boost economy', () => {
     expect(burner.boost).toBeLessThan(0.65);
   });
 
-  it('a clean 360 lands, pays boost, and fires a trick event', () => {
-    const sim = createSim(1);
+  // Put the skier high in the air off a launch — steering now spins them.
+  function launch(sim: Sim, height = 14, vy = 2): void {
     teleport(sim, 0, 800, 15);
-    sim.skier.y += 8; // plenty of hangtime to rotate
+    sim.skier.y += height;
     sim.skier.airTime = 0.01;
-    sim.skier.vy = 0;
+    sim.skier.vy = vy;
+  }
+
+  it('steering through a full 360 in the air lands, pays boost, fires a trick', () => {
+    const sim = createSim(1);
+    launch(sim);
     const events: SimEvent[] = [];
-    // Spin until just short of a full turn, then stop rotating and land.
+    // Spin until just short of a full turn (no boost button needed), then
+    // stop and ride it down.
     while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
-      events.push(...stepSim(sim, { steer: 1, stance: 0, boost: true }));
+      events.push(...stepSim(sim, { steer: 1, stance: 0 }));
     }
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBe(0);
-    const trick = events.find((e) => e.type === 'trick');
-    expect(trick).toBeDefined();
+    expect(events.find((e) => e.type === 'trick')).toBeDefined();
     expect(sim.boost).toBeGreaterThan(0.1);
     expect(sim.skier.spin).toBe(0); // ledger settled on landing
   });
 
-  it('cursor hover noise never rotates the skier in trick mode', () => {
+  it('landing mid-spin (past commit) is a wipeout and pays nothing', () => {
     const sim = createSim(1);
-    teleport(sim, 0, 800, 15);
-    sim.skier.y += 8;
-    sim.skier.airTime = 0.01;
-    sim.skier.vy = 0;
-    while (sim.skier.airTime > 0) {
-      stepSim(sim, { steer: 0.2, stance: -0.25, boost: true }); // sloppy hover
-    }
-    expect(sim.skier.tumbling).toBe(0); // landed clean: no drift accumulated
-  });
-
-  it('landing mid-rotation is a wipeout and pays nothing', () => {
-    const sim = createSim(1);
-    teleport(sim, 0, 800, 15);
-    sim.skier.y += 8;
-    sim.skier.airTime = 0.01;
-    sim.skier.vy = 0;
+    launch(sim);
     const events: SimEvent[] = [];
-    // Spin to ~180 and hold it there — land sideways.
-    while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < Math.PI) {
-      events.push(...stepSim(sim, { steer: 1, stance: 0, boost: true }));
+    // Spin well past the half-turn commit, then land sideways.
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 4.0) {
+      events.push(...stepSim(sim, { steer: 1, stance: 0 }));
     }
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBeGreaterThan(0);
     expect(events.some((e) => e.type === 'trick')).toBe(false);
     expect(sim.boost).toBe(0);
+  });
+
+  it('a small spin under the commit threshold always lands clean', () => {
+    const sim = createSim(1);
+    launch(sim);
+    // A brief quarter-ish turn, then bail — must land safely, no reward.
+    for (let i = 0; i < 10 && sim.skier.airTime > 0; i++) stepSim(sim, { steer: 1, stance: 0 });
+    const events: SimEvent[] = [];
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    expect(sim.skier.tumbling).toBe(0);
+    expect(events.some((e) => e.type === 'trick')).toBe(false);
+  });
+
+  it('the bug: tucking + boosting through real air never flips you out', () => {
+    // The reported random wipeout — holding tuck (stance) for speed while
+    // airborne used to accumulate a flip and crash on landing.
+    const sim = createSim(1);
+    launch(sim);
+    while (sim.skier.airTime > 0) {
+      stepSim(sim, { steer: 0, stance: -1, boost: true }); // full tuck + boost, no steer
+    }
+    expect(sim.skier.tumbling).toBe(0);
+  });
+
+  it('no spin accrues in the first moments of air (incidental hops are safe)', () => {
+    const sim = createSim(1);
+    launch(sim);
+    // Even holding hard steer + tuck, nothing rotates until you've been up
+    // long enough to be off a real jump.
+    while (sim.skier.airTime > 0 && sim.skier.airTime < 0.34) {
+      stepSim(sim, { steer: 1, stance: -1, boost: true });
+      expect(sim.skier.spin).toBe(0);
+    }
+    expect(sim.skier.airTime).toBeGreaterThan(0.3); // did reach real air
   });
 
   it('an empty tank gives nothing', () => {

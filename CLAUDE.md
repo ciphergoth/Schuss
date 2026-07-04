@@ -10,12 +10,15 @@ of your speed, never the run; the walls contain you physically (rideable
 banks that steepen), no fences or fail states. The economy is SSX Tricky's:
 the run is measured in speed and distance (HUD is SI: m/s and m), and the
 BOOST TANK (tall vertical bar, left edge; big and slow on both ends) fills
-only from deliberate rewards — coins, gems, and above all TRICKS: hold the
-button in the air and steer spins / stance flips (with a wide dead zone so
-cursor hover can't drift you); land near-clean and the rotation pays into
-the tank, land mid-rotation and you tumble. Racing alone earns nothing.
-Burning is hard acceleration with flames, rainbow trail, FOV slam, rumble.
-Reward loop over penalty loop.
+only from deliberate rewards — coins, gems, and above all TRICKS: off a REAL
+jump (airborne past MIN_TRICK_AIR — never incidental roller hops) steering
+spins you; land within tolerance of a whole 360 for a big boost, land past
+the half-turn commit still mid-spin and you tumble; a small spin always
+bails safe. A live degree readout (green ✓ near clean) plus NICE!/SPUN OUT
+banners make it legible. Flips are dormant — driving them off the always-held
+tuck stance silently flipped-and-crashed you off every roller. Racing alone
+earns nothing. Burning is hard acceleration with flames, rainbow trail, FOV
+slam, rumble. Reward loop over penalty loop.
 
 Terrain is a pure height function: a curving centerline (straight near the
 start and uphill of it, for gentle run-ins and predictable physics tests)
