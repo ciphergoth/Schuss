@@ -75,18 +75,21 @@ const TUMBLE_SPEED_KEEP = 0.25;
 const TUMBLE_FRICTION = 0.35;
 const AIR_TURN_FACTOR = 0.5; // reduced but real steering mid-air
 
-// Tricks are opt-in twice over: you must hold the TRICK button (the brake
-// control, which has no airborne meaning) AND be in real air (kickers, big
-// launches — not incidental roller hops). Then steering spins you; button up,
-// steering gently aims your landing as normal. Flips are dormant for now:
-// driving them from the always-held tuck stance silently flipped you off
-// every roller and wiped you out. The landing judges a committed spin —
-// bring it round to a whole turn or tumble; small rotation is always safe.
-// Travel flies straight while spinning: style costs line.
+// Tricks are opt-in twice over: you must hold the dedicated TRICK button AND
+// be in real air (kickers, big launches — not incidental roller hops). While
+// it's held, all four directions are trick inputs: steer/x spins, stance/y
+// flips (up = backflip). Button up, steering gently aims your landing. The
+// landing judges committed rotation — bring it round to whole turns or
+// tumble; small rotation always bails safe. Spins are lenient (landing a bit
+// sideways is skiable); flips commit early (landing pitched 90 degrees is a
+// faceplant, not a stumble). Travel flies straight while tricking.
 const MIN_TRICK_AIR = 0.35; // seconds aloft before the trick button engages
 const SPIN_RATE = 6; // rad/s of trick yaw
-export const TRICK_COMMIT = 3.3; // radians (~a half-turn): below this a landing is always clean
+const FLIP_RATE = 5; // rad/s of trick pitch
+export const TRICK_COMMIT = 3.3; // radians of spin (~half-turn) before you must complete
+export const FLIP_COMMIT = 1.2; // radians of flip (~70 deg) before you must complete
 export const SPIN_TOLERANCE = 0.7; // radians from a whole turn to land clean
+export const FLIP_TOLERANCE = 0.55;
 
 export function createSkier(): SkierState {
   return {
@@ -198,16 +201,18 @@ export function stepSkier(
   }
 
   if (state.airTime > 0) {
-    // Ballistic: gravity on vy, air drag on speed (tuck still matters).
-    // Trick button held in real air: steering spins you. Otherwise steering
-    // keeps gentle heading control so you can aim your landing.
-    const airTuck = Math.max(0, -input.stance);
-    if (input.trick && state.airTime > MIN_TRICK_AIR) {
+    // Ballistic: gravity on vy, air drag on speed. Trick button held in real
+    // air: both axes belong to the trick (x spins, y flips) and stance stops
+    // meaning tuck. Otherwise steering gently aims your landing.
+    const tricking = (input.trick ?? false) && state.airTime > MIN_TRICK_AIR;
+    const airTuck = tricking ? 0 : Math.max(0, -input.stance);
+    if (tricking) {
       // Wide dead zone: analog cursor hover noise must not integrate into
-      // rotation over a whole flight — only deliberate deflection spins.
+      // rotation over a whole flight — only deliberate deflection tricks.
       const deadband = (v: number) =>
         Math.abs(v) > 0.35 ? (Math.sign(v) * (Math.abs(v) - 0.35)) / 0.65 : 0;
       state.spin += SPIN_RATE * deadband(input.steer) * dt;
+      state.flip += FLIP_RATE * deadband(input.stance) * dt;
     } else {
       steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
     }
@@ -250,10 +255,14 @@ export function stepSkier(
       if (horizontal > 0.1) state.heading = Math.atan2(vx, -vz);
       state.speed = horizontal;
 
-      // The landing judges a COMMITTED spin: only if you rotated past
-      // TRICK_COMMIT and touch down mid-turn is it a wipeout. Anything under
-      // that (incidental rotation, a small aimed nudge) always lands clean.
-      if (Math.abs(state.spin) > TRICK_COMMIT && Math.abs(residual(state.spin)) > SPIN_TOLERANCE) {
+      // The landing judges COMMITTED rotation per axis: past the commit
+      // threshold you must arrive within tolerance of whole turns or wipe
+      // out. Anything under commit always lands clean.
+      const blownSpin =
+        Math.abs(state.spin) > TRICK_COMMIT && Math.abs(residual(state.spin)) > SPIN_TOLERANCE;
+      const blownFlip =
+        Math.abs(state.flip) > FLIP_COMMIT && Math.abs(residual(state.flip)) > FLIP_TOLERANCE;
+      if (blownSpin || blownFlip) {
         state.tumbling = TUMBLE_TIME;
         state.speed *= TUMBLE_SPEED_KEEP;
       }

@@ -149,6 +149,43 @@ describe('boost economy', () => {
     expect(events.some((e) => e.type === 'trick')).toBe(false);
   });
 
+  it('a full backflip (trick + stance up) lands and pays more than a spin', () => {
+    const sim = createSim(1);
+    launch(sim);
+    const events: SimEvent[] = [];
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.flip) < 2 * Math.PI - 0.12) {
+      events.push(...stepSim(sim, { steer: 0, stance: -1, trick: true }));
+    }
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    expect(sim.skier.tumbling).toBe(0);
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick && trick.type === 'trick' && trick.flips).toBe(1);
+    expect(sim.boost).toBeGreaterThan(0.2); // 0.22 — outearns a 360's 0.18
+  });
+
+  it('landing mid-flip is a wipeout', () => {
+    const sim = createSim(1);
+    launch(sim);
+    const events: SimEvent[] = [];
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.flip) < Math.PI) {
+      events.push(...stepSim(sim, { steer: 0, stance: -1, trick: true }));
+    }
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    expect(sim.skier.tumbling).toBeGreaterThan(0);
+    expect(events.some((e) => e.type === 'trick')).toBe(false);
+    expect(sim.boost).toBe(0);
+  });
+
+  it('a small flip under the commit threshold bails safe', () => {
+    const sim = createSim(1);
+    launch(sim);
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.flip) < 0.9) {
+      stepSim(sim, { steer: 0, stance: -1, trick: true });
+    }
+    while (sim.skier.airTime > 0) stepSim(sim, COAST);
+    expect(sim.skier.tumbling).toBe(0);
+  });
+
   it('steering in the air without the trick button aims, never spins', () => {
     const sim = createSim(1);
     launch(sim);

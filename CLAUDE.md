@@ -11,17 +11,17 @@ banks that steepen), no fences or fail states. The economy is SSX Tricky's:
 the run is measured in speed and distance (HUD is SI: m/s and m), and the
 BOOST TANK (tall vertical bar, left edge; big and slow on both ends) fills
 only from deliberate rewards — coins, gems, and above all TRICKS. Tricks are
-opt-in twice over: hold the TRICK button (= the brake control, meaningless in
-the air) while airborne off a REAL jump (past MIN_TRICK_AIR — never roller
-hops), and steering spins you; without the button, air steering gently aims
-your landing. Land within tolerance of a whole 360 for a big boost; land past
-the half-turn commit still mid-spin and you tumble; a small spin always bails
-safe. A live degree readout (green ✓ near clean) plus NICE!/SPUN OUT banners
-make it legible. Flips are dormant — driving them off the always-held tuck
-stance silently flipped-and-crashed you off every roller; they'll return on
-the trick button + stance later. Racing alone earns nothing. Burning is hard
-acceleration with flames, rainbow trail, FOV slam, rumble. Reward loop over
-penalty loop.
+opt-in twice over: hold the dedicated TRICK button (F) while airborne off a
+REAL jump (past MIN_TRICK_AIR — never roller hops). While F is held, all four
+directions are trick inputs: left/right spins, up/down flips (up = backflip);
+stance stops meaning tuck. Without F, air steering gently aims your landing.
+Land within tolerance of whole rotations for big boost (flips pay more than
+spins); past commit still mid-rotation and you tumble — spins commit at a
+half-turn, flips at ~70 degrees (a 90-degree-pitched landing is a faceplant,
+not a stumble); under commit always bails safe. A live degree readout (green
+✓ when lined up) plus NICE!/SPUN OUT banners make it legible. Racing alone
+earns nothing. Burning is hard acceleration with flames, rainbow trail, FOV
+slam, rumble. Reward loop over penalty loop.
 
 Terrain is a pure height function: a curving centerline (straight near the
 start and uphill of it, for gentle run-ins and predictable physics tests)

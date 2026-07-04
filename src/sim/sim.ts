@@ -1,7 +1,7 @@
 import { Terrain } from './terrain';
 import {
+  FLIP_COMMIT,
   SKIER_RADIUS,
-  SPIN_TOLERANCE,
   TRICK_COMMIT,
   SkierInput,
   SkierState,
@@ -39,6 +39,7 @@ export interface Sim {
 const BOOST_GEM = 0.12;
 const BOOST_COIN = 0.035;
 const BOOST_PER_SPIN = 0.18; // per full 360 landed clean — the top earner
+const BOOST_PER_FLIP = 0.22; // flips pay more — they are scarier
 const BOOST_TRICK_CAP = 0.5; // per landing
 const BOOST_DRAIN = 0.15; // per second while burning
 const NEAR_MISS_RING = 1.1; // meters beyond a collision that still count
@@ -81,21 +82,27 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   sim.nearMissCooldown = Math.max(0, sim.nearMissCooldown - SIM_DT);
 
   if (s.tumbling > 0 && !wasTumbling) {
-    // A spin still on the clock at the moment of tumbling means a blown trick.
-    events.push({ type: 'tumble', trick: Math.abs(s.spin) > TRICK_COMMIT });
+    // Rotation still on the clock at the moment of tumbling = a blown trick.
+    events.push({
+      type: 'tumble',
+      trick: Math.abs(s.spin) > TRICK_COMMIT || Math.abs(s.flip) > FLIP_COMMIT,
+    });
   }
 
-  // Any return to the snow settles the flight's rotation ledger. A trick only
-  // pays if you completed whole turns and landed within tolerance of clean;
-  // the sim's own judge has already tumbled a spin that came down mid-turn.
+  // Any return to the snow settles the flight's rotation ledger. Whole turns
+  // that survived the skier's own landing judge (which tumbles anything past
+  // commit that isn't near-clean) are the trick.
   if (airBefore > 0 && s.airTime === 0) {
-    const landedClean = Math.abs(Math.atan2(Math.sin(s.spin), Math.cos(s.spin))) < SPIN_TOLERANCE;
     const turns = Math.round(Math.abs(s.spin) / (2 * Math.PI));
+    const flipTurns = Math.round(Math.abs(s.flip) / (2 * Math.PI));
     if (s.tumbling === 0) {
       if (airBefore > MIN_STYLISH_AIR) events.push({ type: 'landing', airTime: airBefore });
-      if (turns >= 1 && landedClean) {
-        earnBoost(sim, Math.min(BOOST_TRICK_CAP, turns * BOOST_PER_SPIN));
-        events.push({ type: 'trick', spins: turns, flips: 0 });
+      if (turns >= 1 || flipTurns >= 1) {
+        earnBoost(
+          sim,
+          Math.min(BOOST_TRICK_CAP, turns * BOOST_PER_SPIN + flipTurns * BOOST_PER_FLIP)
+        );
+        events.push({ type: 'trick', spins: turns, flips: flipTurns });
       }
     }
     s.spin = 0;

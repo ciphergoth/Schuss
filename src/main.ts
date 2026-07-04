@@ -109,8 +109,11 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     else if (e.type === 'landing') audio.playThump(e.airTime);
     else if (e.type === 'pickup') audio.playDing(e.gem);
     else if (e.type === 'trick') {
-      audio.playTrick(e.spins);
-      showTrick(`${e.spins * 360}° — NICE!`, '#7dff8a', 1.2);
+      audio.playTrick(e.spins + e.flips);
+      const parts = [];
+      if (e.spins >= 1) parts.push(`${e.spins * 360}°`);
+      if (e.flips >= 1) parts.push(e.flips > 1 ? `${e.flips}x FLIP` : 'FLIP');
+      showTrick(`${parts.join(' + ')} — NICE!`, '#7dff8a', 1.2);
     } else if (e.type === 'tumble' && e.trick) {
       showTrick('SPUN OUT', '#ff6a5a', 1.0);
     }
@@ -131,16 +134,22 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     : `hsl(${35 + sim.boost * 10}, 95%, 58%)`;
   overlay.classList.toggle('visible', skier.tumbling > 0);
 
-  // Live spin readout while airborne past the trick threshold: shows the
-  // rotation and turns green once you're lined up to land it clean. Result
-  // banners (set by showTrick) take priority while they last.
+  // Live rotation readout while airborne: spin and flip degrees, turning
+  // green with a ✓ once every started rotation is lined up to land clean.
+  // Result banners (set by showTrick) take priority while they last.
   if (sim.time >= trickBannerUntil) {
-    const deg = Math.round((Math.abs(skier.spin) * 180) / Math.PI);
-    if (skier.tumbling === 0 && deg >= 20) {
-      const residual = Math.abs(Math.atan2(Math.sin(skier.spin), Math.cos(skier.spin)));
-      const clean = residual < 0.7;
-      trickText.textContent = `${deg}°${clean && deg >= 300 ? ' ✓' : ''}`;
-      trickText.style.color = clean && deg >= 300 ? '#7dff8a' : '#ffffff';
+    const spinDeg = Math.round((Math.abs(skier.spin) * 180) / Math.PI);
+    const flipDeg = Math.round((Math.abs(skier.flip) * 180) / Math.PI);
+    if (skier.tumbling === 0 && (spinDeg >= 20 || flipDeg >= 20)) {
+      const res = (a: number) => Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
+      const clean =
+        (spinDeg < 20 || res(skier.spin) < 0.7) && (flipDeg < 20 || res(skier.flip) < 0.55);
+      const committed = spinDeg >= 300 || flipDeg >= 300;
+      const parts = [];
+      if (spinDeg >= 20) parts.push(`${spinDeg}°`);
+      if (flipDeg >= 20) parts.push(`flip ${flipDeg}°`);
+      trickText.textContent = `${parts.join(' · ')}${clean && committed ? ' ✓' : ''}`;
+      trickText.style.color = clean && committed ? '#7dff8a' : '#ffffff';
       trickText.classList.add('visible');
     } else {
       trickText.classList.remove('visible');
