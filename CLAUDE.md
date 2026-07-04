@@ -15,9 +15,10 @@ on both ends) is the mechanical loop: it fills only from deliberate rewards
 speeds) — and burning it is the speed. The SCORE (top right, big digits,
 uncapped; localStorage BEST beneath) is the ledger of glory: tricks pay
 points (500 spin / 800 frontflip / 1100 backflip per rotation), BONUS STARS
-multiply the next landed trick's POINTS (never fuel; spent on touchdown
-whether you tricked or not; a HUD ×N glows in the star's color while
-armed), and every 250m a SECTOR popup grades average pace on a savage curve
+multiply the next trick's POINTS (never fuel; armed until a trick attempt
+settles — spent by the landed trick it multiplied or by a blown-trick
+tumble, kept through plain landings and crashes; a HUD ×N glows in the
+star's color while armed), and every 250m a SECTOR popup grades average pace on a savage curve
 (25·(avg−12)^2.2 — a full-boost sector outearns several tricks), so fuel
 burned into speed converts to points: tricks → fuel → speed → score. Both
 stars sit ON the arc of a jump popped at the kicker's lip, which flies

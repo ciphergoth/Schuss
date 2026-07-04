@@ -90,7 +90,7 @@ describe('boost economy', () => {
     expect(trick && trick.type === 'trick' && trick.mult).toBe(5);
     expect(sim.score).toBe(2500); // 500 for the 360, x5 — the jackpot ledger
     expect(sim.boost).toBeCloseTo(0.15, 5); // fuel is NOT multiplied
-    expect(sim.trickMult).toBe(1); // spent on touchdown
+    expect(sim.trickMult).toBe(1); // spent by the trick it multiplied
   });
 
   it('the x5 star hangs further out than the x3, both well off the snow', () => {
@@ -291,6 +291,45 @@ describe('boost economy', () => {
     expect(spin.points).toBe(500);
     expect(front.points).toBe(800);
     expect(back.points).toBe(1100);
+  });
+
+  it('an armed star survives trickless landings and waits for the trick', () => {
+    const sim = createSim(1);
+    sim.trickMult = 5;
+    launch(sim);
+    while (sim.skier.airTime > 0) stepSim(sim, COAST); // land, no trick
+    expect(sim.skier.tumbling).toBe(0);
+    expect(sim.trickMult).toBe(5); // no attempt, no spend
+    // The next flight's 360 collects the full x5.
+    launch(sim);
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
+      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 });
+    }
+    while (sim.skier.airTime > 0) stepSim(sim, COAST);
+    expect(sim.score).toBe(2500);
+    expect(sim.trickMult).toBe(1);
+  });
+
+  it('a blown trick spends the star; a plain crash keeps it', () => {
+    const blown = createSim(1);
+    blown.trickMult = 3;
+    launch(blown);
+    while (blown.skier.airTime > 0 && Math.abs(blown.skier.spin) < 4.2) {
+      stepSim(blown, { steer: 0, stance: 0, trickSpin: 1 });
+    }
+    while (blown.skier.airTime > 0) stepSim(blown, COAST);
+    expect(blown.skier.tumbling).toBeGreaterThan(0);
+    expect(blown.trickMult).toBe(1); // the attempt happened; the star is gone
+    // An obstacle hit is not a trick attempt: the star rides out the tumble.
+    const crashed = createSim(1);
+    let oi = 5;
+    while (crashed.terrain.obstaclesForChunk(oi).length === 0) oi++;
+    const obstacle = crashed.terrain.obstaclesForChunk(oi)[0]!;
+    teleport(crashed, obstacle.x, obstacle.z + 3, 10);
+    crashed.trickMult = 3;
+    const events = runCollecting(crashed, 0.5);
+    expect(events.some((e) => e.type === 'tumble' && !e.trick)).toBe(true);
+    expect(crashed.trickMult).toBe(3);
   });
 
   it('a mixed combo scores the variety bonus', () => {

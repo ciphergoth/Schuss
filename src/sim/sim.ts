@@ -109,10 +109,9 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
 
   if (s.tumbling > 0 && !wasTumbling) {
     // Rotation still on the clock at the moment of tumbling = a blown trick.
-    events.push({
-      type: 'tumble',
-      trick: Math.abs(s.spin) > TRICK_COMMIT || Math.abs(s.flip) > FLIP_COMMIT,
-    });
+    const trick = Math.abs(s.spin) > TRICK_COMMIT || Math.abs(s.flip) > FLIP_COMMIT;
+    if (trick) sim.trickMult = 1; // a blown attempt still spends the star
+    events.push({ type: 'tumble', trick });
   }
 
   // Any return to the snow settles the flight's rotation ledger. Whole turns
@@ -144,10 +143,11 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
           mult: sim.trickMult,
           points,
         });
+        // The star is spent by the attempt it multiplied. It survives plain
+        // landings and crashes, staying armed until a trick settles.
+        sim.trickMult = 1;
       }
     }
-    // The star is spent on touchdown either way — trick, no trick, or crash.
-    sim.trickMult = 1;
     s.spin = 0;
     s.flip = 0;
   }
