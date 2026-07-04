@@ -19,6 +19,7 @@ export interface InputSource {
   read: () => SkierInput; // consumes one-shot events (jump); sim stepping only
   peek: () => SkierInput; // current state, safe to call from anywhere
   acted: () => boolean; // has a real (trusted) user input landed this run?
+  resetActed: () => void; // a fresh run must earn its "played" flag again
 }
 
 // Mouse: x steers, y sets stance (top = tuck, bottom = snowplow), held button
@@ -69,12 +70,10 @@ export function setupInput(onRestart: () => void): InputSource {
     code === 'Space' || code === 'ShiftLeft' || code === 'ShiftRight';
 
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyR') {
-      onRestart();
-      acted = false; // the fresh run must earn its "played" flag again
-    } else {
-      noteActivity(e);
-    }
+    // R asks to restart (the game layer confirms and calls resetActed when
+    // it actually happens); it doesn't count as playing the run.
+    if (e.code === 'KeyR') onRestart();
+    else noteActivity(e);
     if (isBoostKey(e.code)) beginCharge();
     down.add(e.code);
   });
@@ -136,6 +135,9 @@ export function setupInput(onRestart: () => void): InputSource {
   return {
     peek: current,
     acted: () => acted,
+    resetActed: () => {
+      acted = false;
+    },
     read: () => {
       const input = current();
       if (pendingJump > 0) {

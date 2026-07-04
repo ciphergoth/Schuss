@@ -48,6 +48,7 @@ const chargeBar = document.getElementById('chargebar')!;
 const chargeFill = document.getElementById('chargefill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
 const pauseScreen = document.getElementById('pause')!;
+const confirmScreen = document.getElementById('confirm')!;
 const trickText = document.getElementById('trick')!;
 
 // A short-lived banner: live spin readout while airborne, result on landing.
@@ -60,23 +61,52 @@ let best = Number(localStorage.getItem(BEST_KEY) ?? '0');
 let sim = createSim(seed);
 let lastInput: SkierInput = { steer: 0, stance: 0 };
 const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
-const input = setupInput(() => {
-  sim = createSim(seed);
-  trickBannerUntil = 0; // sim.time resets to 0; don't let a stale banner linger
-  trickText.classList.remove('visible');
-});
+// R doesn't restart outright anymore — it pauses onto a Y/N confirm, so a
+// stray keypress can't throw away a run.
+const input = setupInput(() => openConfirm());
 
 // Esc or ? pauses: the sim freezes, the cursor is yours, and the pause screen
 // doubles as the key guide.
 let paused = false;
+let confirming = false; // the R restart ask; a special flavor of paused
+let pausedBeforeConfirm = false;
 
 function setPaused(next: boolean): void {
   paused = next;
-  pauseScreen.classList.toggle('visible', paused);
+  pauseScreen.classList.toggle('visible', paused && !confirming);
   audio.setPaused(paused);
 }
 
+function openConfirm(): void {
+  if (confirming) return;
+  confirming = true;
+  pausedBeforeConfirm = paused;
+  confirmScreen.classList.add('visible');
+  pauseScreen.classList.remove('visible');
+  if (!paused) setPaused(true);
+}
+
+function closeConfirm(restart: boolean): void {
+  confirming = false;
+  confirmScreen.classList.remove('visible');
+  if (restart) {
+    sim = createSim(seed);
+    trickBannerUntil = 0; // sim.time resets to 0; don't let a stale banner linger
+    trickText.classList.remove('visible');
+    input.resetActed();
+    setPaused(false);
+  } else {
+    // Back to wherever they came from: the run, or the pause guide.
+    setPaused(pausedBeforeConfirm);
+  }
+}
+
 window.addEventListener('keydown', (e) => {
+  if (confirming) {
+    if (e.code === 'KeyY') closeConfirm(true);
+    else if (e.code === 'KeyN' || e.code === 'Escape') closeConfirm(false);
+    return;
+  }
   if (e.code === 'Escape' || e.key === '?') setPaused(!paused);
 });
 

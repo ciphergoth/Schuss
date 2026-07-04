@@ -171,5 +171,6 @@ friction braking).
   takes 3s, so a tap does nearly nothing.
 - Esc or ? pauses (freezes the sim, suspends audio) and shows the key guide;
   the game starts paused, so the guide doubles as the title screen
-- R starts a fresh run
+- R pauses onto a Y/N confirm (Y restarts, N or Esc resumes) — a stray
+  keypress never throws away a run
 - M toggles sound (sound starts on the first input, per browser autoplay rules)

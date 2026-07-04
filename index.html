@@ -147,7 +147,20 @@
       #pause.visible {
         display: flex;
       }
-      #pause .panel {
+      #confirm {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(10, 14, 40, 0.55);
+        user-select: none;
+      }
+      #confirm.visible {
+        display: flex;
+      }
+      #pause .panel,
+      #confirm .panel {
         background: rgba(18, 24, 64, 0.92);
         border-radius: 14px;
         padding: 26px 34px;
@@ -155,10 +168,21 @@
         text-shadow: 0 1px 3px rgba(0, 0, 40, 0.6);
         min-width: 320px;
       }
-      #pause h1 {
+      #confirm .panel {
+        min-width: 0;
+        text-align: center;
+      }
+      #pause h1,
+      #confirm h1 {
         margin: 0 0 14px;
         font-family: 'Bungee', system-ui, sans-serif;
         font-size: 26px;
+      }
+      #confirm .keys {
+        font-size: 17px;
+      }
+      #confirm .keys b {
+        color: #ffd34d;
       }
       #pause table {
         border-collapse: collapse;
@@ -227,7 +251,7 @@
           </tr>
           <tr>
             <td>R</td>
-            <td>Fresh run</td>
+            <td>Restart &mdash; asks Y/N first</td>
           </tr>
           <tr>
             <td>M</td>
@@ -236,6 +260,14 @@
         </table>
         <div class="hint">
           Esc or ? resumes &middot; ride the walls, graze the obstacles, thread the gold
+        </div>
+      </div>
+    </div>
+    <div id="confirm">
+      <div class="panel">
+        <h1>Fresh run?</h1>
+        <div class="keys">
+          <b>Y</b> &mdash; restart &nbsp;&middot;&nbsp; <b>N</b> &mdash; keep skiing
         </div>
       </div>
     </div>
