@@ -366,6 +366,36 @@ describe('boost economy', () => {
     expect(crashed.trickMult).toBe(3);
   });
 
+  it('repeating your last trick docks the pay; variety restores it', () => {
+    const sim = createSim(1);
+    const spin360 = (): SimEvent[] => {
+      launch(sim);
+      const events: SimEvent[] = [];
+      while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
+        events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
+      }
+      while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+      return events;
+    };
+    const backflip = (): void => {
+      launch(sim, 18, 3);
+      while (sim.skier.airTime > 0 && Math.abs(sim.skier.flip) < 2 * Math.PI - 0.12) {
+        stepSim(sim, { steer: 0, stance: 0, trickFlip: 1 });
+      }
+      while (sim.skier.airTime > 0) stepSim(sim, COAST);
+    };
+    spin360();
+    expect(sim.score).toBe(500); // fresh trick, full pay
+    const events = spin360();
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick && trick.type === 'trick' && trick.repeat).toBe(true);
+    expect(sim.score).toBe(850); // the encore pays 70%: +350
+    backflip();
+    expect(sim.score).toBe(1950); // variety restores full pay: +1100
+    spin360();
+    expect(sim.score).toBe(2450); // the spin is fresh again after the flip
+  });
+
   it('a mixed combo scores the variety bonus', () => {
     const sim = createSim(1);
     launch(sim, 18, 3);

@@ -171,9 +171,11 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
         parts.push(e.flips > 1 ? `${e.flips}x ${name}` : name);
       }
       const big = e.spins >= 2 || e.flips >= 2;
-      const word = mixed ? 'INCREDIBLE!' : big ? 'OUTSTANDING!' : 'NICE!';
+      // Repeating your last trick demotes the praise: the judges are bored.
+      const word = e.repeat ? 'AGAIN?' : mixed ? 'INCREDIBLE!' : big ? 'OUTSTANDING!' : 'NICE!';
       const mult = e.mult > 1 ? ` ×${e.mult}` : '';
-      const color = e.mult >= 5 ? '#ff3ddc' : e.mult >= 3 ? '#ffd34d' : '#7dff8a';
+      const color =
+        e.mult >= 5 ? '#ff3ddc' : e.mult >= 3 ? '#ffd34d' : e.repeat ? '#b9c4d6' : '#7dff8a';
       showTrick(
         `${parts.join(' + ')}${mult} — ${word} +${e.points.toLocaleString('en')}`,
         color,

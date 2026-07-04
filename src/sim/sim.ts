@@ -22,7 +22,15 @@ export type SimEvent =
   | { type: 'landing'; airTime: number }
   | { type: 'pickup'; x: number; z: number }
   | { type: 'bonus'; x: number; z: number; mult: number } // trick-bonus star grabbed
-  | { type: 'trick'; spins: number; flips: number; flipBack: boolean; mult: number; points: number }
+  | {
+      type: 'trick';
+      spins: number;
+      flips: number;
+      flipBack: boolean;
+      mult: number;
+      points: number;
+      repeat: boolean; // same trick as the last one landed: docked pay
+    }
   | { type: 'sector'; speed: number; points: number } // 250m pace grade
   | { type: 'tumble'; trick: boolean }; // trick: blown rotation vs plain crash
 
@@ -33,6 +41,7 @@ export interface Sim {
   boost: number; // 0..1 tank — rewards fill it, burning it is the speed
   boosting: boolean; // burning right now (render/audio read this)
   trickMult: number; // armed by a bonus star; multiplies the next trick's POINTS
+  lastTrick: string | null; // signature of the last landed trick (repeat check)
   score: number; // the ledger of glory: trick points + sector pace, uncapped
   nextSectorZ: number; // where the next 250m pace grade lands
   sectorStartTime: number;
@@ -64,6 +73,7 @@ const BOOST_PER_SPIN = 0.15;
 const BOOST_PER_FRONTFLIP = 0.2;
 const BOOST_PER_BACKFLIP = 0.26;
 const COMBO_MULT = 1.35; // spin AND flip landed in the same flight
+const REPEAT_FACTOR = 0.7; // same trick as last time: the judges are bored
 const BOOST_TRICK_CAP = 0.65; // per landing
 const BOOST_DRAIN = 0.15; // per second while burning
 const NEAR_MISS_RING = 1.1; // meters beyond a collision that still count
@@ -84,6 +94,7 @@ export function createSim(seed: number): Sim {
     boost: 0,
     boosting: false,
     trickMult: 1,
+    lastTrick: null,
     score: 0,
     nextSectorZ: -SECTOR_LENGTH,
     sectorStartTime: 0,
@@ -137,9 +148,16 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
         if (turns >= 1 && flipTurns >= 1) fuel *= COMBO_MULT; // variety bonus
         earnBoost(sim, Math.min(BOOST_TRICK_CAP, fuel));
         // Points are uncapped and star-multiplied — the ledger of glory.
+        // Repeating your own last trick bores the judges: the base pay is
+        // docked before the star multiplies it. Fuel is never docked — the
+        // mechanical loop doesn't judge style.
         const perFlipPts = flipBack ? POINTS_PER_BACKFLIP : POINTS_PER_FRONTFLIP;
         let points = turns * POINTS_PER_SPIN + flipTurns * perFlipPts;
         if (turns >= 1 && flipTurns >= 1) points *= COMBO_MULT;
+        const signature = `${turns}:${flipTurns}:${flipTurns > 0 ? (flipBack ? 'b' : 'f') : '-'}`;
+        const repeat = sim.lastTrick === signature;
+        if (repeat) points *= REPEAT_FACTOR;
+        sim.lastTrick = signature;
         points = Math.round(points * sim.trickMult);
         sim.score += points;
         events.push({
@@ -149,6 +167,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
           flipBack,
           mult: sim.trickMult,
           points,
+          repeat,
         });
         // The star is spent by the attempt it multiplied. It survives plain
         // landings and crashes, staying armed until a trick settles.

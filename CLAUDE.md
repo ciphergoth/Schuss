@@ -32,7 +32,9 @@ MIN_TRICK_AIR — never roller hops) A/D spins, W frontflips, S backflips, and
 you can aim with the mouse mid-trick. Land within tolerance of whole
 rotations for the payout; spinning WHILE flipping syncs the
 spin to the flip's rate so combos land as one package, and a landed
-spin+flip mix earns a 1.35x variety bonus — the praise ladder reserves
+spin+flip mix earns a 1.35x variety bonus, while repeating your own last
+trick docks the base points to 70% before any star multiplies them (fuel
+is never docked; the banner asks AGAIN?) — the praise ladder reserves
 INCREDIBLE for mixes, OUTSTANDING for big same-type tricks, NICE for
 singles. Land within tolerance of the correct facing on every rotated axis
 (spin ~52 degrees, flip ~43 — ONE gate for payout and bail alike) or the

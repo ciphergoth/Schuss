@@ -46,7 +46,7 @@ describe('effects', () => {
     expect(fx.sparks.liveCount()).toBe(0);
     // A landed trick earns the orbit for a couple of seconds.
     fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, [
-      { type: 'trick', spins: 1, flips: 0, flipBack: false, mult: 5, points: 2500 },
+      { type: 'trick', spins: 1, flips: 0, flipBack: false, mult: 5, points: 2500, repeat: false },
     ]);
     fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, []);
     expect(fx.sparks.liveCount()).toBeGreaterThan(0);
