@@ -37,10 +37,17 @@ describe('effects', () => {
     expect(peak).toBeGreaterThan(300); // the barrage happened
   });
 
-  it('an armed star trails sparkles until it is spent', () => {
+  it('orbit sparkles are a score afterglow, not an armed-star status light', () => {
     const fx = new Effects(new THREE.Scene());
     const sim = createSim(1);
+    // An armed star alone spawns nothing — quiet screen while nothing happens.
     sim.trickMult = 5;
+    fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, []);
+    expect(fx.sparks.liveCount()).toBe(0);
+    // A landed trick earns the orbit for a couple of seconds.
+    fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, [
+      { type: 'trick', spins: 1, flips: 0, flipBack: false, mult: 5, points: 2500 },
+    ]);
     fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, []);
     expect(fx.sparks.liveCount()).toBeGreaterThan(0);
   });

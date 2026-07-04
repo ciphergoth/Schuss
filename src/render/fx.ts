@@ -282,6 +282,10 @@ export class Effects {
   readonly pyro: Particles; // fireworks: big additive sprites, sky-sized
   private trail: Trail;
   private shells: Shell[] = [];
+  // Score afterglow: sparkles orbit the skier briefly after a payout.
+  private orbitUntil = 0;
+  private orbitColor = new THREE.Color();
+  private lastTime = 0;
   private white = new THREE.Color(0xffffff);
   private powder = new THREE.Color(0xe8f1fb);
   private gold = new THREE.Color(0xffd34d);
@@ -354,6 +358,10 @@ export class Effects {
     const skierPos = new THREE.Vector3(s.x, s.y, s.z);
     const grounded = s.airTime === 0 && s.tumbling === 0;
 
+    // R resets sim.time to zero; stale afterglow must not survive it.
+    if (sim.time < this.lastTime) this.orbitUntil = 0;
+    this.lastTime = sim.time;
+
     // Carve/plow spray from the skis, thrown to the outside of the turn.
     const intensity = grounded
       ? Math.min(1, (Math.abs(input.steer) * 0.8 + Math.max(0, input.stance)) * (s.speed / 25))
@@ -415,11 +423,18 @@ export class Effects {
         } else if (mixed) {
           this.volley(sim, 3, NEON_PALETTE, 1.5);
         }
+        // Scoring earns the orbiting sparkles for a moment.
+        this.orbitColor.copy(e.mult >= 5 ? this.magenta : e.mult >= 3 ? this.gold : this.cyan);
+        this.orbitUntil = sim.time + Math.min(2.5, 1.4 + e.points / 8000);
       } else if (e.type === 'sector') {
         // The pace grade pays in the sky too: a polite pair for any paid
         // sector, a full barrage for a jackpot.
         if (e.points >= 5000) this.volley(sim, 7, NEON_PALETTE, 2.5);
         else if (e.points > 0) this.volley(sim, 3, NEON_PALETTE, 1);
+        if (e.points > 0) {
+          this.orbitColor.copy(this.gold);
+          this.orbitUntil = sim.time + (e.points >= 5000 ? 2.5 : 1.6);
+        }
       } else if (e.type === 'pickup') {
         this.particles.spawn(
           new THREE.Vector3(e.x, s.y + 1.1, e.z),
@@ -470,12 +485,11 @@ export class Effects {
       this.shells.splice(i, 1);
     }
 
-    // An armed star orbits the skier as a ring of sparkles — you carry the
-    // multiplier visibly until a trick spends it. Airborne it goes silent
-    // with everything else: a jump is when the continuous effects hold
-    // their breath, and the landing is the pop.
-    if (sim.trickMult > 1 && grounded) {
-      const color = sim.trickMult >= 5 ? this.magenta : this.gold;
+    // Orbiting sparkles are a score afterglow, not a status light: they
+    // circle the skier only for a couple of seconds after a payout (in its
+    // color), then leave the screen alone. The armed star still shows on
+    // the HUD and in the trail's dye.
+    if (grounded && sim.time < this.orbitUntil) {
       for (let k = 0; k < 2; k++) {
         const a = sim.time * 7 + k * Math.PI;
         this.sparks.spawn(
@@ -487,7 +501,7 @@ export class Effects {
           new THREE.Vector3(0, 0.8, 0),
           0.4,
           1,
-          color
+          this.orbitColor
         );
       }
     }
