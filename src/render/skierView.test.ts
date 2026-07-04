@@ -61,6 +61,24 @@ describe('skier rig', () => {
     expect(spun.group.rotation.y).toBeCloseTo(steered.group.rotation.y, 10);
   });
 
+  it('positive flip (S, backflip) lifts the ski tips; negative dips them', () => {
+    // Pins the world-space pitch convention: the flip rotation composes
+    // after the yaw, so positive rotation.x raises the nose. Getting this
+    // backwards once mislabeled front- and backflips.
+    const tipVsTail = (flip: number) => {
+      const view = createSkierView(new THREE.Scene());
+      const state = { ...createSkier(), flip };
+      updateSkierView(view, state, { steer: 0, stance: 0 }, 1 / 60);
+      view.group.updateMatrixWorld(true);
+      const ski = view.skis[0];
+      const tip = ski.localToWorld(new THREE.Vector3(0, 0, 0.9));
+      const tail = ski.localToWorld(new THREE.Vector3(0, 0, -0.9));
+      return tip.y - tail.y;
+    };
+    expect(tipVsTail(0.5)).toBeGreaterThan(0.3); // backflip: nose up
+    expect(tipVsTail(-0.5)).toBeLessThan(-0.3); // frontflip: nose over
+  });
+
   it('tumbling somersaults the skier and recovery lands upright', () => {
     const view = createSkierView(new THREE.Scene());
     const state = { ...createSkier(), tumbling: 0.6 };

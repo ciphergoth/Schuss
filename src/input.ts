@@ -109,7 +109,8 @@ export function setupInput(onRestart: () => void): InputSource {
     const charge =
       chargeStart === null ? 0 : Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS);
     const trickSpin = (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0);
-    const trickFlip = (key('KeyS') ? 1 : 0) - (key('KeyW') ? 1 : 0); // W = backflip
+    // Push forward to flip forward: W = frontflip, S (pull back) = backflip.
+    const trickFlip = (key('KeyS') ? 1 : 0) - (key('KeyW') ? 1 : 0);
     return { steer, stance, charge, boost: chargeStart !== null, trickSpin, trickFlip };
   };
 

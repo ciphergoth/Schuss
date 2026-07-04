@@ -98,7 +98,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   if (airBefore > 0 && s.airTime === 0) {
     const turns = Math.round(Math.abs(s.spin) / (2 * Math.PI));
     const flipTurns = Math.round(Math.abs(s.flip) / (2 * Math.PI));
-    const flipBack = s.flip < 0; // W = backflip = negative pitch
+    const flipBack = s.flip > 0; // positive pitch lifts the tips: backflip (S)
     if (s.tumbling === 0) {
       if (airBefore > MIN_STYLISH_AIR) events.push({ type: 'landing', airTime: airBefore });
       if (turns >= 1 || flipTurns >= 1) {

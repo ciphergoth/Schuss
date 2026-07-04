@@ -13,7 +13,7 @@ BOOST TANK (tall vertical bar, left edge; big and slow on both ends) fills
 only from deliberate rewards — coins, gems, and above all TRICKS. The mouse
 is REQUIRED and never changes meaning (x steers / aims the landing, y is
 stance, buttons brake/boost); WASD exists only for tricks: in real air (past
-MIN_TRICK_AIR — never roller hops) A/D spins, W backflips, S frontflips, and
+MIN_TRICK_AIR — never roller hops) A/D spins, W frontflips, S backflips, and
 you can aim with the mouse mid-trick. Land within tolerance of whole
 rotations for big boost (flips pay more than spins); past commit still
 mid-rotation and you tumble — spins commit at a half-turn, flips at ~70
@@ -109,7 +109,8 @@ friction braking).
   y sets stance (top = tuck, bottom = snowplow); hold button for full snowplow
 - Touch: first finger works like the mouse position, second finger = full
   snowplow
-- WASD: trick keys ONLY (in real air: A/D spin, W backflip, S frontflip).
+- WASD: trick keys ONLY (in real air: A/D spin, W frontflip, S backflip —
+  push forward to flip forward, pull back to flip back).
   There is no keyboard steering — the mouse is required.
 - Boost/jump is ONE button, SSX-style (Space, Shift, or right mouse): holding
   burns the tank (grounded only) and preloads a jump (skier crouches);

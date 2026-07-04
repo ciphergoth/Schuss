@@ -157,8 +157,8 @@ describe('boost economy', () => {
       return Math.max(Math.abs(sim.skier.spin), Math.abs(sim.skier.flip));
     };
     const spun = rotate({ steer: 0, stance: 0, trickSpin: 1 });
-    const front = rotate({ steer: 0, stance: 0, trickFlip: 1 });
-    const back = rotate({ steer: 0, stance: 0, trickFlip: -1 });
+    const front = rotate({ steer: 0, stance: 0, trickFlip: -1 }); // W
+    const back = rotate({ steer: 0, stance: 0, trickFlip: 1 }); // S
     expect(spun).toBeGreaterThan(front);
     expect(front).toBeGreaterThan(back);
   });
@@ -178,8 +178,8 @@ describe('boost economy', () => {
       return sim.boost;
     };
     const spin = land({ steer: 0, stance: 0, trickSpin: 1 });
-    const front = land({ steer: 0, stance: 0, trickFlip: 1 });
-    const back = land({ steer: 0, stance: 0, trickFlip: -1 });
+    const front = land({ steer: 0, stance: 0, trickFlip: -1 }); // W
+    const back = land({ steer: 0, stance: 0, trickFlip: 1 }); // S
     expect(back).toBeGreaterThan(front);
     expect(front).toBeGreaterThan(spin);
     expect(spin).toBeGreaterThan(0.1);

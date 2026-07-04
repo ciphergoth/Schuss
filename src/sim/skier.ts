@@ -7,7 +7,8 @@ export interface SkierInput {
   charge?: number; // 0..1 jump charge currently held; render feedback only
   boost?: boolean; // burn the tank (Shift / right mouse)
   trickSpin?: number; // -1..1 from the dedicated trick keys (A/D)
-  trickFlip?: number; // -1..1 from the dedicated trick keys (W = back, S = front)
+  trickFlip?: number; // -1..1 from the trick keys: W = -1 = frontflip (nose
+  // over), S = +1 = backflip (nose up) — push forward to flip forward
 }
 
 export interface SkierState {
@@ -213,8 +214,8 @@ export function stepSkier(
     steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
     if (state.airTime > MIN_TRICK_AIR) {
       state.spin += SPIN_RATE * (input.trickSpin ?? 0) * dt;
-      const flipInput = input.trickFlip ?? 0; // negative = backflip (W)
-      state.flip += (flipInput < 0 ? BACKFLIP_RATE : FRONTFLIP_RATE) * flipInput * dt;
+      const flipInput = input.trickFlip ?? 0; // positive = backflip (S)
+      state.flip += (flipInput > 0 ? BACKFLIP_RATE : FRONTFLIP_RATE) * flipInput * dt;
     }
     state.speed = Math.max(
       0,
