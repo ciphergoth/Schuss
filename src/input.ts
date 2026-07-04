@@ -26,9 +26,10 @@ export interface InputSource {
 // the mouse position, a second finger is full snowplow. Keyboard steering and
 // stance still work and win while held. R starts a fresh run.
 //
-// Jump is its own control: hold Space to charge (the skier crouches), release
-// to pop — bigger with a longer hold. No stance side effect.
-const MAX_CHARGE_MS = 800;
+// Jump is its own control: hold Space to charge (the skier crouches and the
+// charge bar fills), release to pop. Energy is linear in hold time, and the
+// full pop takes a deliberate, several-second hold.
+const MAX_CHARGE_MS = 3000;
 
 export function setupInput(onRestart: () => void): InputSource {
   const down = new Set<string>();
@@ -57,9 +58,8 @@ export function setupInput(onRestart: () => void): InputSource {
   };
   const releaseCharge = () => {
     if (chargeStart === null) return;
-    // A tap is a tap: barely any charge, barely any pop. The old 0.15 floor
-    // (on top of a generous base pop) made every tap read as a full jump.
-    pendingJump = Math.max(0.05, Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS));
+    // No floor: a tap banks almost no energy and pops almost not at all.
+    pendingJump = Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS);
     chargeStart = null;
   };
 

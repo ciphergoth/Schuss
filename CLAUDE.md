@@ -165,8 +165,10 @@ friction braking).
   push forward to flip forward, pull back to flip back).
   There is no keyboard steering — the mouse is required.
 - Boost/jump is ONE button, SSX-style (Space, Shift, or right mouse): holding
-  burns the tank (grounded only) and preloads a jump (skier crouches);
-  releasing pops — bigger with a longer hold (up to 0.8s).
+  burns the tank (grounded only) and preloads a jump (skier crouches; a gold
+  charge bar beside the tank appears while held); releasing pops. Jump ENERGY
+  is linear in hold time — vy goes with sqrt(charge) — and a full charge
+  takes 3s, so a tap does nearly nothing.
 - Esc or ? pauses (freezes the sim, suspends audio) and shows the key guide;
   the game starts paused, so the guide doubles as the title screen
 - R starts a fresh run

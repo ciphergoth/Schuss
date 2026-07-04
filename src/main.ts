@@ -44,6 +44,8 @@ const scoreText = document.getElementById('score')!;
 const bestText = document.getElementById('best')!;
 const multText = document.getElementById('mult')!;
 const boostFill = document.getElementById('boostfill') as HTMLElement;
+const chargeBar = document.getElementById('chargebar')!;
+const chargeFill = document.getElementById('chargefill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
 const pauseScreen = document.getElementById('pause')!;
 const trickText = document.getElementById('trick')!;
@@ -203,6 +205,14 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   boostFill.style.background = sim.boosting
     ? 'hsl(18, 100%, 58%)'
     : `hsl(${35 + sim.boost * 10}, 95%, 58%)`;
+  // The jump charge bar lives beside the tank and only exists while the
+  // button is held: gold while filling, white when the pop is maxed.
+  const charge = lastInput.charge ?? 0;
+  chargeBar.classList.toggle('visible', charge > 0);
+  if (charge > 0) {
+    chargeFill.style.height = `${charge * 100}%`;
+    chargeFill.style.background = charge >= 1 ? '#ffffff' : '#ffd34d';
+  }
   overlay.classList.toggle('visible', skier.tumbling > 0);
 
   // Live rotation readout while airborne: spin and flip degrees, turning

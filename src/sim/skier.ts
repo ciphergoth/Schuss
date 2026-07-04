@@ -57,10 +57,9 @@ const LAUNCH_EXTRA_ACCEL = 6;
 const LAUNCH_MAX_VY_RATIO = 0.35;
 // Jump: a released charge pops the skier off the snow. Deliberately modest —
 // a hop for line adjustments and a little extra off a lip; real air comes
-// from the terrain. The charge has to be worth the wait: a tap is a tiny
-// bunny hop, only a real hold approaches the full pop (the old 1.8 base on
-// a 3.8 max meant a tap already flew at half strength).
-const JUMP_POP_MIN = 1.5;
+// from the terrain. Jump ENERGY is linear in hold time (the charge fraction),
+// so vy goes with its square root: a tap releases almost nothing, and the
+// full pop takes a several-second hold to bank (see MAX_CHARGE_MS).
 const JUMP_POP_MAX = 3.8;
 // Invisible outer barrier where the bank steepens past ~55 degrees: hitting
 // it caroms you back into the course (grounded or flying). Banks up to there
@@ -352,10 +351,11 @@ export function stepSkier(
   state.y = ground;
   state.vy = followVy;
 
-  // A released jump charge pops the skier off the snow.
+  // A released jump charge pops the skier off the snow. Energy scales with
+  // the charge, so velocity scales with its square root.
   const jump = input.jump ?? 0;
   if (jump > 0) {
-    state.vy = Math.max(state.vy, 0) + JUMP_POP_MIN + (JUMP_POP_MAX - JUMP_POP_MIN) * jump;
+    state.vy = Math.max(state.vy, 0) + JUMP_POP_MAX * Math.sqrt(jump);
     state.y += state.vy * dt;
     state.airTime = dt;
     return;
