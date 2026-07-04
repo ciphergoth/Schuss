@@ -15,10 +15,14 @@ is REQUIRED and never changes meaning (x steers / aims the landing, y is
 stance, buttons brake/boost); WASD exists only for tricks: in real air (past
 MIN_TRICK_AIR — never roller hops) A/D spins, W frontflips, S backflips, and
 you can aim with the mouse mid-trick. Land within tolerance of whole
-rotations for big boost (flips pay more than spins); past commit still
-mid-rotation and you tumble — spins commit at a half-turn, flips at ~70
-degrees (a 90-degree-pitched landing is a faceplant, not a stumble); under
-commit always bails safe. A live degree readout (green ✓ when lined up) plus
+rotations for big boost (spin 0.15 < frontflip 0.20 < backflip 0.26 per
+rotation, matching their rotation speeds); spinning WHILE flipping syncs the
+spin to the flip's rate so combos land as one package, and a landed
+spin+flip mix earns a 1.35x variety bonus — the praise ladder reserves
+INCREDIBLE for mixes, OUTSTANDING for big same-type tricks, NICE for
+singles. Past commit still mid-rotation and you tumble — spins commit at a
+half-turn, flips at ~70 degrees (a 90-degree-pitched landing is a faceplant,
+not a stumble); under commit always bails safe. A live degree readout (green ✓ when lined up) plus
 NICE!/SPUN OUT banners make it legible. Racing alone earns nothing. Burning
 is hard acceleration with flames, rainbow trail, FOV slam, rumble. Reward
 loop over penalty loop.

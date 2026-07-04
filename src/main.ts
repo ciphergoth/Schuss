@@ -116,7 +116,12 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
         const name = e.flipBack ? 'BACKFLIP' : 'FRONTFLIP';
         parts.push(e.flips > 1 ? `${e.flips}x ${name}` : name);
       }
-      showTrick(`${parts.join(' + ')} — NICE!`, '#7dff8a', 1.2);
+      // Praise ladder: INCREDIBLE is reserved for mixed combos; big
+      // same-type tricks are OUTSTANDING; a single rotation is NICE.
+      const mixed = e.spins >= 1 && e.flips >= 1;
+      const big = e.spins >= 2 || e.flips >= 2;
+      const word = mixed ? 'INCREDIBLE!' : big ? 'OUTSTANDING!' : 'NICE!';
+      showTrick(`${parts.join(' + ')} — ${word}`, '#7dff8a', 1.2);
     } else if (e.type === 'tumble' && e.trick) {
       showTrick('SPUN OUT', '#ff6a5a', 1.0);
     }

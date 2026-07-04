@@ -163,6 +163,31 @@ describe('boost economy', () => {
     expect(front).toBeGreaterThan(back);
   });
 
+  it('combo sync: spinning while flipping locks both rotations together', () => {
+    const sim = createSim(1);
+    launch(sim);
+    for (let i = 0; i < Math.round(1 / SIM_DT); i++) {
+      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1, trickFlip: 1 });
+    }
+    // Same rate on both axes: the combo can land as one clean package.
+    expect(Math.abs(sim.skier.spin)).toBeCloseTo(Math.abs(sim.skier.flip), 6);
+  });
+
+  it('a mixed combo pays more than the sum of its tricks', () => {
+    const sim = createSim(1);
+    launch(sim, 18, 3); // room for the slow synced rotation
+    while (
+      sim.skier.airTime > 0 &&
+      Math.min(Math.abs(sim.skier.spin), Math.abs(sim.skier.flip)) < 2 * Math.PI - 0.12
+    ) {
+      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1, trickFlip: 1 }); // 360 + backflip
+    }
+    while (sim.skier.airTime > 0) stepSim(sim, COAST);
+    expect(sim.skier.tumbling).toBe(0);
+    // Un-multiplied sum is 0.15 + 0.26 = 0.41; the variety bonus beats it.
+    expect(sim.boost).toBeGreaterThan(0.5);
+  });
+
   it('harder tricks pay more: backflip > frontflip > spin', () => {
     const land = (input: SkierInput) => {
       const sim = createSim(1);

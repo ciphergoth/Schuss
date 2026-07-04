@@ -213,9 +213,14 @@ export function stepSkier(
     const airTuck = Math.max(0, -input.stance);
     steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
     if (state.airTime > MIN_TRICK_AIR) {
-      state.spin += SPIN_RATE * (input.trickSpin ?? 0) * dt;
+      const spinInput = input.trickSpin ?? 0;
       const flipInput = input.trickFlip ?? 0; // positive = backflip (S)
-      state.flip += (flipInput > 0 ? BACKFLIP_RATE : FRONTFLIP_RATE) * flipInput * dt;
+      const flipRate = flipInput > 0 ? BACKFLIP_RATE : FRONTFLIP_RATE;
+      // Combo sync: spinning WHILE flipping slows the spin to the flip's
+      // rate, so both rotations complete in lockstep and can land together.
+      const spinRate = flipInput !== 0 ? flipRate : SPIN_RATE;
+      state.spin += spinRate * spinInput * dt;
+      state.flip += flipRate * flipInput * dt;
     }
     state.speed = Math.max(
       0,

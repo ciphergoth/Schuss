@@ -39,11 +39,13 @@ export interface Sim {
 const BOOST_GEM = 0.12;
 const BOOST_COIN = 0.035;
 // Trick pay follows difficulty (slower rotation = more air needed = more
-// money): spin < frontflip < backflip.
+// money): spin < frontflip < backflip. Mixing TYPES in one flight is the
+// hardest thing of all — variety multiplies, repetition merely adds.
 const BOOST_PER_SPIN = 0.15;
 const BOOST_PER_FRONTFLIP = 0.2;
 const BOOST_PER_BACKFLIP = 0.26;
-const BOOST_TRICK_CAP = 0.5; // per landing
+const COMBO_MULT = 1.35; // spin AND flip landed in the same flight
+const BOOST_TRICK_CAP = 0.65; // per landing
 const BOOST_DRAIN = 0.15; // per second while burning
 const NEAR_MISS_RING = 1.1; // meters beyond a collision that still count
 const NEAR_MISS_MIN_SPEED = 12;
@@ -103,7 +105,9 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
       if (airBefore > MIN_STYLISH_AIR) events.push({ type: 'landing', airTime: airBefore });
       if (turns >= 1 || flipTurns >= 1) {
         const perFlip = flipBack ? BOOST_PER_BACKFLIP : BOOST_PER_FRONTFLIP;
-        earnBoost(sim, Math.min(BOOST_TRICK_CAP, turns * BOOST_PER_SPIN + flipTurns * perFlip));
+        let pay = turns * BOOST_PER_SPIN + flipTurns * perFlip;
+        if (turns >= 1 && flipTurns >= 1) pay *= COMBO_MULT; // variety bonus
+        earnBoost(sim, Math.min(BOOST_TRICK_CAP, pay));
         events.push({ type: 'trick', spins: turns, flips: flipTurns, flipBack });
       }
     }
