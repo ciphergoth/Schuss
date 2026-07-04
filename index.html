@@ -23,6 +23,38 @@
         line-height: 1.5;
         user-select: none;
       }
+      #scoreboard {
+        position: fixed;
+        top: 12px;
+        right: 18px;
+        text-align: right;
+        color: white;
+        text-shadow: 0 1px 3px rgba(0, 0, 40, 0.6);
+        user-select: none;
+        pointer-events: none;
+      }
+      #score {
+        font-size: 34px;
+        font-weight: 800;
+        font-style: italic;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 1px;
+      }
+      #best {
+        font-size: 14px;
+        opacity: 0.75;
+        font-variant-numeric: tabular-nums;
+      }
+      #mult {
+        display: none;
+        font-size: 30px;
+        font-weight: 800;
+        font-style: italic;
+        margin-top: 4px;
+      }
+      #mult.visible {
+        display: block;
+      }
       #boostbar {
         position: fixed;
         left: 14px;
@@ -124,6 +156,11 @@
     <div id="hud">
       <div id="stats"></div>
     </div>
+    <div id="scoreboard">
+      <div id="score">0</div>
+      <div id="best"></div>
+      <div id="mult"></div>
+    </div>
     <div id="boostbar"><div id="boostfill"></div></div>
     <div id="overlay">Wipeout!</div>
     <div id="trick"></div>
@@ -151,8 +188,13 @@
             <td>WASD in the air</td>
             <td>
               Tricks, off a real jump: A/D spin, W frontflip, S backflip &mdash; land clean (whole
-              rotations) for big boost. Mix a spin WITH a flip for the real money
+              rotations) for boost and points. Mix a spin WITH a flip, and grab a &times;3/&times;5
+              star on the way, for the real money
             </td>
+          </tr>
+          <tr>
+            <td>Every 250 m</td>
+            <td>Your sector pace is graded &mdash; fast sectors pay savage points</td>
           </tr>
           <tr>
             <td>R</td>

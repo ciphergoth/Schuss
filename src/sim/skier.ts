@@ -91,10 +91,10 @@ const MIN_TRICK_AIR = 0.35; // seconds aloft before the trick keys engage
 const SPIN_RATE = 6; // full 360 in ~1.05s
 const FRONTFLIP_RATE = 5; // ~1.26s per rotation
 const BACKFLIP_RATE = 4.2; // ~1.5s per rotation — the money trick
-export const TRICK_COMMIT = 3.3; // radians of spin (~half-turn) before you must complete
-export const FLIP_COMMIT = 1.2; // radians of flip (~70 deg) before you must complete
-export const SPIN_TOLERANCE = 0.7; // radians from a whole turn to land clean
-export const FLIP_TOLERANCE = 0.55;
+export const TRICK_COMMIT = 3.6; // radians of spin (~200 deg) before you must complete
+export const FLIP_COMMIT = 1.4; // radians of flip (~80 deg) before you must complete
+export const SPIN_TOLERANCE = 0.9; // radians from a whole turn to land clean
+export const FLIP_TOLERANCE = 0.75; // a 90-deg-pitched landing still faceplants
 
 export function createSkier(): SkierState {
   return {

@@ -244,7 +244,7 @@ export class Effects {
           big ? 60 : 35,
           big ? this.magenta : this.gold
         );
-      } else {
+      } else if (e.type === 'nearMiss') {
         // Near-miss: a puff plucked off the obstacle you grazed.
         this.particles.spawn(
           new THREE.Vector3(e.x, s.y + 1.2, e.z),

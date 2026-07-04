@@ -7,28 +7,38 @@ site, no server.
 
 Design rules: punishment is light — obstacle hits cost a 1.3s tumble and most
 of your speed, never the run; the walls contain you physically (rideable
-banks that steepen), no fences or fail states. The economy is SSX Tricky's:
-the run is measured in speed and distance (HUD is SI: m/s and m), and the
-BOOST TANK (tall vertical bar, left edge; big and slow on both ends) fills
-only from deliberate rewards — coins (off-plan detours) and above all
-TRICKS, multiplied by BONUS STARS: a gold x3 and magenta x5 hang high over
-every kicker's flight path (the x5 needs a full-charge jump at speed);
-grabbing one arms a multiplier for the next landed trick, spent on
-touchdown whether you tricked or not. Big jumps are pure upside — the old
-gem arcs sat on the default flight path and punished jumping over them. The mouse
+banks that steepen), no fences or fail states. The economy is two ledgers
+doing one loop. The BOOST TANK (tall vertical bar, left edge; big and slow
+on both ends) is the mechanical loop: it fills only from deliberate rewards
+— coins (off-plan detours) and above all TRICKS (flat, capped fuel: spin
+0.15 < frontflip 0.20 < backflip 0.26 per rotation, matching their rotation
+speeds) — and burning it is the speed. The SCORE (top right, big digits,
+uncapped; localStorage BEST beneath) is the ledger of glory: tricks pay
+points (500 spin / 800 frontflip / 1100 backflip per rotation), BONUS STARS
+multiply the next landed trick's POINTS (never fuel; spent on touchdown
+whether you tricked or not; a HUD ×N glows in the star's color while
+armed), and every 250m a SECTOR popup grades average pace on a savage curve
+(25·(avg−12)^2.2 — a full-boost sector outearns several tricks), so fuel
+burned into speed converts to points: tricks → fuel → speed → score. Both
+stars sit ON the arc of a jump popped at the kicker's lip, which flies
+nearly flat past it — gold x3 at 13m out, magenta x5 at 24m (needs the lip
+pop AND 21+ m/s to still be flying there); a hop before the ramp crests
+early and is meters below them, so the reward is timing, never jumping
+early. Near misses celebrate (whoosh, puff) but pay nothing. The mouse
 is REQUIRED and never changes meaning (x steers / aims the landing, y is
 stance, buttons brake/boost); WASD exists only for tricks: in real air (past
 MIN_TRICK_AIR — never roller hops) A/D spins, W frontflips, S backflips, and
 you can aim with the mouse mid-trick. Land within tolerance of whole
-rotations for big boost (spin 0.15 < frontflip 0.20 < backflip 0.26 per
-rotation, matching their rotation speeds); spinning WHILE flipping syncs the
+rotations for the payout; spinning WHILE flipping syncs the
 spin to the flip's rate so combos land as one package, and a landed
 spin+flip mix earns a 1.35x variety bonus — the praise ladder reserves
 INCREDIBLE for mixes, OUTSTANDING for big same-type tricks, NICE for
-singles. Past commit still mid-rotation and you tumble — spins commit at a
-half-turn, flips at ~70 degrees (a 90-degree-pitched landing is a faceplant,
-not a stumble); under commit always bails safe. A live degree readout (green ✓ when lined up) plus
-NICE!/SPUN OUT banners make it legible. Racing alone earns nothing. Burning
+singles. Past commit still mid-rotation and you tumble — spins commit just
+past a half-turn, flips at ~80 degrees (a 90-degree-pitched landing is a
+faceplant, not a stumble); under commit always bails safe, and tolerances
+are player-generous (spin 0.9 rad, flip 0.75 rad from clean). A live degree readout (green ✓ when lined up) plus
+NICE!/SPUN OUT banners make it legible. Racing alone never fills the tank —
+but past the first sector line it does score. Burning
 is hard acceleration with flames, rainbow trail, FOV slam, rumble. Reward
 loop over penalty loop.
 
@@ -36,8 +46,7 @@ Terrain is a pure height function: a curving centerline (straight near the
 start and uphill of it, for gentle run-ins and predictable physics tests)
 plus a U-channel cross-section whose width breathes (10-20m half-width; wide
 zones get obstacle slaloms and wider pickup weaves). Kickers are steerable
-features with cyan gem arcs floating in their flight paths — jump off the
-lip to collect (50 pts + flow surge vs 10 for floor coins). The render layer
+features with the trick-bonus stars floating past their lips. The render layer
 draws the course as a ribbon clipped just past the bounce barrier, so the
 walls stay low and the world beyond shows: neon edge poles, a city skyline
 with beacon-topped towers, hot-air balloons, clouds below.

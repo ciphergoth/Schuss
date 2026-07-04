@@ -234,6 +234,25 @@ export class GameAudio {
     });
   }
 
+  // Sector pace paid out: a low-to-high sweep, a full fanfare for a jackpot.
+  playSector(jackpot: boolean): void {
+    if (!this.nodes) return;
+    const { ctx, master } = this.nodes;
+    const t = ctx.currentTime;
+    const notes = jackpot ? [392, 523, 659, 784, 1046] : [392, 523];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.07, t + i * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.25);
+      osc.connect(gain).connect(master);
+      osc.start(t + i * 0.08);
+      osc.stop(t + i * 0.08 + 0.27);
+    });
+  }
+
   // Landed trick: an ascending arpeggio, one extra note for a full turn+.
   playTrick(turns: number): void {
     if (!this.nodes) return;

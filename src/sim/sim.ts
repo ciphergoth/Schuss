@@ -19,7 +19,8 @@ export type SimEvent =
   | { type: 'landing'; airTime: number }
   | { type: 'pickup'; x: number; z: number }
   | { type: 'bonus'; x: number; z: number; mult: number } // trick-bonus star grabbed
-  | { type: 'trick'; spins: number; flips: number; flipBack: boolean; mult: number }
+  | { type: 'trick'; spins: number; flips: number; flipBack: boolean; mult: number; points: number }
+  | { type: 'sector'; speed: number; points: number } // 250m pace grade
   | { type: 'tumble'; trick: boolean }; // trick: blown rotation vs plain crash
 
 export interface Sim {
@@ -28,17 +29,31 @@ export interface Sim {
   time: number;
   boost: number; // 0..1 tank — rewards fill it, burning it is the speed
   boosting: boolean; // burning right now (render/audio read this)
-  trickMult: number; // armed by a bonus star; pays out on the next landed trick
+  trickMult: number; // armed by a bonus star; multiplies the next trick's POINTS
+  score: number; // the ledger of glory: trick points + sector pace, uncapped
+  nextSectorZ: number; // where the next 250m pace grade lands
+  sectorStartTime: number;
   nearMissCooldown: number;
   collected: Set<string>; // pickup + bonus ids gathered this run
 }
 
-// The SSX economy: the run is measured in speed and distance, and the tank
-// fills ONLY from deliberate rewards — coins (detours) and above all landed
-// tricks, multiplied by any bonus star grabbed high over a kicker. Merely
-// racing earns nothing: near-misses and plain landings celebrate with
-// events/fx but pay no boost. The tank is big and slow on both ends.
+// The economy has two ledgers doing different jobs. The BOOST TANK is the
+// mechanical loop: coins and tricks fill it (flat, capped), burning it is
+// speed. The SCORE is the uncapped ledger of glory: tricks pay big points
+// (multiplied by bonus stars — that's where the x5 jackpot lives), and every
+// 250m sector grades your pace SAVAGELY, so fuel burned into a fast sector
+// converts to points. Tricks -> fuel -> speed -> points: one economy.
 const BOOST_COIN = 0.035;
+const POINTS_COIN = 50;
+const POINTS_PER_SPIN = 500;
+const POINTS_PER_FRONTFLIP = 800;
+const POINTS_PER_BACKFLIP = 1100;
+export const SECTOR_LENGTH = 250;
+const SECTOR_MIN_SPEED = 12; // average m/s before a sector pays anything
+// Savage: points = 25 * (avg - 12)^2.2 — a 20 m/s sector ~2400, a
+// full-boost 30 m/s sector ~20000, worth several big tricks.
+const SECTOR_COEFF = 25;
+const SECTOR_EXP = 2.2;
 // Trick pay follows difficulty (slower rotation = more air needed = more
 // money): spin < frontflip < backflip. Mixing TYPES in one flight is the
 // hardest thing of all — variety multiplies, repetition merely adds.
@@ -66,6 +81,9 @@ export function createSim(seed: number): Sim {
     boost: 0,
     boosting: false,
     trickMult: 1,
+    score: 0,
+    nextSectorZ: -SECTOR_LENGTH,
+    sectorStartTime: 0,
     nearMissCooldown: 0,
     collected: new Set(),
   };
@@ -107,17 +125,24 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     if (s.tumbling === 0) {
       if (airBefore > MIN_STYLISH_AIR) events.push({ type: 'landing', airTime: airBefore });
       if (turns >= 1 || flipTurns >= 1) {
+        // Fuel is flat and capped — the mechanical loop.
         const perFlip = flipBack ? BOOST_PER_BACKFLIP : BOOST_PER_FRONTFLIP;
-        let pay = turns * BOOST_PER_SPIN + flipTurns * perFlip;
-        if (turns >= 1 && flipTurns >= 1) pay *= COMBO_MULT; // variety bonus
-        // An armed bonus star multiplies the whole landed trick.
-        earnBoost(sim, Math.min(BOOST_TRICK_CAP, pay) * sim.trickMult);
+        let fuel = turns * BOOST_PER_SPIN + flipTurns * perFlip;
+        if (turns >= 1 && flipTurns >= 1) fuel *= COMBO_MULT; // variety bonus
+        earnBoost(sim, Math.min(BOOST_TRICK_CAP, fuel));
+        // Points are uncapped and star-multiplied — the ledger of glory.
+        const perFlipPts = flipBack ? POINTS_PER_BACKFLIP : POINTS_PER_FRONTFLIP;
+        let points = turns * POINTS_PER_SPIN + flipTurns * perFlipPts;
+        if (turns >= 1 && flipTurns >= 1) points *= COMBO_MULT;
+        points = Math.round(points * sim.trickMult);
+        sim.score += points;
         events.push({
           type: 'trick',
           spins: turns,
           flips: flipTurns,
           flipBack,
           mult: sim.trickMult,
+          points,
         });
       }
     }
@@ -149,6 +174,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
       if (dx * dx + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS && Math.abs(dy) < 1.5) {
         sim.collected.add(pickup.id);
         earnBoost(sim, BOOST_COIN);
+        sim.score += POINTS_COIN;
         events.push({ type: 'pickup', x: pickup.x, z: pickup.z });
       }
     }
@@ -165,6 +191,19 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
         events.push({ type: 'bonus', x: star.x, z: star.z, mult: star.mult });
       }
     }
+  }
+
+  // Sector pace grade: every 250m of course, average speed converts to
+  // points on a savage curve. This is where burned boost becomes score.
+  if (s.z <= sim.nextSectorZ) {
+    const elapsed = sim.time - sim.sectorStartTime;
+    const avg = SECTOR_LENGTH / Math.max(elapsed, 0.001);
+    const over = Math.max(0, avg - SECTOR_MIN_SPEED);
+    const points = Math.round(SECTOR_COEFF * Math.pow(over, SECTOR_EXP));
+    sim.score += points;
+    events.push({ type: 'sector', speed: avg, points });
+    sim.nextSectorZ -= SECTOR_LENGTH;
+    sim.sectorStartTime = sim.time;
   }
 
   return events;

@@ -41,6 +41,7 @@ describe('boost economy', () => {
     const events = runCollecting(sim, 8);
     expect(events.some((e) => e.type === 'landing')).toBe(true);
     expect(sim.boost).toBe(0); // fuel requires coins or tricks
+    expect(sim.score).toBe(0); // and the run-in is before the first sector
   });
 
   it('coins fill the tank', () => {
@@ -54,9 +55,10 @@ describe('boost economy', () => {
     teleport(sim, coin!.x, coin!.z + 2, 12);
     runCollecting(sim, 1);
     expect(sim.boost).toBeGreaterThan(0.05);
+    expect(sim.score).toBe(50 * sim.collected.size); // coins pay pocket change
   });
 
-  it('a bonus star arms a multiplier that pays out on the next landed trick', () => {
+  it('a bonus star multiplies the next trick POINTS; fuel stays flat', () => {
     const sim = createSim(1);
     // A kicker whose landing zone is obstacle-free: the flight coasts ~25m.
     let index = 3;
@@ -67,39 +69,86 @@ describe('boost economy', () => {
     ) {
       index++;
     }
-    const star = sim.terrain.bonusesForChunk(index).find((b) => b.mult === 3)!;
-    // Fly through the star, then spin a 360 and land it.
+    const star = sim.terrain.bonusesForChunk(index).find((b) => b.mult === 5)!;
+    sim.nextSectorZ = -1e9; // teleporting would make the sector clock a lie
+    // Fly through the x5 (the x3 hangs behind the start), spin a 360, land.
     const s = sim.skier;
     s.x = star.x;
     s.z = star.z + 2;
-    s.y = star.y - 0.6; // through the x3's window but sinking below the x5's
+    s.y = star.y - 0.6;
     s.heading = sim.terrain.trackHeading(star.z);
     s.speed = 15;
-    s.vy = 0;
+    s.vy = -1;
     s.airTime = 0.4;
     const events: SimEvent[] = [];
     while (sim.skier.airTime > 0 && Math.abs(s.spin) < 2 * Math.PI - 0.15) {
       events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
     }
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
-    expect(events.some((e) => e.type === 'bonus' && e.mult === 3)).toBe(true);
+    expect(events.some((e) => e.type === 'bonus' && e.mult === 5)).toBe(true);
     const trick = events.find((e) => e.type === 'trick');
-    expect(trick && trick.type === 'trick' && trick.mult).toBe(3);
-    expect(sim.boost).toBeCloseTo(0.45, 5); // 0.15 x3 — a plain 360, tripled
+    expect(trick && trick.type === 'trick' && trick.mult).toBe(5);
+    expect(sim.score).toBe(2500); // 500 for the 360, x5 — the jackpot ledger
+    expect(sim.boost).toBeCloseTo(0.15, 5); // fuel is NOT multiplied
     expect(sim.trickMult).toBe(1); // spent on touchdown
   });
 
-  it('the x5 star hangs higher than the x3', () => {
+  it('the x5 star hangs further out than the x3, both well off the snow', () => {
     const sim = createSim(1);
     let index = 3;
     while (!sim.terrain.jumpForChunk(index)) index++;
+    const jump = sim.terrain.jumpForChunk(index)!;
     const stars = sim.terrain.bonusesForChunk(index);
     const b3 = stars.find((b) => b.mult === 3)!;
     const b5 = stars.find((b) => b.mult === 5)!;
-    expect(b5.y).toBeGreaterThan(b3.y + 1.5);
+    // Difficulty is distance along the flight: the x5 needs to still be
+    // flying where the x3 line has already landed.
+    const past = (b: { z: number }) => jump.zLip - b.z;
+    expect(past(b5)).toBeGreaterThan(past(b3) + 5);
     // Both far above the snow beneath them: grounded skiers can't graze them.
     expect(b3.y - sim.terrain.height(b3.x, b3.z)).toBeGreaterThan(2.5);
     expect(b5.y - sim.terrain.height(b5.x, b5.z)).toBeGreaterThan(4);
+  });
+
+  // Ride the kicker's line from uphill at a given speed, releasing a
+  // full-charge jump when z first passes releaseAt (grounded). Returns the
+  // bonus multipliers collected during the flight past the lip.
+  function rideKicker(speed: number, releaseOffset: number | null): number[] {
+    const sim = createSim(1);
+    let index = 3;
+    while (!sim.terrain.jumpForChunk(index)) index++;
+    const jump = sim.terrain.jumpForChunk(index)!;
+    const t = sim.terrain;
+    const s = sim.skier;
+    const z0 = jump.zLip + 54;
+    s.x = t.centerX(z0) + jump.xOffset;
+    s.z = z0;
+    s.heading = t.trackHeading(z0);
+    s.speed = speed;
+    s.y = t.height(s.x, s.z);
+    let fired = false;
+    const mults: number[] = [];
+    for (let i = 0; i < Math.round(8 / SIM_DT); i++) {
+      const doJump =
+        !fired && releaseOffset !== null && s.z <= jump.zLip + releaseOffset && s.airTime === 0;
+      if (doJump) fired = true;
+      for (const e of stepSim(sim, { steer: 0, stance: 0, jump: doJump ? 1 : 0 })) {
+        if (e.type === 'bonus') mults.push(e.mult);
+      }
+      if (s.z < jump.zLip - 30) break;
+    }
+    return mults;
+  }
+
+  it('the x5 rewards a jump timed at the lip, not a hop before the ramp', () => {
+    // Full-charge pop 1m before the lip, at speed: the flat fast arc threads
+    // both stars.
+    expect(rideKicker(26, 1)).toContain(5);
+    // The same pop released before the ramp even starts crests early and
+    // sinks below the x5 line — the exploit this placement retires.
+    expect(rideKicker(26, 16)).not.toContain(5);
+    // And no pop at all gets neither: the natural lip launch drops away.
+    expect(rideKicker(21, null)).toEqual([]);
   });
 
   it('a tumble still fires its event but keeps the tank', () => {
@@ -219,7 +268,7 @@ describe('boost economy', () => {
     expect(sim.boost).toBeGreaterThan(0.5);
   });
 
-  it('harder tricks pay more: backflip > frontflip > spin', () => {
+  it('harder tricks pay more, in fuel and in points', () => {
     const land = (input: SkierInput) => {
       const sim = createSim(1);
       launch(sim, 18, 3); // extra hangtime for the slow rotations
@@ -231,14 +280,55 @@ describe('boost economy', () => {
       }
       while (sim.skier.airTime > 0) stepSim(sim, COAST);
       expect(sim.skier.tumbling).toBe(0);
-      return sim.boost;
+      return { fuel: sim.boost, points: sim.score };
     };
     const spin = land({ steer: 0, stance: 0, trickSpin: 1 });
     const front = land({ steer: 0, stance: 0, trickFlip: -1 }); // W
     const back = land({ steer: 0, stance: 0, trickFlip: 1 }); // S
-    expect(back).toBeGreaterThan(front);
-    expect(front).toBeGreaterThan(spin);
-    expect(spin).toBeGreaterThan(0.1);
+    expect(back.fuel).toBeGreaterThan(front.fuel);
+    expect(front.fuel).toBeGreaterThan(spin.fuel);
+    expect(spin.fuel).toBeGreaterThan(0.1);
+    expect(spin.points).toBe(500);
+    expect(front.points).toBe(800);
+    expect(back.points).toBe(1100);
+  });
+
+  it('a mixed combo scores the variety bonus', () => {
+    const sim = createSim(1);
+    launch(sim, 18, 3);
+    while (
+      sim.skier.airTime > 0 &&
+      Math.min(Math.abs(sim.skier.spin), Math.abs(sim.skier.flip)) < 2 * Math.PI - 0.12
+    ) {
+      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1, trickFlip: 1 }); // 360 + backflip
+    }
+    while (sim.skier.airTime > 0) stepSim(sim, COAST);
+    expect(sim.skier.tumbling).toBe(0);
+    expect(sim.score).toBe(2160); // (500 + 1100) x 1.35
+  });
+
+  it('sectors grade pace savagely: fast pays big, slow pays nothing', () => {
+    const race = (speed: number, input: SkierInput) => {
+      const sim = createSim(1);
+      teleport(sim, 0, -1, speed);
+      for (let i = 0; i < Math.round(60 / SIM_DT); i++) {
+        const sector = stepSim(sim, input).find((e) => e.type === 'sector');
+        if (sector && sector.type === 'sector') return sector;
+      }
+      throw new Error('never crossed the sector line');
+    };
+    // Coasting at race pace: the savage curve makes this worth several tricks.
+    const fast = race(29, COAST);
+    expect(fast.points).toBeGreaterThan(3000);
+    expect(fast.speed).toBeGreaterThan(15);
+    // Below the pay floor a sector is worth exactly nothing. Backdating the
+    // sector clock pins the average without racing a knife-edge crawl.
+    const slow = createSim(1);
+    teleport(slow, 0, -8, 15);
+    slow.nextSectorZ = -10;
+    slow.sectorStartTime = slow.time - 25; // 250m in 25s: 10 m/s average
+    const sector = runCollecting(slow, 1).find((e) => e.type === 'sector');
+    expect(sector && sector.type === 'sector' && sector.points).toBe(0);
   });
 
   it('landing mid-flip is a wipeout', () => {

@@ -38,6 +38,9 @@ const camera = createCamera();
 const skierView = createSkierView(scene);
 const fx = new Effects(scene);
 const stats = document.getElementById('stats')!;
+const scoreText = document.getElementById('score')!;
+const bestText = document.getElementById('best')!;
+const multText = document.getElementById('mult')!;
 const boostFill = document.getElementById('boostfill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
 const pauseScreen = document.getElementById('pause')!;
@@ -45,6 +48,10 @@ const trickText = document.getElementById('trick')!;
 
 // A short-lived banner: live spin readout while airborne, result on landing.
 let trickBannerUntil = 0;
+
+// Best score survives across runs and sessions.
+const BEST_KEY = 'skigame-best';
+let best = Number(localStorage.getItem(BEST_KEY) ?? '0');
 
 let sim = createSim(seed);
 let lastInput: SkierInput = { steer: 0, stance: 0 };
@@ -125,7 +132,24 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       const big = e.spins >= 2 || e.flips >= 2;
       const word = mixed ? 'INCREDIBLE!' : big ? 'OUTSTANDING!' : 'NICE!';
       const mult = e.mult > 1 ? ` ×${e.mult}` : '';
-      showTrick(`${parts.join(' + ')}${mult} — ${word}`, '#7dff8a', 1.2);
+      const color = e.mult >= 5 ? '#ff3ddc' : e.mult >= 3 ? '#ffd34d' : '#7dff8a';
+      showTrick(
+        `${parts.join(' + ')}${mult} — ${word} +${e.points.toLocaleString('en')}`,
+        color,
+        1.4
+      );
+    } else if (e.type === 'sector') {
+      // The pace grade: a fast sector is a jackpot, a slow one just a fact.
+      if (e.points > 0) {
+        audio.playSector(e.points >= 5000);
+        showTrick(
+          `SECTOR ${Math.round(e.speed)} m/s — +${e.points.toLocaleString('en')}`,
+          e.points >= 5000 ? '#ffd34d' : '#9fd4ff',
+          1.4
+        );
+      } else {
+        showTrick(`SECTOR ${Math.round(e.speed)} m/s`, '#9fd4ff', 1.0);
+      }
     } else if (e.type === 'tumble' && e.trick) {
       showTrick('SPUN OUT', '#ff6a5a', 1.0);
     }
@@ -137,9 +161,21 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
 
   audio.update(skier, lastInput, sim.boosting, sim.terrain.stickinessAt(skier.x, skier.z));
 
-  // The run IS the score: speed and distance, full SI. The vertical bar on
-  // the left is the boost tank, SSX-style.
+  // Speed and distance top-left, the score ledger top-right, the vertical
+  // bar on the left is the boost tank — SSX-style.
   stats.textContent = `${Math.round(skier.speed)} m/s · ${Math.round(distanceSkied(sim))} m`;
+  scoreText.textContent = sim.score.toLocaleString('en');
+  if (sim.score > best) {
+    best = sim.score;
+    localStorage.setItem(BEST_KEY, String(best));
+  }
+  bestText.textContent = best > 0 ? `BEST ${best.toLocaleString('en')}` : '';
+  // The armed star glows under the score in its own color until touchdown.
+  multText.classList.toggle('visible', sim.trickMult > 1);
+  if (sim.trickMult > 1) {
+    multText.textContent = `×${sim.trickMult}`;
+    multText.style.color = sim.trickMult >= 5 ? '#ff3ddc' : '#ffd34d';
+  }
   boostFill.style.height = `${sim.boost * 100}%`;
   boostFill.style.background = sim.boosting
     ? 'hsl(18, 100%, 58%)'
@@ -152,14 +188,12 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   if (sim.time >= trickBannerUntil) {
     const spinDeg = Math.round((Math.abs(skier.spin) * 180) / Math.PI);
     const flipDeg = Math.round((Math.abs(skier.flip) * 180) / Math.PI);
-    const armed = sim.trickMult > 1 && skier.airTime > 0;
-    if (skier.tumbling === 0 && (spinDeg >= 20 || flipDeg >= 20 || armed)) {
+    if (skier.tumbling === 0 && (spinDeg >= 20 || flipDeg >= 20)) {
       const res = (a: number) => Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
       const clean =
         (spinDeg < 20 || res(skier.spin) < 0.7) && (flipDeg < 20 || res(skier.flip) < 0.55);
       const committed = spinDeg >= 300 || flipDeg >= 300;
       const parts = [];
-      if (armed) parts.push(`×${sim.trickMult}`);
       if (spinDeg >= 20) parts.push(`${spinDeg}°`);
       if (flipDeg >= 20) parts.push(`flip ${flipDeg}°`);
       trickText.textContent = `${parts.join(' · ')}${clean && committed ? ' ✓' : ''}`;

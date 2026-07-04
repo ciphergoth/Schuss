@@ -319,9 +319,7 @@ export class Terrain {
     return pickups;
   }
 
-  // Trick-bonus stars above each kicker: x3 where a fast, clean approach
-  // peaks; x5 higher and further — full charge jump at the lip, at speed, or
-  // you are not getting it. Both sit along the lip's flight direction.
+  // Trick-bonus stars past each kicker, along the lip's flight direction.
   bonusesForChunk(index: number): TrickBonus[] {
     const cached = this.chunkBonuses.get(index);
     if (cached) return cached;
@@ -336,8 +334,14 @@ export class Terrain {
         x: core + Math.sin(heading) * dist,
         z: jump.zLip - Math.cos(heading) * dist,
       });
-      bonuses.push({ id: `b${index}:3`, ...along(7), y: yLip + 3.2, mult: 3 });
-      bonuses.push({ id: `b${index}:5`, ...along(10), y: yLip + 5.6, mult: 5 });
+      // Both stars sit ON the arc of a jump popped at the lip (which flies
+      // nearly flat past it), so the reward is for TIMING, not for hopping
+      // early — a pre-ramp hop crests before the lip and is meters below
+      // these by the time it reaches them. Difficulty is distance: the x5
+      // needs the lip pop AND real speed (21+ m/s) to still be up here 24m
+      // out — every pre-ramp hop is meters below by then.
+      bonuses.push({ id: `b${index}:3`, ...along(13), y: yLip + 1.6, mult: 3 });
+      bonuses.push({ id: `b${index}:5`, ...along(24), y: yLip + 0.5, mult: 5 });
     }
     this.chunkBonuses.set(index, bonuses);
     return bonuses;
