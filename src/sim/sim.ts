@@ -118,10 +118,10 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   }
 
   // Any return to the snow settles the flight's rotation ledger. A rotation
-  // only counts if it arrived within tolerance of the correct facing (45
-  // degrees) — the same bar the landing judge tumbles by past commit. Under
-  // commit a wide residual is a safe bail, not a payday: without this gate
-  // a 185-degree spin rounded up to a paid 360.
+  // only counts if it arrived within tolerance of the correct facing — the
+  // SAME bar the landing judge tumbles by past commit; one gate for payout
+  // and bail alike. Under commit a wide residual is a safe bail, not a
+  // payday: without this gate a 185-degree spin rounded up to a paid 360.
   if (airBefore > 0 && s.airTime === 0) {
     const spinClean = Math.abs(residual(s.spin)) <= SPIN_TOLERANCE;
     const flipClean = Math.abs(residual(s.flip)) <= FLIP_TOLERANCE;

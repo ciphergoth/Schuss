@@ -34,11 +34,12 @@ rotations for the payout; spinning WHILE flipping syncs the
 spin to the flip's rate so combos land as one package, and a landed
 spin+flip mix earns a 1.35x variety bonus — the praise ladder reserves
 INCREDIBLE for mixes, OUTSTANDING for big same-type tricks, NICE for
-singles. Land within 45 degrees of the correct facing on every rotated
-axis or the rotation doesn't count: past commit that's a tumble — spins
-commit just past a half-turn, flips at ~80 degrees (a 90-degree-pitched
-landing is a faceplant, not a stumble) — and under commit it's a safe bail
-that pays nothing (never a round-up to a paid 360). A live degree readout (green ✓ when lined up) plus
+singles. Land within tolerance of the correct facing on every rotated axis
+(spin ~52 degrees, flip ~43 — ONE gate for payout and bail alike) or the
+rotation doesn't count: past commit that's a tumble — spins commit just
+past a half-turn, flips at ~80 degrees (a 90-degree-pitched landing is a
+faceplant, not a stumble) — and under commit it's a safe bail that pays
+nothing (never a round-up to a paid 360). A live degree readout (green ✓ when lined up) plus
 NICE!/SPUN OUT banners make it legible. Racing alone never fills the tank —
 but past the first sector line it does score. Burning
 is hard acceleration with flames, rainbow trail, FOV slam, rumble. Reward

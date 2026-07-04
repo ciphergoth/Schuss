@@ -222,7 +222,7 @@ describe('boost economy', () => {
     sim.trickMult = 3;
     launch(sim);
     // Rotate to ~190 degrees — under commit, but Math.round would have
-    // called it a full turn and paid it before the 45-degree facing gate.
+    // called it a full turn and paid it before the facing gate.
     while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 3.3) {
       stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 });
     }
