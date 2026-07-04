@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CHUNK_LENGTH, Terrain, WALL_WIDTH } from '../sim/terrain';
+import { CHUNK_LENGTH, Terrain, WALL_WIDTH, jumpDrift } from '../sim/terrain';
 import { SECTOR_LENGTH } from '../sim/sim';
 import { hash2, mulberry32 } from '../sim/rng';
 
@@ -216,12 +216,15 @@ export class ChunkRenderer {
     // like an airstrip, funneling you onto the ramp.
     const jump = this.terrain.jumpForChunk(index);
     if (jump) {
+      // A hip's core curves along the rider's drift line; poles and studs
+      // follow it so the lit runway IS the line to ride.
+      const coreAt = (u: number) => jump.xOffset + jumpDrift(jump, u);
       // Poles grow with the kicker: an L reads as a bigger event from afar.
       const poleHeight = 8 + jump.lipHeight * 1.5;
       const neonGeo = new THREE.CylinderGeometry(0.22, 0.22, poleHeight, 6);
       const neon = this.neons[index % this.neons.length]!;
       for (const side of [-1, 1]) {
-        const x = this.terrain.centerX(jump.zLip) + jump.xOffset + side * (jump.halfWidth + 0.6);
+        const x = this.terrain.centerX(jump.zLip) + coreAt(0) + side * (jump.halfWidth + 0.6);
         const pole = new THREE.Mesh(neonGeo, neon);
         pole.position.set(x, this.terrain.height(x, jump.zLip) + poleHeight / 2, jump.zLip);
         group.add(pole);
@@ -231,7 +234,7 @@ export class ChunkRenderer {
       for (let u = 4; u <= jump.rampLength + 14; u += 6) {
         const z = jump.zLip + u;
         for (const side of [-1, 1]) {
-          const x = this.terrain.centerX(z) + jump.xOffset + side * (jump.halfWidth + 0.5);
+          const x = this.terrain.centerX(z) + coreAt(u) + side * (jump.halfWidth + 0.5);
           const stud = new THREE.Mesh(studGeo, neon);
           stud.position.set(x, this.terrain.height(x, z) + 0.2, z);
           group.add(stud);

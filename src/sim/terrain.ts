@@ -37,6 +37,7 @@ interface SectionSpec {
   obstacleChance: number;
   obstacleCount: number;
   crudThreshold: number; // higher = cleaner snow (patch noise cutoff)
+  bermRoom: number; // meters of bank kept crud-free: the rideable berm line
 }
 
 const TERRACE_LENGTH = 50;
@@ -58,6 +59,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleChance: 0.3,
     obstacleCount: 1,
     crudThreshold: 0.62,
+    bermRoom: 0,
   },
   // High walls, no room, pure nerve. Nothing in the corridor but you.
   narrows: {
@@ -72,6 +74,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleChance: 0,
     obstacleCount: 0,
     crudThreshold: 0.95,
+    bermRoom: 0,
   },
   // The playground: wide open, obstacle slaloms, kickers of every size.
   bowl: {
@@ -86,6 +89,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleChance: 0.8,
     obstacleCount: 3,
     crudThreshold: 0.55,
+    bermRoom: 0,
   },
   // The grade breaks away mid-section: raw speed, clean snow, big Ls only.
   plunge: {
@@ -100,6 +104,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleChance: 0,
     obstacleCount: 0,
     crudThreshold: 0.78,
+    bermRoom: 0,
   },
   // Giant terraces; every edge is a launch with a landing below.
   steps: {
@@ -114,6 +119,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleChance: 0,
     obstacleCount: 0,
     crudThreshold: 0.7,
+    bermRoom: 0,
   },
   // Big banked S-turns where carving the wall is the racing line.
   sweeper: {
@@ -128,6 +134,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleChance: 0.25,
     obstacleCount: 1,
     crudThreshold: 0.62,
+    bermRoom: 5,
   },
 };
 
@@ -179,10 +186,10 @@ export interface TrickBonus {
 }
 
 // Kickers now come in personalities: three sizes, plus an optional step-down
-// landing — the ground past the lip falls away for float and a soft catch.
-// (Hip kickers — yawed ramps that throw the flight across the track — wait
-// on a physics addition: a pure heightfield yaw can't redirect a kinematic
-// skier's heading, so the "throw" would be a lie.)
+// landing (the ground past the lip falls away for float and a soft catch)
+// or a HIP — the approach pad tilts into a banked corner, and the
+// gravity-turn physics slings the launch heading sideways across the track.
+// No fake geometry: the throw is the cross-slope force, honestly earned.
 export type JumpKind = 'S' | 'M' | 'L';
 
 interface JumpGeometry {
@@ -204,10 +211,23 @@ export interface Jump {
   rampLength: number;
   lipHeight: number;
   stepDown: number; // extra drop scooped out of the landing (0 = flat kicker)
+  hip: number; // banked-pad throw direction: -1 / 0 / +1 (toward -x / straight / +x)
 }
 
 const JUMP_EDGE = 1.8; // soft shoulder from full height to flat floor
 const SCOOP_EDGE = 5; // step-down landings get wide, gentle shoulders
+// Hip pads: the approach tilts up to HIP_TILT cross-slope by the lip over a
+// HIP_LANE run-up; gravity's cross-slope turn converts that into a launch
+// heading thrown ~HIP_THROW radians across the track at plan-ish speeds
+// (slower = thrown harder, which is physics being a good game designer).
+const HIP_TILT = 0.38;
+const HIP_LANE = 20;
+const HIP_THROW = 0.3;
+// Riding the pad slides the skier ~this far toward the throw side by the
+// lip (measured by simulated rides; self-limiting where the tilt fades).
+// The whole pad — core, lip, tilt — bends along that drift line, so the
+// slung rider still exits over a true lip; stars hang off the drifted exit.
+const HIP_DRIFT = 7.5;
 
 // Star placement per kicker size, tuned against simulated flight arcs (see
 // boost.test's rideKicker): distance past the lip along the flight line and
@@ -233,6 +253,15 @@ function smoothstep(t: number): number {
 
 function clamp01(t: number): number {
   return Math.min(1, Math.max(0, t));
+}
+
+// Where a jump's core line sits laterally (relative to xOffset) at q meters
+// uphill of the lip: flat kickers run straight, hip pads bend along the
+// rider's drift. Shared by the heightfield, the steering aim, and the
+// render layer's runway lights.
+export function jumpDrift(jump: Jump, q: number): number {
+  if (jump.hip === 0) return 0;
+  return jump.hip * HIP_DRIFT * clamp01(1 - q / (jump.rampLength + HIP_LANE));
 }
 
 export class Terrain {
@@ -427,7 +456,17 @@ export class Terrain {
     const xOffset = Math.max(-maxOffset, Math.min(maxOffset, this.planOffset(zLip)));
     const variantRoll = hash2(this.seed, index, 7333);
     const stepDown = !opening && kind !== 'S' && variantRoll < 0.3 ? lipHeight * 1.6 : 0;
-    const jump: Jump = { zLip, xOffset, halfWidth, kind, rampLength, lipHeight, stepDown };
+    // Hips throw toward the center so the slung flight stays over the floor;
+    // they need lateral room for the landing.
+    const hip =
+      !opening && stepDown === 0 && halfChannel >= 13 && variantRoll > 0.75
+        ? Math.abs(xOffset) > 1
+          ? -Math.sign(xOffset)
+          : hash2(this.seed, index, 9257) < 0.5
+            ? -1
+            : 1
+        : 0;
+    const jump: Jump = { zLip, xOffset, halfWidth, kind, rampLength, lipHeight, stepDown, hip };
     this.chunkJumps.set(index, jump);
     return jump;
   }
@@ -442,8 +481,10 @@ export class Terrain {
     for (const i of [index, index - 1]) {
       const jump = this.jumpForChunk(i);
       if (!jump) continue;
-      const p = d - jump.xOffset; // lateral offset from the kicker core
       const q = z - jump.zLip; // uphill distance from the lip
+      // Hips bend the whole pad along the rider's drift line; a flat
+      // kicker's core runs straight (drift 0).
+      const p = d - jump.xOffset - jumpDrift(jump, q); // offset from the (curved) core
       if (q >= 0 && q <= jump.rampLength) {
         const rise = 1 - q / jump.rampLength;
         const lateral = Math.abs(p) - jump.halfWidth;
@@ -452,6 +493,19 @@ export class Terrain {
           y += jump.lipHeight * rise * rise * fade;
         }
       }
+      // Hip pad: the approach and ramp tilt progressively into a banked
+      // corner (raised on the side away from the throw). The tilt fades out
+      // a few meters past the lip, under where the flight has already left.
+      if (jump.hip !== 0) {
+        const build = smoothstep(clamp01((jump.rampLength + HIP_LANE - q) / HIP_LANE));
+        const fadeOut = q < 0 ? smoothstep(clamp01((q + 8) / 6)) : 1;
+        const tilt = HIP_TILT * build * fadeOut;
+        if (tilt > 0) {
+          const w = jump.halfWidth + JUMP_EDGE + 2;
+          y += -jump.hip * tilt * Math.max(-w, Math.min(w, p));
+        }
+      }
+
       // Step-down scoop: the floor past the lip falls away and gently
       // returns, so the flight floats and the catch is soft.
       if (jump.stepDown > 0 && q < 0) {
@@ -467,6 +521,33 @@ export class Terrain {
       }
     }
     return y;
+  }
+
+  // How much a hip pad is steering the course line here: the pad's thrown
+  // direction, faded across its corridor (which widens past the lip, under
+  // the slung flight). The skier's neutral steering follows the course, and
+  // on a hip pad the course bends across the track — same mechanism that
+  // carries neutral steering around a sweeper's rotating trackHeading. The
+  // banked surface (kickerShape) provides the matching physical force.
+  hipAim(x: number, z: number): number {
+    const index = this.chunkIndexAt(z);
+    for (const i of [index - 1, index, index + 1]) {
+      const jump = this.jumpForChunk(i);
+      if (!jump || jump.hip === 0) continue;
+      const q = z - jump.zLip;
+      if (q > jump.rampLength + HIP_LANE || q < -45) continue;
+      const build = smoothstep(clamp01((jump.rampLength + HIP_LANE - q) / HIP_LANE));
+      const p = x - this.centerX(z) - jump.xOffset - jumpDrift(jump, q);
+      const w = jump.halfWidth + 4 + Math.max(0, -q) * 0.5;
+      const lateral = 1 - smoothstep(clamp01((Math.abs(p) - w) / 3));
+      // Follow the pad's curved core LINE, not a blind offset: the throw
+      // eases off (or reverses) as the rider gets ahead of the line, so
+      // slow riders don't spiral past it.
+      const correct = 0.35 * Math.max(-1, Math.min(1, p / 7));
+      const aim = (jump.hip * HIP_THROW - correct) * build * lateral;
+      if (aim !== 0) return aim;
+    }
+    return 0;
   }
 
   // Is this point on the clean approach to (or the ramp of) a kicker? Crud
@@ -493,7 +574,11 @@ export class Terrain {
   // BELOW a kicker's flight path is fair game: jump it.)
   stickinessAt(x: number, z: number): number {
     const d = x - this.centerX(z);
-    const wall = Math.min(1, Math.max(0, (Math.abs(d) - this.channelHalfWidth(z)) / 4));
+    // Sections with berm room keep the first stretch of bank crud-free:
+    // with gravity-turn physics carrying riders along banks, the berm is a
+    // line you choose, not a punishment.
+    const berm = this.sectionParam(z, (spec) => spec.bermRoom);
+    const wall = Math.min(1, Math.max(0, (Math.abs(d) - this.channelHalfWidth(z) - berm) / 4));
     let patch = 0;
     if (z < -80 && this.kickerShape(d, z) === 0 && !this.inJumpLane(d, z)) {
       const threshold = this.sectionParam(z, (spec) => spec.crudThreshold);
@@ -502,6 +587,13 @@ export class Terrain {
       // The guaranteed clean corridor IS the golden path.
       const laneDist = Math.abs(d - this.planOffset(z));
       patch *= smoothstep(Math.min(1, Math.max(0, (laneDist - 3.5) / 2)));
+      // Berm sections keep patches off the outer floor and the berm itself:
+      // the high line must be genuinely rideable.
+      const bermness = Math.min(1, berm / 5);
+      patch *=
+        1 -
+        bermness *
+          smoothstep(Math.min(1, Math.max(0, (Math.abs(d) - (this.channelHalfWidth(z) - 3)) / 2)));
     }
     return Math.max(wall, patch);
   }
@@ -567,7 +659,7 @@ export class Terrain {
         if (
           jump &&
           z > jump.zLip - 40 &&
-          z < jump.zLip + jump.rampLength + 3 &&
+          z < jump.zLip + jump.rampLength + HIP_LANE + 3 &&
           Math.abs(d - jump.xOffset) < jump.halfWidth + 8
         ) {
           continue;
@@ -643,12 +735,23 @@ export class Terrain {
     const jump = this.jumpForChunk(index);
     if (jump) {
       const core = this.centerX(jump.zLip) + jump.xOffset;
-      const yLip = this.height(core, jump.zLip + 0.02);
-      const heading = this.trackHeading(jump.zLip);
-      const along = (dist: number) => ({
-        x: core + Math.sin(heading) * dist,
-        z: jump.zLip - Math.cos(heading) * dist,
-      });
+      // A hip's banked pad has already slid the rider across and slung the
+      // launch heading by the lip; its stars hang on the thrown line from
+      // the drifted exit point (where the curved core meets the lip).
+      const track = this.trackHeading(jump.zLip);
+      const originX = core + jump.hip * HIP_DRIFT * Math.cos(track);
+      const originZ = jump.zLip + jump.hip * HIP_DRIFT * Math.sin(track);
+      const yLip = this.height(originX, originZ + 0.02);
+      // The slung flight bends gently back toward the track after launch,
+      // so the far star sits on a shallower line than the near one
+      // (angles measured from simulated fast rides).
+      const along = (dist: number, angleScale = 1) => {
+        const heading = track + jump.hip * HIP_THROW * angleScale;
+        return {
+          x: originX + Math.sin(heading) * dist,
+          z: originZ - Math.cos(heading) * dist,
+        };
+      };
       // Both stars sit ON the arc of a jump popped at the lip (which flies
       // nearly flat past it), so the reward is for TIMING, not for hopping
       // early — a pre-ramp hop crests before the lip and is meters below
@@ -656,8 +759,14 @@ export class Terrain {
       // needs the lip pop AND real speed to still be up there. Placement
       // scales with the kicker (see STAR_TABLE).
       const stars = STAR_TABLE[jump.kind];
+      const h5 = jump.hip !== 0 ? stars.h5 - 0.5 : stars.h5;
       bonuses.push({ id: `b${index}:3`, ...along(stars.d3), y: yLip + stars.h3, mult: 3 });
-      bonuses.push({ id: `b${index}:5`, ...along(stars.d5), y: yLip + stars.h5, mult: 5 });
+      bonuses.push({
+        id: `b${index}:5`,
+        ...along(stars.d5, jump.hip !== 0 ? 0.6 : 1),
+        y: yLip + h5,
+        mult: 5,
+      });
     }
     this.chunkBonuses.set(index, bonuses);
     return bonuses;

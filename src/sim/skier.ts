@@ -148,6 +148,7 @@ function steerToward(
   const recovery = over > 0 ? -Math.sign(d) * Math.min(1, over / 6) * BANK_RECOVERY : 0;
   const target =
     terrain.trackHeading(state.z) +
+    terrain.hipAim(state.x, state.z) + // hip pads bend the course line itself
     input.steer * MAX_STEER_OFFSET * (1 - TUCK_TURN_CUT * tuck) +
     recovery;
   const diff = Math.atan2(Math.sin(target - state.heading), Math.cos(target - state.heading));

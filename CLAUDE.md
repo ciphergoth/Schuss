@@ -83,9 +83,17 @@ pace and a wall ride carves back down to the floor. Kickers come in S/M/L (ramp 
 1.5/2.2/3.2m), 30% of M/L are step-downs (the landing scooped out for
 float and a soft catch), the first kicker of a run is always a flat M, and
 the trick-bonus stars sit per-size on the popped-at-the-lip flight arc
-(STAR_TABLE, tuned by simulated flights). Hip kickers are unlocked now
-that cross-slope gravity turns the skier (a yawed ramp face can genuinely
-throw the ride sideways) but are not yet built. The
+(STAR_TABLE, tuned by simulated flights). HIP kickers ride the banking
+physics for real: the pad tilts to 0.38 cross-slope over a 20m run-up,
+its core (and lit runway) bends along the rider's measured ~7.5m drift
+line, neutral steering follows the pad's line (hipAim bends the course
+target the same way sweepers rotate trackHeading), and the launch leaves
+the lip slung ~0.3 rad across the track — stars hang on the thrown line
+from the drifted exit, x5 gated on pace exactly like flat kickers. Hips
+spawn where stepDowns don't (never both), throw toward the center, and
+need a 13m+ channel. Sweepers keep their first 5m of bank crud-free
+(bermRoom): with gravity carrying riders along banks, the berm is a
+line you choose. The
 section framework is where moving hazards and finish lines will plug in.
 The render layer
 draws the course as a ribbon clipped just past the bounce barrier, so the

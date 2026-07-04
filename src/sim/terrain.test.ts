@@ -135,6 +135,7 @@ describe('terrain', () => {
     const t = new Terrain(1);
     const kinds = new Set<string>();
     let stepDowns = 0;
+    let hips = 0;
     let jumps = 0;
     for (let i = 3; i < 400; i++) {
       const jump = t.jumpForChunk(i);
@@ -142,10 +143,53 @@ describe('terrain', () => {
       jumps++;
       kinds.add(jump.kind);
       if (jump.stepDown > 0) stepDowns++;
+      if (jump.hip !== 0) hips++;
+      expect(jump.stepDown === 0 || jump.hip === 0).toBe(true); // never both
     }
     expect(jumps).toBeGreaterThan(15);
     expect(kinds).toEqual(new Set(['S', 'M', 'L']));
     expect(stepDowns).toBeGreaterThan(1);
+    expect(hips).toBeGreaterThan(1);
+  });
+
+  it('hip pads bank the approach toward the throw', () => {
+    const t = new Terrain(1);
+    let found = false;
+    for (let i = 3; i < 400 && !found; i++) {
+      const jump = t.jumpForChunk(i);
+      if (!jump || jump.hip === 0) continue;
+      found = true;
+      const z = jump.zLip + 4; // on the ramp, tilt fully built
+      const core = t.centerX(z) + jump.xOffset;
+      const [gx] = t.gradient(core, z);
+      // Surface falls toward the throw side: gravity slings the launch.
+      expect(gx * jump.hip).toBeLessThan(-0.2);
+    }
+    expect(found).toBe(true);
+  });
+
+  it('hip stars hang off the drifted, thrown line, not the straight core', () => {
+    const t = new Terrain(1);
+    let found = false;
+    for (let i = 3; i < 400 && !found; i++) {
+      const jump = t.jumpForChunk(i);
+      if (!jump || jump.hip === 0) continue;
+      found = true;
+      const b5 = t.bonusesForChunk(i).find((b) => b.mult === 5)!;
+      const straightX = t.centerX(b5.z) + jump.xOffset;
+      expect((b5.x - straightX) * jump.hip).toBeGreaterThan(6);
+    }
+    expect(found).toBe(true);
+  });
+
+  it('sweeper berms are clean racing snow; other banks stay crud', () => {
+    const t = new Terrain(1);
+    const sweeper = findSection(t, 'sweeper');
+    const zs = -(sweeper + 0.5) * SECTION_LENGTH;
+    expect(t.stickinessAt(t.centerX(zs) + t.channelHalfWidth(zs) + 3, zs)).toBeLessThan(0.05);
+    const cruise = findSection(t, 'cruise', 2);
+    const zc = -(cruise + 0.5) * SECTION_LENGTH;
+    expect(t.stickinessAt(t.centerX(zc) + t.channelHalfWidth(zc) + 3, zc)).toBeGreaterThan(0.5);
   });
 
   it('the first kicker of every run is the classic flat M', () => {

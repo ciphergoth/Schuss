@@ -146,14 +146,31 @@ describe('boost economy', () => {
       let index = 3;
       while (true) {
         const jump = sim.terrain.jumpForChunk(index);
-        if (jump && jump.kind === kind && jump.stepDown === 0) break;
+        if (jump && jump.kind === kind && jump.stepDown === 0 && jump.hip === 0) break;
         index++;
       }
       // A full pop near the lip at race pace threads to the x5...
-      expect(rideKicker(26, 1, index)).toContain(5);
+      expect(rideKicker(24, 1, index)).toContain(5);
       // ...but riding off the lip without popping earns nothing at all.
       expect(rideKicker(21, null, index)).toEqual([]);
     }
+  });
+
+  it('hip pads sling a fast pop across the track into both stars', () => {
+    const sim = createSim(1);
+    let index = 3;
+    while (true) {
+      const jump = sim.terrain.jumpForChunk(index);
+      if (jump && jump.hip !== 0) break;
+      index++;
+    }
+    // Ride the pad hands-off at race pace and pop at the lip: the banked
+    // corner does the aiming, and the thrown line threads both stars.
+    const fast = rideKicker(25, 1, index);
+    expect(fast).toContain(3);
+    expect(fast).toContain(5);
+    // Too slow, no pop: slung sideways, paid nothing.
+    expect(rideKicker(17, null, index)).toEqual([]);
   });
 
   it('the x5 rewards a jump timed at the lip, not a hop before the ramp', () => {
