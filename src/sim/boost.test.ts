@@ -217,6 +217,24 @@ describe('boost economy', () => {
     expect(sim.boost).toBe(0);
   });
 
+  it('a half-spin bail lands safe but pays nothing (no round-up to 360)', () => {
+    const sim = createSim(1);
+    sim.trickMult = 3;
+    launch(sim);
+    // Rotate to ~190 degrees — under commit, but Math.round would have
+    // called it a full turn and paid it before the 45-degree facing gate.
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 3.3) {
+      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 });
+    }
+    const events: SimEvent[] = [];
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    expect(sim.skier.tumbling).toBe(0); // under commit: safe
+    expect(events.some((e) => e.type === 'trick')).toBe(false);
+    expect(sim.score).toBe(0);
+    expect(sim.boost).toBe(0);
+    expect(sim.trickMult).toBe(3); // nothing settled; the star keeps waiting
+  });
+
   it('a small spin under the commit threshold always lands clean', () => {
     const sim = createSim(1);
     launch(sim);

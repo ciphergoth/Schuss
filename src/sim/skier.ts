@@ -93,8 +93,11 @@ const FRONTFLIP_RATE = 5; // ~1.26s per rotation
 const BACKFLIP_RATE = 4.2; // ~1.5s per rotation — the money trick
 export const TRICK_COMMIT = 3.6; // radians of spin (~200 deg) before you must complete
 export const FLIP_COMMIT = 1.4; // radians of flip (~80 deg) before you must complete
-export const SPIN_TOLERANCE = 0.9; // radians from a whole turn to land clean
-export const FLIP_TOLERANCE = 0.75; // a 90-deg-pitched landing still faceplants
+// Land within 45 degrees of the correct facing, on every rotated axis, or
+// it isn't landed: past commit that's a tumble, under commit a safe bail
+// that pays nothing (the sim uses the same tolerance to gate payment).
+export const SPIN_TOLERANCE = Math.PI / 4;
+export const FLIP_TOLERANCE = Math.PI / 4; // a 90-deg-pitched landing still faceplants
 
 export function createSkier(): SkierState {
   return {
@@ -112,7 +115,7 @@ export function createSkier(): SkierState {
 }
 
 // How far a rotation is from "clean" (any whole number of full turns).
-function residual(angle: number): number {
+export function residual(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
 

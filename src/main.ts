@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
-import { SkierInput } from './sim/skier';
+import { FLIP_TOLERANCE, SPIN_TOLERANCE, SkierInput } from './sim/skier';
 import { setupInput } from './input';
 import { createScene } from './render/scene';
 import { ChunkRenderer } from './render/chunks';
@@ -191,7 +191,8 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     if (skier.tumbling === 0 && (spinDeg >= 20 || flipDeg >= 20)) {
       const res = (a: number) => Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
       const clean =
-        (spinDeg < 20 || res(skier.spin) < 0.7) && (flipDeg < 20 || res(skier.flip) < 0.55);
+        (spinDeg < 20 || res(skier.spin) < SPIN_TOLERANCE) &&
+        (flipDeg < 20 || res(skier.flip) < FLIP_TOLERANCE);
       const committed = spinDeg >= 300 || flipDeg >= 300;
       const parts = [];
       if (spinDeg >= 20) parts.push(`${spinDeg}°`);

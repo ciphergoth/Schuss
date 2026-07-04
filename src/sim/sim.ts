@@ -1,11 +1,14 @@
 import { Terrain } from './terrain';
 import {
   FLIP_COMMIT,
+  FLIP_TOLERANCE,
   SKIER_RADIUS,
+  SPIN_TOLERANCE,
   TRICK_COMMIT,
   SkierInput,
   SkierState,
   createSkier,
+  residual,
   stepSkier,
 } from './skier';
 
@@ -114,12 +117,16 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     events.push({ type: 'tumble', trick });
   }
 
-  // Any return to the snow settles the flight's rotation ledger. Whole turns
-  // that survived the skier's own landing judge (which tumbles anything past
-  // commit that isn't near-clean) are the trick.
+  // Any return to the snow settles the flight's rotation ledger. A rotation
+  // only counts if it arrived within tolerance of the correct facing (45
+  // degrees) — the same bar the landing judge tumbles by past commit. Under
+  // commit a wide residual is a safe bail, not a payday: without this gate
+  // a 185-degree spin rounded up to a paid 360.
   if (airBefore > 0 && s.airTime === 0) {
-    const turns = Math.round(Math.abs(s.spin) / (2 * Math.PI));
-    const flipTurns = Math.round(Math.abs(s.flip) / (2 * Math.PI));
+    const spinClean = Math.abs(residual(s.spin)) <= SPIN_TOLERANCE;
+    const flipClean = Math.abs(residual(s.flip)) <= FLIP_TOLERANCE;
+    const turns = spinClean ? Math.round(Math.abs(s.spin) / (2 * Math.PI)) : 0;
+    const flipTurns = flipClean ? Math.round(Math.abs(s.flip) / (2 * Math.PI)) : 0;
     const flipBack = s.flip > 0; // positive pitch lifts the tips: backflip (S)
     if (s.tumbling === 0) {
       if (airBefore > MIN_STYLISH_AIR) events.push({ type: 'landing', airTime: airBefore });
