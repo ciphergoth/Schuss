@@ -182,7 +182,9 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   // bar on the left is the boost tank — SSX-style.
   stats.textContent = `${Math.round(skier.speed)} m/s · ${Math.round(distanceSkied(sim))} m`;
   scoreText.textContent = sim.score.toLocaleString('en');
-  if (sim.score > best) {
+  // BEST is for runs actually played: an idle tab self-piloting downhill
+  // (or debug pokes) never writes the persistent ledger.
+  if (sim.score > best && input.acted()) {
     best = sim.score;
     localStorage.setItem(BEST_KEY, String(best));
   }

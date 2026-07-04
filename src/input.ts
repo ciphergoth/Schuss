@@ -18,6 +18,7 @@ export function pointerAxis(clientPos: number, viewportExtent: number): number {
 export interface InputSource {
   read: () => SkierInput; // consumes one-shot events (jump); sim stepping only
   peek: () => SkierInput; // current state, safe to call from anywhere
+  acted: () => boolean; // has a real (trusted) user input landed this run?
 }
 
 // Mouse: x steers, y sets stance (top = tuck, bottom = snowplow), held button
@@ -34,6 +35,17 @@ export function setupInput(onRestart: () => void): InputSource {
   const touches = new Map<number, { x: number; y: number }>(); // non-mouse pointers
   let mouse: { x: number; y: number } | null = null; // last known cursor position
   let mouseBrake = false;
+
+  // A run only counts as PLAYED once a real user input lands: an idle tab
+  // self-piloting downhill (or a debug script poking the sim) must never
+  // set a persistent best score. isTrusted separates real gestures from
+  // synthetic events; R resets the flag along with the run.
+  let acted = false;
+  const noteActivity = (e: Event) => {
+    if (e.isTrusted) acted = true;
+  };
+  window.addEventListener('pointermove', noteActivity);
+  window.addEventListener('pointerdown', noteActivity);
 
   // Right mouse button is boost+charge; keep the context menu out of the way.
   window.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -55,7 +67,12 @@ export function setupInput(onRestart: () => void): InputSource {
     code === 'Space' || code === 'ShiftLeft' || code === 'ShiftRight';
 
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyR') onRestart();
+    if (e.code === 'KeyR') {
+      onRestart();
+      acted = false; // the fresh run must earn its "played" flag again
+    } else {
+      noteActivity(e);
+    }
     if (isBoostKey(e.code)) beginCharge();
     down.add(e.code);
   });
@@ -116,6 +133,7 @@ export function setupInput(onRestart: () => void): InputSource {
 
   return {
     peek: current,
+    acted: () => acted,
     read: () => {
       const input = current();
       if (pendingJump > 0) {

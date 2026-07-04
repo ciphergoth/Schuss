@@ -130,7 +130,9 @@ out of `src/sim/`.
 Debugging: `window.__game` exposes live sim state plus `poll()` (current
 input), `renderFrame(dt)` (force a render while rAF is paused, e.g. hidden
 tab), and `step(seconds)` (advance sim + render while paused). After mutating
-state for verification, restart with R before handing the game back.
+state for verification, restart with R before handing the game back. The
+localStorage BEST only persists for runs with real (isTrusted) user input —
+idle self-play and synthetic debug events can never set it.
 
 ## Running
 
