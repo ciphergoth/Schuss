@@ -497,6 +497,26 @@ export class Effects {
       );
     }
 
+    // Charging a jump: a golden ring of sparks converges on the skis and
+    // brightens as the charge builds — release timing made visible. At full
+    // charge it burns white: nothing more to wait for.
+    const charge = input.charge ?? 0;
+    if (grounded && charge > 0.03) {
+      const radius = 1.7 - 1.1 * charge;
+      const full = charge >= 0.99;
+      this.scratch.setHSL(0.11, full ? 0.25 : 0.95, 0.55 + 0.35 * charge);
+      for (let k = 0; k < 3; k++) {
+        const a = sim.time * 10 + (k * Math.PI * 2) / 3;
+        this.sparks.spawn(
+          new THREE.Vector3(s.x + Math.cos(a) * radius, s.y + 0.15, s.z + Math.sin(a) * radius),
+          new THREE.Vector3(-Math.cos(a) * 1.5, 0.5 + charge, -Math.sin(a) * 1.5),
+          0.3,
+          1,
+          this.scratch
+        );
+      }
+    }
+
     // Burning boost: flame spray plus a rainbow shimmer behind the skis.
     if (sim.boosting) {
       this.particles.spawn(

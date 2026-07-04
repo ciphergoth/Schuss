@@ -57,7 +57,9 @@ export function setupInput(onRestart: () => void): InputSource {
   };
   const releaseCharge = () => {
     if (chargeStart === null) return;
-    pendingJump = Math.max(0.15, Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS));
+    // A tap is a tap: barely any charge, barely any pop. The old 0.15 floor
+    // (on top of a generous base pop) made every tap read as a full jump.
+    pendingJump = Math.max(0.05, Math.min(1, (performance.now() - chargeStart) / MAX_CHARGE_MS));
     chargeStart = null;
   };
 

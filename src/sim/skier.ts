@@ -57,8 +57,10 @@ const LAUNCH_EXTRA_ACCEL = 6;
 const LAUNCH_MAX_VY_RATIO = 0.35;
 // Jump: a released charge pops the skier off the snow. Deliberately modest —
 // a hop for line adjustments and a little extra off a lip; real air comes
-// from the terrain (and, later, purpose-built ski jumps).
-const JUMP_POP_MIN = 1.8;
+// from the terrain. The charge has to be worth the wait: a tap is a tiny
+// bunny hop, only a real hold approaches the full pop (the old 1.8 base on
+// a 3.8 max meant a tap already flew at half strength).
+const JUMP_POP_MIN = 1.5;
 const JUMP_POP_MAX = 3.8;
 // Invisible outer barrier where the bank steepens past ~55 degrees: hitting
 // it caroms you back into the course (grounded or flying). Banks up to there
