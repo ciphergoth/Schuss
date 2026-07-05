@@ -88,6 +88,11 @@ function setPaused(next: boolean): void {
     // Unpausing calibrates tilt: however the phone is held right now
     // becomes neutral. Re-unpause any time to recalibrate.
     input.calibrateTilt();
+    // Every touch route back into the run funnels through here — the plain
+    // resume and the restart confirm's Yes alike — so re-enter fullscreen
+    // from all of them, not just the first drop-in. (The drop-in also asks
+    // synchronously below, since its unpause happens after an await.)
+    tryFullscreen();
   }
   paused = next;
   if (paused) audio.setTiltWarning(0);
@@ -181,8 +186,11 @@ async function enableTilt(): Promise<boolean> {
 
 // Go as immersive as the platform allows — a browser chrome bar is dead
 // screen on a phone. Must be called in-gesture; failure just means the
-// platform (iPhone Safari) doesn't do fullscreen, and that's fine.
+// platform (iPhone Safari) doesn't do fullscreen, and that's fine. Touch
+// only: a desktop window shouldn't seize the whole screen on resume, and
+// there Esc both unpauses and exits fullscreen — they'd fight.
 function tryFullscreen(): void {
+  if (!document.body.classList.contains('touch')) return;
   if (document.fullscreenElement) return;
   const root = document.documentElement as HTMLElement & {
     webkitRequestFullscreen?: () => Promise<void>;
@@ -244,7 +252,10 @@ document.getElementById('confirmn')!.addEventListener('pointerdown', (e) => {
 });
 document.getElementById('nextcourse')!.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
-  if (finishScreen.classList.contains('visible')) startCourse(currentSeed + 1);
+  if (finishScreen.classList.contains('visible')) {
+    tryFullscreen(); // the ceremony doesn't re-pause, so ask here directly
+    startCourse(currentSeed + 1);
+  }
 });
 
 // Tilting far outside the control envelope, sustained, pauses the game:
