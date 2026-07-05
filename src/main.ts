@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
+import { SECTION_LENGTH } from './sim/terrain';
 import { FLIP_TOLERANCE, SPIN_TOLERANCE, SkierInput } from './sim/skier';
 import { setupInput } from './input';
 import { FAR_HOLD_S, THUMB_ZONE, tiltZone } from './tilt';
@@ -41,7 +42,9 @@ const { scene, sun } = sceneSetup;
 const camera = createCamera();
 const skierView = createSkierView(scene);
 const fx = new Effects(scene);
-const stats = document.getElementById('stats')!;
+const timeText = document.getElementById('time')!;
+const courseNum = document.getElementById('coursenum')!;
+const progressEl = document.getElementById('progress')!;
 const scoreText = document.getElementById('score')!;
 const bestText = document.getElementById('best')!;
 const multText = document.getElementById('mult')!;
@@ -70,6 +73,18 @@ let finishPanelAt: number | null = null;
 let sim = createSim(currentSeed);
 let lastInput: SkierInput = { steer: 0, stance: 0 };
 const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
+
+// The progress bar has one segment per course section; each fills as you
+// ski through it. Built from the terrain so it tracks the real length.
+const segFills: HTMLElement[] = [];
+for (let i = 0; i < Math.round(sim.terrain.courseLength / SECTION_LENGTH); i++) {
+  const seg = document.createElement('div');
+  seg.className = 'seg';
+  const fill = document.createElement('i');
+  seg.appendChild(fill);
+  progressEl.appendChild(seg);
+  segFills.push(fill);
+}
 // R doesn't restart outright anymore — it pauses onto a Y/N confirm, so a
 // stray keypress can't throw away a run.
 const input = setupInput(() => openConfirm());
@@ -368,9 +383,19 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     Math.floor(Math.max(0, -skier.z) / ZONE_LENGTH)
   );
 
-  // Speed, distance and course top-left, the score ledger top-right, the
-  // vertical bar on the left is the boost tank — SSX-style.
-  stats.textContent = `${Math.round(skier.speed)} m/s · ${Math.round(distanceSkied(sim))} m · course ${currentSeed}`;
+  // The race clock top-left (mirrors the score ledger top-right), the
+  // vertical bar on the left is the boost tank — SSX-style. The clock stops
+  // at the line: show the locked finish time once crossed.
+  const clock = sim.finishedAt ?? sim.time;
+  const clockMin = Math.floor(clock / 60);
+  timeText.textContent = `${clockMin}:${(clock - clockMin * 60).toFixed(2).padStart(5, '0')}`;
+  courseNum.textContent = `COURSE ${currentSeed}`;
+  // Segmented course progress under the score: fill completed segments
+  // fully, the current one partway.
+  const scaled = Math.min(1, distanceSkied(sim) / sim.terrain.courseLength) * segFills.length;
+  segFills.forEach((fill, i) => {
+    fill.style.width = `${Math.max(0, Math.min(1, scaled - i)) * 100}%`;
+  });
 
   // The ceremony: once the finish barrage has landed, raise the panel.
   const showFinish = finishPanelAt !== null && sim.time >= finishPanelAt && !confirming;

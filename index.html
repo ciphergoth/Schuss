@@ -24,9 +24,20 @@
         left: 16px;
         color: white;
         text-shadow: 0 1px 3px rgba(0, 0, 40, 0.6);
-        font-size: 18px;
-        line-height: 1.5;
         user-select: none;
+        pointer-events: none;
+      }
+      /* The race clock, styled to mirror the score across the top. */
+      #time {
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 30px;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 1px;
+      }
+      #coursenum {
+        font-size: 14px;
+        opacity: 0.75;
+        font-variant-numeric: tabular-nums;
       }
       #scoreboard {
         position: fixed;
@@ -57,6 +68,28 @@
       }
       #mult.visible {
         display: block;
+      }
+      /* Course progress under the score: one segment per course section,
+         each filling left-to-right as you ski through it. */
+      #progress {
+        display: flex;
+        gap: 3px;
+        width: 168px;
+        margin: 8px 0 0 auto;
+      }
+      #progress .seg {
+        flex: 1;
+        height: 7px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.16);
+        overflow: hidden;
+      }
+      #progress .seg > i {
+        display: block;
+        height: 100%;
+        width: 0;
+        background: #7dd3ff;
+        transition: width 120ms linear;
       }
       #boostbar {
         position: fixed;
@@ -359,11 +392,13 @@
   </head>
   <body>
     <div id="hud">
-      <div id="stats"></div>
+      <div id="time">0:00.00</div>
+      <div id="coursenum"></div>
     </div>
     <div id="scoreboard">
       <div id="score">0</div>
       <div id="best"></div>
+      <div id="progress"></div>
       <div id="mult"></div>
     </div>
     <div id="boostbar"><div id="boostfill"></div></div>
