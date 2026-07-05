@@ -207,13 +207,19 @@ friction braking).
   on the title panel requests iOS motion permission (must be in-gesture)
   and is UI, not game input (stopPropagation — otherwise tilt mode grabs
   it as a thumb touch; GameAudio.unlock() is public and called explicitly
-  because that tap no longer reaches the window unlock listener). Thumbs
-  are the buttons: LEFT half is the trick pad (drag ~24px from touch-down
-  and hold = W/S/A/D by dominant axis, up = frontflip), RIGHT half is
-  boost/charge (hold/release = Space). Past ~35 degrees off neutral a
+  because that tap no longer reaches the window unlock listener; the tap
+  also tries fullscreen — best-effort, iPhone Safari refuses). Thumbs are
+  the buttons: the LEFT 38% of the screen is the trick pad (drag ~24px
+  from touch-down and hold = W/S/A/D by dominant axis, up = frontflip),
+  the RIGHT 38% is boost/charge (hold/release = Space), and the MIDDLE
+  band is the pause button (tilt.ts THUMB_ZONE; the top-center chip is
+  just its visible tip). Labeled chips in the bottom corners (body.tilt)
+  light up while their touch is live. Past ~35 degrees off neutral a
   detuned warning dyad rises (engine.setTiltWarning); past ~60 degrees
-  sustained 0.4s the game pauses — putting the phone down IS the pause
-  gesture (plus a top-center pause chip). Tilt-only runs still set BEST:
+  sustained 0.4s the game also pauses — putting the phone down IS a pause
+  gesture. toScreen's rotation follows screen.orientation.angle as the
+  device's CCW rotation from portrait — getting that backwards mirrors
+  BOTH axes at once (found on-device). Tilt-only runs still set BEST:
   trusted orientation events >3 degrees off neutral mark the run as
   played (a phone flat on a table streams events but never deviates).
   Panels grow tap buttons on touch devices (body.touch + .touchonly);

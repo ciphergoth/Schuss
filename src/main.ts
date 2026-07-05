@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
 import { FLIP_TOLERANCE, SPIN_TOLERANCE, SkierInput } from './sim/skier';
 import { setupInput } from './input';
-import { FAR_HOLD_S, tiltZone } from './tilt';
+import { FAR_HOLD_S, THUMB_ZONE, tiltZone } from './tilt';
 import { createScene } from './render/scene';
 import { ZONE_LENGTH } from './render/palette';
 import { ChunkRenderer } from './render/chunks';
@@ -55,6 +55,8 @@ const finishScreen = document.getElementById('finish')!;
 const finishStats = document.getElementById('finishstats')!;
 const finishBest = document.getElementById('finishbest')!;
 const trickText = document.getElementById('trick')!;
+const padTricks = document.getElementById('padtricks')!;
+const padBoost = document.getElementById('padboost')!;
 
 // A short-lived banner: live spin readout while airborne, result on landing.
 let trickBannerUntil = 0;
@@ -161,6 +163,7 @@ if (navigator.maxTouchPoints > 0) document.body.classList.add('touch');
 // on the title screen is where we ask. Denial (or no sensor) leaves the
 // legacy touch scheme: first finger steers, second snowplows.
 let tiltAsked = false;
+let tiltOn = false; // tilt granted: thumb zones live, center tap pauses
 async function enableTilt(): Promise<void> {
   const DOE = DeviceOrientationEvent as unknown as {
     requestPermission?: () => Promise<string>;
@@ -170,9 +173,23 @@ async function enableTilt(): Promise<void> {
       if ((await DOE.requestPermission()) !== 'granted') return;
     }
     input.setTiltMode(true);
+    tiltOn = true;
+    document.body.classList.add('tilt'); // shows the thumb-zone chips
   } catch {
     // Permission prompt rejected or unavailable: stay on legacy touch.
   }
+}
+
+// Go as immersive as the platform allows — a browser chrome bar is dead
+// screen on a phone. Must be called in-gesture; failure just means the
+// platform (iPhone Safari) doesn't do fullscreen, and that's fine.
+function tryFullscreen(): void {
+  if (document.fullscreenElement) return;
+  const root = document.documentElement as HTMLElement & {
+    webkitRequestFullscreen?: () => Promise<void>;
+  };
+  const request = root.requestFullscreen ?? root.webkitRequestFullscreen;
+  if (request) void request.call(root).catch(() => {});
 }
 
 pauseScreen.addEventListener('pointerdown', (e) => {
@@ -180,6 +197,7 @@ pauseScreen.addEventListener('pointerdown', (e) => {
   // A panel tap is UI, not game input: without this, tilt mode would grab
   // the drop-in tap itself as a trick-pad or charge touch.
   e.stopPropagation();
+  tryFullscreen();
   if (!tiltAsked) {
     tiltAsked = true;
     void enableTilt().finally(() => {
@@ -190,6 +208,14 @@ pauseScreen.addEventListener('pointerdown', (e) => {
     setPaused(false);
     audio.unlock();
   }
+});
+
+// In tilt mode the thumbs own the screen edges, so the whole middle band
+// is the pause button (the chip up top is its visible tip).
+window.addEventListener('pointerdown', (e) => {
+  if (!tiltOn || paused || confirming || e.pointerType === 'mouse') return;
+  const frac = e.clientX / window.innerWidth;
+  if (frac > THUMB_ZONE && frac < 1 - THUMB_ZONE) setPaused(true);
 });
 
 // A deliberate pause affordance for thumbs (besides tilting the phone flat).
@@ -351,6 +377,10 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     multText.textContent = `×${sim.trickMult}`;
     multText.style.color = sim.trickMult >= 5 ? '#ff3ddc' : '#ffd34d';
   }
+  // The thumb-zone chips light up while their touch is live, so the
+  // invisible controls answer back.
+  padTricks.classList.toggle('active', !!lastInput.trickSpin || !!lastInput.trickFlip);
+  padBoost.classList.toggle('active', !!lastInput.boost);
   boostFill.style.height = `${sim.boost * 100}%`;
   boostFill.style.background = sim.boosting
     ? 'hsl(18, 100%, 58%)'

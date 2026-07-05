@@ -1,5 +1,13 @@
 import { SkierInput } from './sim/skier';
-import { tiltAxes, tiltDeviation, toScreen, trickFromDrag, upFromOrientation, Vec3 } from './tilt';
+import {
+  THUMB_ZONE,
+  tiltAxes,
+  tiltDeviation,
+  toScreen,
+  trickFromDrag,
+  upFromOrientation,
+  Vec3,
+} from './tilt';
 
 // Analog axis from a pointer coordinate: a small dead zone around the viewport
 // center, then a linear ramp that saturates at SATURATION of the half-extent,
@@ -113,14 +121,16 @@ export function setupInput(onRestart: () => void): InputSource {
       if (e.button === 2) beginCharge();
       else mouseBrake = true;
     } else if (tiltMode) {
-      // Thumb zones: right half is the boost/charge button, left half is
-      // the trick pad (an invisible joystick from the touch-down point).
-      if (e.clientX > window.innerWidth / 2) {
+      // Thumb zones: the right edge of the screen is the boost/charge
+      // button, the left edge is the trick pad (an invisible joystick from
+      // the touch-down point). The middle band is nothing here — main
+      // treats a center tap as the pause button.
+      if (e.clientX > window.innerWidth * (1 - THUMB_ZONE)) {
         if (chargeTouch === null) {
           chargeTouch = e.pointerId;
           beginCharge();
         }
-      } else if (!trickPad) {
+      } else if (e.clientX < window.innerWidth * THUMB_ZONE && !trickPad) {
         trickPad = { id: e.pointerId, x0: e.clientX, y0: e.clientY, spin: 0, flip: 0 };
       }
     } else {

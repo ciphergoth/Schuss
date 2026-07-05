@@ -16,6 +16,7 @@ export const TILT_DEAD_ZONE = 0.08; // fraction of range around neutral
 export const EDGE_START = 35 * DEG; // beyond this, the warning sound rises
 export const FAR_TILT = 60 * DEG; // beyond this (sustained), the game pauses
 export const FAR_HOLD_S = 0.4; // how long "far" must persist to pause
+export const THUMB_ZONE = 0.38; // outer screen fraction per thumb; the middle is pause
 
 export interface Vec3 {
   x: number;
@@ -36,13 +37,17 @@ export function upFromOrientation(betaDeg: number, gammaDeg: number): Vec3 {
 }
 
 // Rotate a device-frame vector into SCREEN coordinates (x right, y toward
-// the top edge as currently displayed, z out of the screen) given the
-// screen orientation angle (0 / 90 / 180 / 270).
+// the top edge as currently displayed, z out of the screen).
+// screen.orientation.angle is the COUNTERCLOCKWISE rotation of the device
+// from natural portrait: at angle 90 the device's x-axis points at the
+// screen top, so screen-y must read the device-x component. Getting this
+// rotation backwards mirrors BOTH axes at once — steering and stance each
+// flip — which is exactly how the bug presents on a real phone.
 export function toScreen(v: Vec3, screenAngleDeg: number): Vec3 {
   const a = screenAngleDeg * DEG;
   const cos = Math.cos(a);
   const sin = Math.sin(a);
-  return { x: v.x * cos + v.y * sin, y: v.y * cos - v.x * sin, z: v.z };
+  return { x: v.x * cos - v.y * sin, y: v.y * cos + v.x * sin, z: v.z };
 }
 
 // Roll: how far up leans out of the screen's vertical plane (the

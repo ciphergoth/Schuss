@@ -35,13 +35,19 @@ describe('orientation plumbing', () => {
     expect(Math.abs(up.x)).toBeLessThan(1e-6);
   });
 
-  it('a landscape hold maps to up-toward-the-top in screen coords', () => {
-    // Landscape (device long axis horizontal), tipped back 40 degrees:
-    // beta 0, gamma theta-90, screen angle 270 for this hold direction.
-    const up = toScreen(upFromOrientation(0, -50), 270);
-    expect(up.y).toBeGreaterThan(0.7); // mostly toward the screen top
-    expect(Math.abs(up.x)).toBeLessThan(1e-6); // no twist
-    expect(up.z).toBeCloseTo(Math.sin(40 * DEG), 6);
+  it('both landscape holds map to up-toward-the-top in screen coords', () => {
+    // Device turned counterclockwise (its x-axis at the screen top, angle
+    // 90), tipped back 40 degrees: beta 0, gamma theta-90 puts world-up at
+    // (cos40, 0, sin40) in device coords.
+    const ccw = toScreen(upFromOrientation(0, -50), 90);
+    // The opposite landscape (angle 270): device x-axis points at the
+    // screen bottom, so the same physical hold is gamma 90-theta.
+    const cw = toScreen(upFromOrientation(0, 50), 270);
+    for (const up of [ccw, cw]) {
+      expect(up.y).toBeGreaterThan(0.7); // mostly toward the screen top
+      expect(Math.abs(up.x)).toBeLessThan(1e-6); // no twist
+      expect(up.z).toBeCloseTo(Math.sin(40 * DEG), 6);
+    }
   });
 });
 

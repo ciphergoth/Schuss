@@ -289,6 +289,38 @@
         font-size: 15px;
         user-select: none;
       }
+      /* Thumb-zone chips: the visible tips of the invisible controls, shown
+         only once tilt mode is live (body.tilt). They light up while their
+         touch is held. Never targets themselves — touches pass through. */
+      .padchip {
+        position: fixed;
+        bottom: 14px;
+        padding: 8px 16px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(18, 24, 64, 0.45);
+        color: rgba(255, 255, 255, 0.7);
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 13px;
+        letter-spacing: 1px;
+        user-select: none;
+        pointer-events: none;
+        display: none;
+      }
+      body.tilt .padchip {
+        display: block;
+      }
+      #padtricks {
+        left: 16px;
+      }
+      #padboost {
+        right: 16px;
+      }
+      .padchip.active {
+        border-color: rgba(255, 211, 77, 0.9);
+        color: #ffd34d;
+        background: rgba(60, 50, 20, 0.55);
+      }
     </style>
   </head>
   <body>
@@ -362,7 +394,7 @@
         <div class="hint touchonly">
           <b>Tap to drop in</b> &mdash; tilt steers (twist = turn, tip away = tuck, pull back =
           brake; your grip at drop-in is neutral). Left thumb drags for tricks, right thumb holds to
-          boost &amp; charge. Tilt way off and it pauses.
+          boost &amp; charge. Tap the middle of the screen &mdash; or tilt way off &mdash; to pause.
         </div>
       </div>
     </div>
@@ -392,6 +424,8 @@
       </div>
     </div>
     <div id="pausechip" class="touchonly">&#10074;&#10074;</div>
+    <div id="padtricks" class="padchip">TRICKS &mdash; drag + hold</div>
+    <div id="padboost" class="padchip">BOOST &mdash; hold</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
