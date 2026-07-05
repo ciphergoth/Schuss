@@ -23,6 +23,14 @@ export const GRADE = 0.35; // average drop per meter of z
 export const SECTION_LENGTH = 400;
 const SECTION_BLEND = 0.15; // fraction of the section that fades into the next
 
+// A COURSE is a run you can finish: eight sections with an arc — a gentle
+// cruise opening (section 0, as ever), a mixed middle, and a forced PLUNGE
+// finale into the checkered gate at the line. Past the line the mountain
+// becomes a clean celebratory outrun: cruise terrain, nothing to hit,
+// nothing left to collect. Tests that need every section type to exist can
+// construct Terrain with courseLength Infinity (an endless mountain).
+export const COURSE_LENGTH = SECTION_LENGTH * 8;
+
 export type SectionType = 'cruise' | 'narrows' | 'bowl' | 'plunge' | 'steps' | 'sweeper';
 
 interface SectionSpec {
@@ -280,7 +288,20 @@ export class Terrain {
   private sectionTypes = new Map<number, SectionType>();
   private sectionDrops = new Map<number, number>();
 
-  constructor(readonly seed: number) {}
+  constructor(
+    readonly seed: number,
+    readonly courseLength = COURSE_LENGTH
+  ) {}
+
+  // The last section of the course; the finish line sits at its far edge.
+  private lastSection(): number {
+    return Math.ceil(this.courseLength / SECTION_LENGTH) - 1;
+  }
+
+  // Is this z past the finish line (on the celebratory outrun)?
+  pastFinish(z: number): boolean {
+    return -z >= this.courseLength;
+  }
 
   // 1D value noise in [0, 1).
   private noise1(t: number, octave: number): number {
@@ -311,14 +332,25 @@ export class Terrain {
 
   // The personality of section s. Deterministic, never repeats its
   // predecessor (a Narrows into a Narrows would just be one long Narrows).
+  // The course has an arc: section 0 is always cruise, the final section is
+  // always the plunge finale, and everything past the line is outrun cruise.
   sectionType(s: number): SectionType {
     if (s <= 0) return 'cruise';
+    if (s > this.lastSection()) return 'cruise'; // the outrun
+    if (s === this.lastSection()) return 'plunge'; // the finale
     const cached = this.sectionTypes.get(s);
     if (cached) return cached;
     const prev = this.sectionType(s - 1);
     const roll = Math.floor(hash2(this.seed, s, 6011) * SECTION_ORDER.length);
     let type = SECTION_ORDER[roll % SECTION_ORDER.length]!;
     if (type === prev) type = SECTION_ORDER[(roll + 1) % SECTION_ORDER.length]!;
+    // Never a plunge straight into the plunge finale.
+    if (s === this.lastSection() - 1 && type === 'plunge') {
+      type = SECTION_ORDER[(roll + 1) % SECTION_ORDER.length]!;
+      if (type === 'plunge' || type === prev) {
+        type = SECTION_ORDER[(roll + 2) % SECTION_ORDER.length]!;
+      }
+    }
     this.sectionTypes.set(s, type);
     return type;
   }
@@ -442,6 +474,7 @@ export class Terrain {
   private rollsJump(index: number): boolean {
     if (index < 3) return false;
     const zLip = -index * CHUNK_LENGTH - 24;
+    if (this.pastFinish(zLip)) return false; // the outrun asks nothing of you
     const chance = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].kickerChance;
     return hash2(this.seed, index, 31337) < chance;
   }
@@ -599,7 +632,7 @@ export class Terrain {
     const berm = this.sectionParam(z, (spec) => spec.bermRoom);
     const wall = Math.min(1, Math.max(0, (Math.abs(d) - this.channelHalfWidth(z) - berm) / 4));
     let patch = 0;
-    if (z < -80 && this.kickerShape(d, z) === 0 && !this.inJumpLane(d, z)) {
+    if (z < -80 && !this.pastFinish(z) && this.kickerShape(d, z) === 0 && !this.inJumpLane(d, z)) {
       const threshold = this.sectionParam(z, (spec) => spec.crudThreshold);
       const n = this.noise2(x / 13, z / 13, 5);
       patch = smoothstep(Math.min(1, Math.max(0, (n - threshold) / 0.1)));
@@ -661,8 +694,9 @@ export class Terrain {
 
     const obstacles: Obstacle[] = [];
     const zTop = -index * CHUNK_LENGTH;
-    // Chunks 0-5 stay empty so every run starts in the open.
-    if (index >= 6) {
+    // Chunks 0-5 stay empty so every run starts in the open; the outrun
+    // past the finish stays empty so every run ends in celebration.
+    if (index >= 6 && index * CHUNK_LENGTH < this.courseLength) {
       const spec = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zTop - CHUNK_LENGTH / 2))];
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 7919) * 2 ** 31));
       const jump = this.jumpForChunk(index);
@@ -714,7 +748,7 @@ export class Terrain {
     if (cached) return cached;
 
     const pickups: Pickup[] = [];
-    if (index > 0) {
+    if (index > 0 && index * CHUNK_LENGTH < this.courseLength) {
       const zMid = -index * CHUNK_LENGTH - CHUNK_LENGTH / 2;
       const type = this.sectionType(this.sectionIndexAt(zMid));
       const chance = type === 'bowl' ? 0.9 : type === 'narrows' ? 0.35 : 0.7;

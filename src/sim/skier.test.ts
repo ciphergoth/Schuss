@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SIM_DT, Sim, createSim, distanceSkied, stepSim } from './sim';
 import { SkierInput, stepSkier } from './skier';
-import { SECTION_LENGTH, WALL_WIDTH } from './terrain';
+import { SECTION_LENGTH, Terrain, WALL_WIDTH } from './terrain';
 
 const COAST: SkierInput = { steer: 0, stance: 0 };
 
@@ -63,8 +63,10 @@ describe('skier', () => {
 
   it('a banked sweeper carries a hands-off rider around the turn at speed', () => {
     // Before the gravity-turn force, this ride scrubbed 23 -> 15 m/s off
-    // the walls; the superelevation now does the steering.
+    // the walls; the superelevation now does the steering. (Endless
+    // mountain: courses don't guarantee every section type.)
     const sim = createSim(1);
+    sim.terrain = new Terrain(1, Infinity);
     const t = sim.terrain;
     let sweeper = 1;
     while (t.sectionType(sweeper) !== 'sweeper') sweeper++;

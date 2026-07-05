@@ -32,6 +32,7 @@ export type SimEvent =
       repeat: boolean; // same trick as the last one landed: docked pay
     }
   | { type: 'sector'; speed: number; points: number } // 250m pace grade
+  | { type: 'finish'; time: number; score: number } // crossed the line
   | { type: 'tumble'; trick: boolean }; // trick: blown rotation vs plain crash
 
 export interface Sim {
@@ -45,6 +46,7 @@ export interface Sim {
   // fills while there is fuel burning. Released as vy = 5.4 * sqrt(charge).
   trickMult: number; // armed by a bonus star; multiplies the next trick's POINTS
   lastTrick: string | null; // signature of the last landed trick (repeat check)
+  finishedAt: number | null; // sim time the line was crossed; score locks there
   score: number; // the ledger of glory: trick points + sector pace, uncapped
   nextSectorZ: number; // where the next 250m pace grade lands
   sectorStartTime: number;
@@ -107,6 +109,7 @@ export function createSim(seed: number): Sim {
     charge: 0,
     trickMult: 1,
     lastTrick: null,
+    finishedAt: null,
     score: 0,
     nextSectorZ: -SECTOR_LENGTH,
     sectorStartTime: 0,
@@ -157,6 +160,14 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     events.push({ type: 'tumble', trick });
   }
 
+  // Crossing the line ends the run: the score locks, and the outrun beyond
+  // is pure ceremony — no pay, no penalties, just skiing it out.
+  if (sim.finishedAt === null && sim.terrain.pastFinish(s.z)) {
+    sim.finishedAt = sim.time;
+    events.push({ type: 'finish', time: sim.time, score: sim.score });
+  }
+  const scoring = sim.finishedAt === null;
+
   // Any return to the snow settles the flight's rotation ledger. A rotation
   // only counts if it arrived within tolerance of the correct facing — the
   // SAME bar the landing judge tumbles by past commit; one gate for payout
@@ -170,7 +181,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     const flipBack = s.flip > 0; // positive pitch lifts the tips: backflip (S)
     if (s.tumbling === 0) {
       if (airBefore > MIN_STYLISH_AIR) events.push({ type: 'landing', airTime: airBefore });
-      if (turns >= 1 || flipTurns >= 1) {
+      if (scoring && (turns >= 1 || flipTurns >= 1)) {
         // Fuel is flat and capped — the mechanical loop.
         const perFlip = flipBack ? BOOST_PER_BACKFLIP : BOOST_PER_FRONTFLIP;
         let fuel = turns * BOOST_PER_SPIN + flipTurns * perFlip;
@@ -250,7 +261,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
 
   // Sector pace grade: every 250m of course, average speed converts to
   // points on a savage curve. This is where burned boost becomes score.
-  if (s.z <= sim.nextSectorZ) {
+  if (scoring && s.z <= sim.nextSectorZ) {
     const elapsed = sim.time - sim.sectorStartTime;
     const avg = SECTOR_LENGTH / Math.max(elapsed, 0.001);
     const over = Math.max(0, avg - SECTOR_MIN_SPEED);

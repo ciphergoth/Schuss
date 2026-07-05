@@ -226,6 +226,10 @@ class Trail {
     if (this.centers.length > TRAIL_POINTS) this.centers.shift();
   }
 
+  clear(): void {
+    this.centers.length = 0;
+  }
+
   rebuild(flow: number, time: number, armed: number): void {
     const color = new THREE.Color();
     for (let i = 0; i < TRAIL_POINTS; i++) {
@@ -324,6 +328,14 @@ export class Effects {
       sprite: glow,
     });
     this.trail = new Trail(scene);
+  }
+
+  // A new course (or a fresh run) starts visually clean: no trail painted
+  // across two worlds, no shells or afterglow carried over.
+  reset(): void {
+    this.trail.clear();
+    this.shells.length = 0;
+    this.orbitUntil = 0;
   }
 
   // Queue a volley of firework shells over the track around z, colored from
@@ -426,6 +438,9 @@ export class Effects {
         // Scoring earns the orbiting sparkles for a moment.
         this.orbitColor.copy(e.mult >= 5 ? this.magenta : e.mult >= 3 ? this.gold : this.cyan);
         this.orbitUntil = sim.time + Math.min(2.5, 1.4 + e.points / 8000);
+      } else if (e.type === 'finish') {
+        // The line: the grandest barrage the sky has seen this run.
+        this.volley(sim, 12, NEON_PALETTE, 3);
       } else if (e.type === 'sector') {
         // The pace grade pays in the sky too: a polite pair for any paid
         // sector, a full barrage for a jackpot.

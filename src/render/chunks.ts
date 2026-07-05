@@ -131,6 +131,20 @@ export class ChunkRenderer {
     private terrain: Terrain
   ) {}
 
+  // Swap to a new course (next seed): tear down every chunk and rebuild
+  // against the new terrain as the update loop asks for it.
+  setTerrain(terrain: Terrain): void {
+    for (const [, group] of this.chunks) {
+      this.scene.remove(group);
+      group.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) obj.geometry.dispose();
+      });
+    }
+    this.chunks.clear();
+    this.pickupMeshes.clear();
+    this.terrain = terrain;
+  }
+
   update(centerChunk: number, collected: ReadonlySet<string>, time: number): void {
     const lo = centerChunk - CHUNKS_BEHIND;
     const hi = centerChunk + CHUNKS_AHEAD;
@@ -242,14 +256,47 @@ export class ChunkRenderer {
       }
     }
 
+    // The FINISH gate: checkered pillars and bars across the whole channel
+    // where the course ends, visible from far up the final plunge.
+    if (index * CHUNK_LENGTH === this.terrain.courseLength) {
+      const zf = -this.terrain.courseLength;
+      const cX = this.terrain.centerX(zf);
+      const floorY = this.terrain.height(cX, zf);
+      const span = this.terrain.channelHalfWidth(zf) + 2;
+      const black = new THREE.Color(0x15151c);
+      const pillarGeo = stripedPole(0.5, 13, black, this.white);
+      for (const side of [-1, 1]) {
+        const x = cX + side * span;
+        const pillar = new THREE.Mesh(pillarGeo, this.striped);
+        pillar.position.set(x, this.terrain.height(x, zf) + 6.5, zf);
+        pillar.castShadow = true;
+        group.add(pillar);
+      }
+      for (const barY of [10.4, 11.6]) {
+        const bar = new THREE.Mesh(
+          stripedPole(0.55, span * 2, black, this.white).rotateZ(Math.PI / 2),
+          this.striped
+        );
+        bar.position.set(cX, floorY + barY, zf);
+        group.add(bar);
+      }
+      const halo = new THREE.Mesh(
+        new THREE.TorusGeometry(span + 1, 1.3, 8, 40, Math.PI),
+        this.gateGlows[2]!
+      );
+      halo.position.set(cX, floorY + 0.3, zf);
+      group.add(halo);
+    }
+
     // Sector gates: a glowing neon arc spans the channel at every 250m pace
     // line, so the scoring rhythm is built into the course. Cross one fast
-    // and the fireworks are yours (fx layer).
+    // and the fireworks are yours (fx layer). None past the finish — the
+    // outrun has nothing left to grade.
     // A gate lives in the chunk whose [zTop, zTop - CHUNK_LENGTH) span holds
     // it, boundary included at the top (matching chunkIndexAt).
     for (
       let k = Math.max(1, Math.ceil(-zTop / SECTOR_LENGTH));
-      k * SECTOR_LENGTH < -zTop + CHUNK_LENGTH;
+      k * SECTOR_LENGTH < Math.min(-zTop + CHUNK_LENGTH, this.terrain.courseLength);
       k++
     ) {
       const zg = -k * SECTOR_LENGTH;

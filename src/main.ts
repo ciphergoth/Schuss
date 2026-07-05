@@ -24,8 +24,9 @@ declare global {
   }
 }
 
-// ?seed=N picks the mountain; a fixed default keeps runs comparable.
-const seed = Number(new URLSearchParams(location.search).get('seed') ?? '1');
+// ?seed=N picks the starting course; finishing advances to seed+1, so
+// course numbers are shareable ("try course 7").
+let currentSeed = Number(new URLSearchParams(location.search).get('seed') ?? '1');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -49,16 +50,23 @@ const chargeFill = document.getElementById('chargefill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
 const pauseScreen = document.getElementById('pause')!;
 const confirmScreen = document.getElementById('confirm')!;
+const finishScreen = document.getElementById('finish')!;
+const finishStats = document.getElementById('finishstats')!;
+const finishBest = document.getElementById('finishbest')!;
 const trickText = document.getElementById('trick')!;
 
 // A short-lived banner: live spin readout while airborne, result on landing.
 let trickBannerUntil = 0;
 
-// Best score survives across runs and sessions.
-const BEST_KEY = 'skigame-best';
-let best = Number(localStorage.getItem(BEST_KEY) ?? '0');
+// Best score survives across runs and sessions, per course: every course
+// has its own ladder.
+const bestKey = () => `skigame-best-${currentSeed}`;
+let best = Number(localStorage.getItem(bestKey()) ?? '0');
+let bestAtCourseStart = best; // for the NEW BEST! call at the line
+// The ceremony panel waits a beat after the line so the barrage lands first.
+let finishPanelAt: number | null = null;
 
-let sim = createSim(seed);
+let sim = createSim(currentSeed);
 let lastInput: SkierInput = { steer: 0, stance: 0 };
 const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
 // R doesn't restart outright anymore — it pauses onto a Y/N confirm, so a
@@ -89,14 +97,26 @@ function openConfirm(): void {
   if (!paused) setPaused(true);
 }
 
+// Start a course fresh — the current one again, or the next seed up.
+function startCourse(seed: number): void {
+  currentSeed = seed;
+  best = Number(localStorage.getItem(bestKey()) ?? '0');
+  bestAtCourseStart = best;
+  sim = createSim(currentSeed);
+  chunkRenderer.setTerrain(sim.terrain);
+  fx.reset();
+  finishPanelAt = null;
+  finishScreen.classList.remove('visible');
+  trickBannerUntil = 0; // sim.time resets to 0; don't let a stale banner linger
+  trickText.classList.remove('visible');
+  input.resetActed();
+}
+
 function closeConfirm(restart: boolean): void {
   confirming = false;
   confirmScreen.classList.remove('visible');
   if (restart) {
-    sim = createSim(seed);
-    trickBannerUntil = 0; // sim.time resets to 0; don't let a stale banner linger
-    trickText.classList.remove('visible');
-    input.resetActed();
+    startCourse(currentSeed);
     setPaused(false);
   } else {
     // Back to wherever they came from: the run, or the pause guide.
@@ -108,6 +128,11 @@ window.addEventListener('keydown', (e) => {
   if (confirming) {
     if (e.code === 'KeyY') closeConfirm(true);
     else if (e.code === 'KeyN' || e.code === 'Escape') closeConfirm(false);
+    return;
+  }
+  // On the ceremony panel, Space rolls the next course.
+  if (e.code === 'Space' && finishScreen.classList.contains('visible')) {
+    startCourse(currentSeed + 1);
     return;
   }
   if (e.code === 'Escape' || e.key === '?') setPaused(!paused);
@@ -186,6 +211,10 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
         color,
         1.4
       );
+    } else if (e.type === 'finish') {
+      audio.playFinish();
+      audio.playFireworks(12, true);
+      finishPanelAt = sim.time + 1.8; // let the barrage land first
     } else if (e.type === 'sector') {
       // The pace grade: a fast sector is a jackpot, a slow one just a fact.
       if (e.points > 0) {
@@ -220,15 +249,29 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     Math.floor(Math.max(0, -skier.z) / ZONE_LENGTH)
   );
 
-  // Speed and distance top-left, the score ledger top-right, the vertical
-  // bar on the left is the boost tank — SSX-style.
-  stats.textContent = `${Math.round(skier.speed)} m/s · ${Math.round(distanceSkied(sim))} m`;
+  // Speed, distance and course top-left, the score ledger top-right, the
+  // vertical bar on the left is the boost tank — SSX-style.
+  stats.textContent = `${Math.round(skier.speed)} m/s · ${Math.round(distanceSkied(sim))} m · course ${currentSeed}`;
+
+  // The ceremony: once the finish barrage has landed, raise the panel.
+  const showFinish = finishPanelAt !== null && sim.time >= finishPanelAt && !confirming;
+  if (showFinish && !finishScreen.classList.contains('visible')) {
+    const t = sim.finishedAt ?? 0;
+    const mins = Math.floor(t / 60);
+    const secs = (t - mins * 60).toFixed(1).padStart(4, '0');
+    finishStats.textContent = `SCORE ${sim.score.toLocaleString('en')} · TIME ${mins}:${secs}`;
+    finishBest.textContent =
+      sim.score > bestAtCourseStart && input.acted()
+        ? 'NEW COURSE BEST!'
+        : `COURSE BEST ${best.toLocaleString('en')}`;
+  }
+  finishScreen.classList.toggle('visible', showFinish);
   scoreText.textContent = sim.score.toLocaleString('en');
   // BEST is for runs actually played: an idle tab self-piloting downhill
   // (or debug pokes) never writes the persistent ledger.
   if (sim.score > best && input.acted()) {
     best = sim.score;
-    localStorage.setItem(BEST_KEY, String(best));
+    localStorage.setItem(bestKey(), String(best));
   }
   bestText.textContent = best > 0 ? `BEST ${best.toLocaleString('en')}` : '';
   // The armed star glows under the score in its own color until touchdown.

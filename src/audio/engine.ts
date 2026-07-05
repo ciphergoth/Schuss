@@ -396,6 +396,45 @@ export class GameAudio {
     }
   }
 
+  // Crossing the FINISH: a proper victory fanfare — a rising major arpeggio
+  // with a held top chord. The fireworks call in alongside (main fires
+  // playFireworks separately, matching the fx barrage).
+  playFinish(): void {
+    if (!this.nodes) return;
+    const { ctx, master } = this.nodes;
+    const t = ctx.currentTime;
+    const run: readonly (readonly [number, number, number])[] = [
+      [0, 523, 0.14],
+      [0.12, 659, 0.14],
+      [0.24, 784, 0.14],
+      [0.36, 1046, 0.16],
+    ];
+    for (const [at, freq, level] of run) {
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(level, t + at);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + at + 0.3);
+      osc.connect(gain).connect(master);
+      osc.start(t + at);
+      osc.stop(t + at + 0.32);
+    }
+    // The held chord under the top note.
+    for (const freq of [523, 659, 784]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, t + 0.36);
+      gain.gain.exponentialRampToValueAtTime(0.09, t + 0.5);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.6);
+      osc.connect(gain).connect(master);
+      osc.start(t + 0.36);
+      osc.stop(t + 1.7);
+    }
+  }
+
   // Crossing into a new color world: a soft two-note swell, root rising
   // with the zone, felt more than heard.
   private playZoneShift(zone: number): void {

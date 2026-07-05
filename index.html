@@ -194,6 +194,51 @@
       #confirm .keys b {
         color: #ffd34d;
       }
+      #finish {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        pointer-events: none;
+      }
+      #finish.visible {
+        display: flex;
+      }
+      #finish .panel {
+        background: rgba(18, 24, 64, 0.88);
+        border-radius: 14px;
+        padding: 26px 40px;
+        color: white;
+        text-align: center;
+        text-shadow: 0 1px 3px rgba(0, 0, 40, 0.6);
+      }
+      #finish h1 {
+        margin: 0 0 10px;
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 40px;
+        color: #ffd34d;
+      }
+      #finishstats {
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 22px;
+        line-height: 1.7;
+      }
+      #finishbest {
+        color: #ff3ddc;
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 18px;
+        min-height: 24px;
+      }
+      #finish .keys {
+        margin-top: 12px;
+        font-size: 16px;
+        opacity: 0.9;
+      }
+      #finish .keys b {
+        color: #ffd34d;
+      }
       #pause table {
         border-collapse: collapse;
         font-size: 16px;
@@ -264,6 +309,10 @@
             <td>Your sector pace is graded &mdash; fast sectors pay savage points</td>
           </tr>
           <tr>
+            <td>The finish, 3.2 km</td>
+            <td>Score locks at the checkered gate &mdash; Space rolls the next course</td>
+          </tr>
+          <tr>
             <td>R</td>
             <td>Restart &mdash; asks Y/N first</td>
           </tr>
@@ -282,6 +331,16 @@
         <h1>Fresh run?</h1>
         <div class="keys">
           <b>Y</b> &mdash; restart &nbsp;&middot;&nbsp; <b>N</b> &mdash; keep skiing
+        </div>
+      </div>
+    </div>
+    <div id="finish">
+      <div class="panel">
+        <h1>FINISH!</h1>
+        <div id="finishstats"></div>
+        <div id="finishbest"></div>
+        <div class="keys">
+          <b>Space</b> &mdash; next course &nbsp;&middot;&nbsp; <b>R</b> &mdash; retry
         </div>
       </div>
     </div>

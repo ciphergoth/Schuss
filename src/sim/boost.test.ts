@@ -441,6 +441,21 @@ describe('boost economy', () => {
     expect(sim.score).toBe(2160); // (500 + 1100) x 1.35
   });
 
+  it('crossing the line fires finish once, locks the score, ends the pay', () => {
+    const sim = createSim(1);
+    const t = sim.terrain;
+    teleport(sim, t.centerX(-t.courseLength + 30), -t.courseLength + 30, 25);
+    sim.nextSectorZ = -1e9; // isolate the finish from sector pay
+    sim.score = 12345;
+    const events = runCollecting(sim, 5);
+    const fins = events.filter((e) => e.type === 'finish');
+    expect(fins.length).toBe(1);
+    const atLine = fins[0] && fins[0].type === 'finish' ? fins[0].score : -1;
+    expect(atLine).toBeGreaterThanOrEqual(12345); // approach coins may pay
+    expect(sim.finishedAt).not.toBeNull();
+    expect(sim.score).toBe(atLine); // and past the line, nothing does
+  });
+
   it('sectors grade pace savagely: fast pays big, slow pays nothing', () => {
     const race = (speed: number, input: SkierInput) => {
       const sim = createSim(1);

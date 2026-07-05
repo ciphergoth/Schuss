@@ -1,9 +1,11 @@
 # Schuss!
 
-A 3D browser-based skiing game in the spirit of PS2-era SSX Tricky: an
-endless procedurally generated walled track — a banked ice channel floating
-in a dusk sky above a city — with obstacles, jumps, and pickup lines. Static
-site, no server.
+A 3D browser-based skiing game in the spirit of PS2-era SSX Tricky:
+procedurally generated walled COURSES — banked ice channels floating in a
+dusk sky above a city — with obstacles, jumps, and pickup lines. A course
+is 3.2km ending at a checkered finish gate; Space on the ceremony panel
+rolls the next course (seed+1, so course numbers are shareable; ?seed=N
+picks the start). Static site, no server.
 
 Design rules: punishment is light — obstacle hits cost a 1.3s tumble and most
 of your speed, never the run; the walls contain you physically (rideable
@@ -98,8 +100,16 @@ stepDowns don't (never both), throw toward the center, need a 13m+
 channel, and never roll in plunges (mid-plunge grade swings bend flights
 off any fixed sling line). Sweepers keep their first 5m of bank crud-free
 (bermRoom): with gravity carrying riders along banks, the berm is a
-line you choose. The
-section framework is where moving hazards and finish lines will plug in.
+line you choose. COURSES have an arc (COURSE_LENGTH = 8 sections): section 0 cruise, a
+mixed middle, and a forced plunge FINALE into the gate; the outrun past
+the line is clean cruise — no kickers, obstacles, coins, or crud patches
+(Terrain takes a courseLength param; tests probe an endless mountain with
+Infinity). Crossing the line locks the score (SimEvent 'finish'; the
+outrun pays nothing), fires the grandest barrage + a victory fanfare, and
+raises the ceremony panel ~1.8s later: score, time, per-course BEST
+(localStorage key skigame-best-<seed>), Space = next course, R = retry.
+The
+section framework is where moving hazards will plug in.
 The render layer
 draws the course as a ribbon clipped just past the bounce barrier, so the
 walls stay low and the world beyond shows: neon edge poles, a city skyline

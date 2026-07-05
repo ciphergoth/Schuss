@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { CHUNK_LENGTH, GRADE, SECTION_LENGTH, SectionType, Terrain, WALL_WIDTH } from './terrain';
+import {
+  CHUNK_LENGTH,
+  COURSE_LENGTH,
+  GRADE,
+  SECTION_LENGTH,
+  SectionType,
+  Terrain,
+  WALL_WIDTH,
+} from './terrain';
 
 // Find the first section of a given type (searching a long way downhill).
 function findSection(t: Terrain, type: SectionType, from = 1, to = 80): number {
@@ -57,7 +65,7 @@ describe('terrain', () => {
   });
 
   it('sections give every run personality, and never twice in a row', () => {
-    const t = new Terrain(1);
+    const t = new Terrain(1, Infinity);
     const seen = new Set<SectionType>();
     for (let s = 1; s < 60; s++) {
       seen.add(t.sectionType(s));
@@ -68,7 +76,7 @@ describe('terrain', () => {
   });
 
   it('the narrows squeeze and the bowls blow open', () => {
-    const t = new Terrain(1);
+    const t = new Terrain(1, Infinity);
     const narrows = findSection(t, 'narrows');
     const bowl = findSection(t, 'bowl');
     const mid = (s: number) => -(s + 0.5) * SECTION_LENGTH;
@@ -83,7 +91,7 @@ describe('terrain', () => {
   });
 
   it('a plunge drops far more than the mean grade', () => {
-    const t = new Terrain(1);
+    const t = new Terrain(1, Infinity);
     const s = findSection(t, 'plunge');
     const zTop = -s * SECTION_LENGTH;
     const zBot = zTop - SECTION_LENGTH;
@@ -92,7 +100,7 @@ describe('terrain', () => {
   });
 
   it('a steps section is a staircase of launchable terrace edges', () => {
-    const t = new Terrain(1);
+    const t = new Terrain(1, Infinity);
     const s = findSection(t, 'steps');
     const zTop = -s * SECTION_LENGTH;
     let edges = 0;
@@ -110,7 +118,7 @@ describe('terrain', () => {
   });
 
   it('sweepers bank the floor into the turn', () => {
-    const t = new Terrain(1);
+    const t = new Terrain(1, Infinity);
     const s = findSection(t, 'sweeper');
     const zTop = -s * SECTION_LENGTH;
     // Find the sharpest bend in the meat of the section.
@@ -132,7 +140,7 @@ describe('terrain', () => {
   });
 
   it('kickers come in sizes and personalities', () => {
-    const t = new Terrain(1);
+    const t = new Terrain(1, Infinity);
     const kinds = new Set<string>();
     let stepDowns = 0;
     let hips = 0;
@@ -169,7 +177,7 @@ describe('terrain', () => {
   });
 
   it('hip stars hang off the drifted, thrown line, not the straight core', () => {
-    const t = new Terrain(1);
+    const t = new Terrain(1, Infinity);
     let found = false;
     for (let i = 3; i < 400 && !found; i++) {
       const jump = t.jumpForChunk(i);
@@ -183,13 +191,35 @@ describe('terrain', () => {
   });
 
   it('sweeper berms are clean racing snow; other banks stay crud', () => {
-    const t = new Terrain(1);
+    const t = new Terrain(1, Infinity);
     const sweeper = findSection(t, 'sweeper');
     const zs = -(sweeper + 0.5) * SECTION_LENGTH;
     expect(t.stickinessAt(t.centerX(zs) + t.channelHalfWidth(zs) + 3, zs)).toBeLessThan(0.05);
     const cruise = findSection(t, 'cruise', 2);
     const zc = -(cruise + 0.5) * SECTION_LENGTH;
     expect(t.stickinessAt(t.centerX(zc) + t.channelHalfWidth(zc) + 3, zc)).toBeGreaterThan(0.5);
+  });
+
+  it('a course has an arc: cruise opening, plunge finale, empty outrun', () => {
+    for (const seed of [1, 2, 5]) {
+      const t = new Terrain(seed); // default course length
+      const last = COURSE_LENGTH / SECTION_LENGTH - 1;
+      expect(t.sectionType(0)).toBe('cruise');
+      expect(t.sectionType(last)).toBe('plunge'); // the finale
+      expect(t.sectionType(last - 1)).not.toBe('plunge'); // earned, not doubled
+      expect(t.sectionType(last + 1)).toBe('cruise'); // the outrun
+      // The outrun asks nothing of you and offers nothing.
+      const firstOutrunChunk = COURSE_LENGTH / CHUNK_LENGTH;
+      for (let i = firstOutrunChunk; i < firstOutrunChunk + 10; i++) {
+        expect(t.obstaclesForChunk(i)).toEqual([]);
+        expect(t.pickupsForChunk(i)).toEqual([]);
+        expect(t.jumpForChunk(i)).toBeNull();
+        expect(t.bonusesForChunk(i)).toEqual([]);
+      }
+      // Outrun snow is clean celebratory racing snow.
+      const zOut = -COURSE_LENGTH - 100;
+      expect(t.stickinessAt(t.centerX(zOut) + 3, zOut)).toBe(0);
+    }
   });
 
   it('the first kicker of every run is the classic flat M', () => {
@@ -207,7 +237,7 @@ describe('terrain', () => {
   });
 
   it('a step-down kicker scoops its landing out of the floor', () => {
-    const t = new Terrain(1);
+    const t = new Terrain(1, Infinity);
     let found = false;
     for (let i = 3; i < 400 && !found; i++) {
       const jump = t.jumpForChunk(i);
