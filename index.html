@@ -145,6 +145,9 @@
       #trick.visible {
         display: flex;
       }
+      /* Stacking order of the full-screen overlays: the finish ceremony sits
+         below the pause guide and its restart confirm, so pausing during the
+         ceremony always brings the pause screen frontmost. */
       #pause {
         position: fixed;
         inset: 0;
@@ -153,6 +156,7 @@
         justify-content: center;
         background: rgba(10, 14, 40, 0.55);
         user-select: none;
+        z-index: 20;
       }
       #pause.visible {
         display: flex;
@@ -165,6 +169,7 @@
         justify-content: center;
         background: rgba(10, 14, 40, 0.55);
         user-select: none;
+        z-index: 30;
       }
       #confirm.visible {
         display: flex;
@@ -202,6 +207,7 @@
         justify-content: center;
         user-select: none;
         pointer-events: none;
+        z-index: 10;
       }
       #finish.visible {
         display: flex;
