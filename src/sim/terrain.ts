@@ -85,11 +85,14 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     bermRoom: 0,
   },
   // The playground: wide open, obstacle slaloms, kickers of every size.
+  // Rollers run calmer here than in cruise: across 27m of floor the bank
+  // and roller slopes stack, and the drainage guarantee has to hold at
+  // the far edges too.
   bowl: {
     half: 27,
     swing: 4,
     curveAmp: 10,
-    rollerScale: 1,
+    rollerScale: 0.75,
     extraDrop: 0,
     terraced: false,
     kickerChance: 0.35,
@@ -130,11 +133,14 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     bermRoom: 0,
   },
   // Big banked S-turns where carving the wall is the racing line.
+  // Rollers run quiet: at each S-turn's bank flip the transition already
+  // spends most of the grade at the floor edges, and the drainage
+  // guarantee must survive the flip. A sweeper is about the carve anyway.
   sweeper: {
     half: 13,
     swing: 2,
     curveAmp: 20,
-    rollerScale: 0.8,
+    rollerScale: 0.5,
     extraDrop: 0,
     terraced: false,
     kickerChance: 0.18,
@@ -159,6 +165,11 @@ const SECTION_ORDER: readonly SectionType[] = [
 // so the bank helps the carve without becoming a wall of its own.
 const BANK_GAIN = 9;
 const BANK_MAX_SLOPE = 0.26;
+// Superelevation lever arm (see height()). Deliberately just UNDER the
+// sweeper's 13m half-width: the bank plateaus before the wall base, so
+// the low side never digs a V-gutter against the rising wall — a gutter
+// whose along-slope flattened at bank fades was a genuine skier trap.
+const BANK_ARM = 12;
 
 // The sweeper's deliberate S-curve: the wandering noise is too lazy to bend
 // hard enough to bank, so sweeper sections add real sine turns — two full
@@ -224,6 +235,13 @@ export interface Jump {
 
 const JUMP_EDGE = 1.8; // soft shoulder from full height to flat floor
 const SCOOP_EDGE = 5; // step-down landings get wide, gentle shoulders
+// The carved landing floor always descends at least this steeply — with
+// the mogul texture's worst counter-slope (~0.04) subtracted it still
+// clears twice snow friction, so a skier who lands dead in the carve
+// drains out the bottom. Must stay well below the mean grade (0.35) so
+// the rolled base always catches the carve from above and the landing
+// rejoins the floor on a downhill crossing.
+const CARVE_SLOPE = 0.15;
 // Hip pads: the approach tilts up to HIP_TILT cross-slope by the lip over a
 // HIP_LANE run-up; gravity's cross-slope turn converts that into a launch
 // heading thrown ~HIP_THROW radians across the track at plan-ish speeds
@@ -439,9 +457,14 @@ export class Terrain {
     return Math.atan2(this.centerX(z - 1) - this.centerX(z + 1), 2);
   }
 
-  // Signed centerline curvature; drives the banking.
+  // Signed centerline curvature; drives the banking. The wide stencil is
+  // deliberate: it reads the ~100m+ trend of the bend, so the bank doesn't
+  // flip with every noise wiggle. A fast bank flip is a drainage hazard —
+  // its transition moves the floor edges up along-track at arm * dBank/dz,
+  // and rail-to-rail in 20m cancels the whole grade. The 200m sweeper sine
+  // passes through at ~87% strength; sub-80m wiggles lose most of theirs.
   private curvature(z: number): number {
-    return (this.centerX(z - 4) - 2 * this.centerX(z) + this.centerX(z + 4)) / 16;
+    return (this.centerX(z - 20) - 2 * this.centerX(z) + this.centerX(z + 20)) / 400;
   }
 
   // THE GOLDEN PATH: the intended line through the course, as an offset from
@@ -464,9 +487,15 @@ export class Terrain {
   // Height of the track's spine plus big rollers. Under leg-reach contact
   // rollers are rhythm, not flight — their curvature can't out-drop gravity
   // by more than the legs absorb. Air belongs to built edges and the pop.
+  // Amplitude and wavelength are sized so a roller backside always leaves
+  // a net downhill grade of at least ~0.12 (measured by drainage.test.ts;
+  // the fractal noise's slope runs ~3.7x amplitude/wavelength): the floor
+  // keeps draining and a stopped skier always restarts. The old 3.2/55m
+  // rollers could locally cancel the 0.35 grade to below snow friction —
+  // a skier who stopped there was parked forever.
   private baseY(z: number): number {
     const rollers = this.sectionParam(z, (spec) => spec.rollerScale);
-    return this.spineY(z) + (this.noise1(z / 55, 2) - 0.5) * 2 * 3.2 * rollers;
+    return this.spineY(z) + (this.noise1(z / 85, 2) - 0.5) * 2 * 2.5 * rollers;
   }
 
   // Does this chunk roll a kicker? Odds depend on its section — some
@@ -504,7 +533,10 @@ export class Terrain {
     // The kicker sits on the golden path: following the plan lines you up.
     const xOffset = Math.max(-maxOffset, Math.min(maxOffset, this.planOffset(zLip)));
     const variantRoll = hash2(this.seed, index, 7333);
-    const stepDown = !opening && kind !== 'S' && variantRoll < 0.3 ? lipHeight * 1.6 : 0;
+    // Scoop depth is capped: every extra meter of drop is a meter the
+    // carved landing floor must dissipate before it rejoins the grade.
+    const stepDown =
+      !opening && kind !== 'S' && variantRoll < 0.3 ? Math.min(lipHeight * 1.6, 3.5) : 0;
     // Hips throw toward the center so the slung flight stays over the floor;
     // they need lateral room for the landing, and they don't roll in
     // plunges — the mid-plunge grade swing bends flights off any fixed
@@ -525,12 +557,13 @@ export class Terrain {
 
   // The kicker's contribution to the heightfield: the ramp rising to the lip
   // (in the ramp's own, possibly hip-yawed frame) and, for step-downs, the
-  // landing scooped out past the lip. The scoop can spill into the next
-  // chunk, so shapes from this chunk's jump AND the uphill neighbor's apply.
+  // landing carved out past the lip. The carve can run tens of meters into
+  // the chunks below, so shapes from this chunk's jump and TWO uphill
+  // neighbors' apply.
   private kickerShape(d: number, z: number): number {
     const index = this.chunkIndexAt(z);
     let y = 0;
-    for (const i of [index, index - 1]) {
+    for (const i of [index, index - 1, index - 2]) {
       const jump = this.jumpForChunk(i);
       if (!jump) continue;
       const q = z - jump.zLip; // uphill distance from the lip
@@ -547,27 +580,43 @@ export class Terrain {
       }
       // Hip pad: the approach and ramp tilt progressively into a banked
       // corner (raised on the side away from the throw). The tilt fades out
-      // a few meters past the lip, under where the flight has already left.
+      // past the lip, under where the flight has already left — GENTLY,
+      // and only within its own corridor. The old shape plateaued across
+      // the whole track and faded in 6m: the entire low-side floor rose
+      // ~2.9m over 6m past every hip, a 48% wall no slow skier could climb
+      // and no lateral line could avoid — the classic inescapable valley.
+      // With a lateral fade the fade-out tongue is a local ridge you drain
+      // off sideways, and 18m of fade keeps its face shallow.
       if (jump.hip !== 0) {
         const build = smoothstep(clamp01((jump.rampLength + HIP_LANE - q) / HIP_LANE));
-        const fadeOut = q < 0 ? smoothstep(clamp01((q + 8) / 6)) : 1;
+        const fadeOut = q < 0 ? smoothstep(clamp01((q + 20) / 18)) : 1;
         const tilt = HIP_TILT * build * fadeOut;
         if (tilt > 0) {
           const w = jump.halfWidth + JUMP_EDGE + 2;
-          y += -jump.hip * tilt * Math.max(-w, Math.min(w, p));
+          const lateral = Math.abs(p) - w;
+          const latFade = lateral <= 0 ? 1 : smoothstep(1 - Math.min(1, lateral / 8));
+          y += -jump.hip * tilt * Math.max(-w, Math.min(w, p)) * latFade;
         }
       }
 
-      // Step-down scoop: the floor past the lip falls away and gently
-      // returns, so the flight floats and the catch is soft.
+      // Step-down landing: a CARVED floor, not a subtracted dip. The carve
+      // is its own line — dropping stepDown over the first 10m, then always
+      // descending at CARVE_SLOPE — and the floor is simply the lower of
+      // the carve and the rolled base, so the base always catches it from
+      // above and the landing rejoins the grade on a DOWNHILL crossing.
+      // The old shape climbed back to the base over 14m — up to a 55% wall
+      // on an L, a basin no slow lander could leave. A carve can't form a
+      // basin: its floor drains by definition, everywhere.
       if (jump.stepDown > 0 && q < 0) {
         const v = -q;
-        const depth = smoothstep(clamp01(v / 10)) - smoothstep(clamp01((v - 24) / 14));
-        if (depth > 0) {
+        const carve =
+          this.baseY(jump.zLip) - jump.stepDown * smoothstep(clamp01(v / 10)) - CARVE_SLOPE * v;
+        const below = carve - this.baseY(z);
+        if (below < 0) {
           const lateral = Math.abs(p) - (jump.halfWidth + 2);
           if (lateral < SCOOP_EDGE) {
             const fade = lateral <= 0 ? 1 : smoothstep(1 - lateral / SCOOP_EDGE);
-            y -= jump.stepDown * depth * fade;
+            y += below * fade;
           }
         }
       }
@@ -659,13 +708,22 @@ export class Terrain {
     // the racing line through a sweeper). Walls: quadratic bank that keeps
     // steepening past the rideable zone, so the course contains you without
     // any artificial clamp.
-    let y = this.baseY(z) + (this.noise2(x / 9, z / 9, 3) - 0.5) * 2 * 0.12;
+    // Mogul texture rides everywhere, including carved landings. Its SLOPE
+    // is what matters for drainage — the old 0.12m/9m texture swung ±0.10,
+    // silently eating the whole net-downhill margin the rollers left.
+    let y = this.baseY(z) + (this.noise2(x / 12, z / 12, 3) - 0.5) * 2 * 0.07;
     y += this.kickerShape(d, z);
     const bankSlope = Math.max(
       -BANK_MAX_SLOPE,
       Math.min(BANK_MAX_SLOPE, -BANK_GAIN * this.curvature(z))
     );
-    y += bankSlope * Math.max(-half, Math.min(half, d));
+    // The bank's lever arm caps at BANK_ARM: the racing corridor gets the
+    // full superelevation (every section's half-width but the bowl's fits
+    // inside it), while a 27m bowl's outer floor rides at constant lift.
+    // An uncapped arm turns every bank transition into along-track slope
+    // (d * dBank/dz) — at bowl edges that beat the grade and made flats.
+    const arm = Math.min(half, BANK_ARM);
+    y += bankSlope * Math.max(-arm, Math.min(arm, d));
     const over = a - half;
     if (over > 0) {
       y += 0.09 * over * over * (1 + Math.max(0, over - WALL_WIDTH) * 0.3);

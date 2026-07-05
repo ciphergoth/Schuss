@@ -64,12 +64,14 @@ simulated flights) · ⚠️ open item.
 
 ## Terrain features that ARE physics — `src/sim/terrain.ts`
 
-| Feature            | How it works                                                                                                                                                                                                                                         | Status |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| Banking everywhere | Floor cross-slope = `−9 × centerline curvature`, capped at 0.26 — any bend tilts its floor, and the gravity turn honors it. Sweepers add deliberate sine S-turns (amp 30, λ 200m).                                                                   | ✅     |
-| Kickers            | S/M/L (ramp 10/14/19m, lip 1.5/2.2/3.2m); 30% of M/L are step-downs with a scooped landing (float + soft catch). First kicker of every run: flat M.                                                                                                  | ✅     |
-| Hip pads           | Approach tilts to 0.38 cross-slope over a 20m run-up; the core, lip, and lit runway bend along the rider's measured ~7.5m drift line; the launch leaves the lip slung across the track. Never in plunges; throw toward center; needs a 13m+ channel. | 📐     |
-| Sweeper berms      | First 5m of bank is clean racing snow (`bermRoom`) — with gravity carrying riders along banks, the berm is a line you choose.                                                                                                                        | ✅     |
+| Feature                | How it works                                                                                                                                                                                                                                                                                                                                                  | Status                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Banking everywhere     | Floor cross-slope = `−9 × centerline curvature` (read on a ±20m stencil so the bank follows the bend, not the wiggle), capped at 0.26, lever arm capped at 12m (`BANK_ARM` — under the sweeper's 13m half, so the bank plateaus before the wall and never digs a gutter). Sweepers add deliberate sine S-turns (amp 30, λ 200m), passing the stencil at ~87%. | ✅                                  |
+| Kickers                | S/M/L (ramp 10/14/19m, lip 1.5/2.2/3.2m); 30% of M/L are step-downs whose landing is a CARVED floor: its own always-descending line (`CARVE_SLOPE = 0.15`) that the rolled base catches from above — float and a soft catch, and a basin is impossible by construction. First kicker of every run: flat M.                                                    | ✅                                  |
+| Hip pads               | Approach tilts to 0.38 cross-slope over a 20m run-up; the core, lip, and lit runway bend along the rider's measured ~7.5m drift line; the launch leaves the lip slung across the track. The tilt is a LOCAL shape (lateral fade past the corridor) and releases over 18m past the lip. Never in plunges; throw toward center; needs a 13m+ channel.           | 📐                                  |
+| Sweeper berms          | First 5m of bank is clean racing snow (`bermRoom`) — with gravity carrying riders along banks, the berm is a line you choose.                                                                                                                                                                                                                                 | ✅                                  |
+| The drainage guarantee | Everywhere a skier can stand, the fall line beats snow friction (`\|∇h\| ≥ 0.06 = 1.2μ`), so with the low-speed fall-line pivot, no stopped skier stays stopped. Rollers (2.5m/85m), moguls (0.07m/12m), bank flips, scoops, and hip releases all fit inside the 0.35 grade's slope budget. Exception: kicker ramp faces (see below).                         | ✅ `drainage.test.ts`, 4 seeds      |
+| Ramp faces             | A lip only launches because its exit slope nearly matches the grade (`2·lip/ramp` = 0.30–0.34 vs 0.35), so the last meters below every lip are sub-friction for a CRAWLING skier — pads are climbs you arrive at with speed. Exempted from the drainage sweep; a skier who stops dead on a ramp face can be parked.                                           | ⚠️ known, intended — revisit if hit |
 
 ## Bonus stars: placement IS the physics — `src/sim/terrain.ts`
 
@@ -133,6 +135,18 @@ nothing but measurement would have found.
   labeled as popped. The scorecard can't audit the instruments. Slope-
   matched setup and first-flight-only sampling are probe discipline, not
   physics.
+- **The inescapable valley (2026-07-05).** Paul got stuck in a basin on a
+  real run. Reasoning about the report produced FOUR wrong diagnoses in a
+  row — scoop return legs (real, but not the one he hit), roller
+  backsides (real too), mogul slope (real!), bank transitions (real!) —
+  and the actual dominant trap, the hip tilt's 6m fade-out raising the
+  whole low-side floor by 2.9m, only surfaced because the drainage sweep
+  kept failing after each "fix." Every shape was individually plausible;
+  only an exhaustive gradient scan across whole courses found them all,
+  and it now runs forever as `drainage.test.ts`. The ledger's lesson
+  compounds: each slope actor was honest, but nobody had ever summed the
+  slope BUDGET (grade 0.35 vs rollers + moguls + bank flips + feature
+  releases) until a test enforced the total.
 
 **The moral:** this file catches _broken laws_ — hidden resets, minted
 energy, undeclared super-g forces. It does not catch _emergent interactions_

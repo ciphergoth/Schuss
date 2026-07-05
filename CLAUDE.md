@@ -100,7 +100,13 @@ stepDowns don't (never both), throw toward the center, need a 13m+
 channel, and never roll in plunges (mid-plunge grade swings bend flights
 off any fixed sling line). Sweepers keep their first 5m of bank crud-free
 (bermRoom): with gravity carrying riders along banks, the berm is a
-line you choose. COURSES have an arc (COURSE_LENGTH = 8 sections): section 0 cruise, a
+line you choose. THE DRAINAGE GUARANTEE (drainage.test.ts): everywhere a
+skier can stand, the fall line beats snow friction, so no stopped skier
+stays stopped — rollers, moguls, bank flips (curvature on a ±20m
+stencil, 12m BANK_ARM), carved step-down landings (CARVE_SLOPE), and
+hip tilt releases all fit inside the grade's slope budget; only kicker
+ramp faces are exempt (a lip that launches is necessarily near-flat to
+a crawler — documented ⚠️ in PHYSICS.md). COURSES have an arc (COURSE_LENGTH = 8 sections): section 0 cruise, a
 mixed middle, and a forced plunge FINALE into the gate; the outrun past
 the line is clean cruise — no kickers, obstacles, coins, or crud patches
 (Terrain takes a courseLength param; tests probe an endless mountain with
@@ -212,9 +218,14 @@ friction braking).
   the buttons: the LEFT 38% of the screen is the trick pad (drag ~24px
   from touch-down and hold = W/S/A/D by dominant axis, up = frontflip),
   the RIGHT 38% is boost/charge (hold/release = Space), and the MIDDLE
-  band is the pause button (tilt.ts THUMB_ZONE; the top-center chip is
-  just its visible tip). Labeled chips in the bottom corners (body.tilt)
-  light up while their touch is live. Past ~35 degrees off neutral a
+  band is the pause button (tilt.ts THUMB_ZONE). There are no on-screen
+  chips: the touch PAUSE SCREEN is the guide — a tricolor zone map
+  (tricks/pause/boost in true proportion) plus a legend of the HUD,
+  scrolling like a normal widget (the panel overrides the global
+  touch-action: none with pan-y), with explicit DROP IN and RESTART
+  buttons (restart routes through the Y/N confirm, which has its own tap
+  buttons). Panel touches stopPropagation — they are UI, never game
+  input. Past ~35 degrees off neutral a
   detuned warning dyad rises (engine.setTiltWarning); past ~60 degrees
   sustained 0.4s the game also pauses — putting the phone down IS a pause
   gesture. toScreen's rotation follows screen.orientation.angle as the

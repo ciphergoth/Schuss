@@ -55,8 +55,6 @@ const finishScreen = document.getElementById('finish')!;
 const finishStats = document.getElementById('finishstats')!;
 const finishBest = document.getElementById('finishbest')!;
 const trickText = document.getElementById('trick')!;
-const padTricks = document.getElementById('padtricks')!;
-const padBoost = document.getElementById('padboost')!;
 
 // A short-lived banner: live spin readout while airborne, result on landing.
 let trickBannerUntil = 0;
@@ -174,7 +172,6 @@ async function enableTilt(): Promise<void> {
     }
     input.setTiltMode(true);
     tiltOn = true;
-    document.body.classList.add('tilt'); // shows the thumb-zone chips
   } catch {
     // Permission prompt rejected or unavailable: stay on legacy touch.
   }
@@ -192,10 +189,18 @@ function tryFullscreen(): void {
   if (request) void request.call(root).catch(() => {});
 }
 
+// Panel touches are UI — scrolling the guide, pressing its buttons —
+// never game input: without this, tilt mode would grab them as trick-pad
+// or charge touches.
 pauseScreen.addEventListener('pointerdown', (e) => {
-  if (e.pointerType === 'mouse') return; // desktop resumes with Esc / ?
-  // A panel tap is UI, not game input: without this, tilt mode would grab
-  // the drop-in tap itself as a trick-pad or charge touch.
+  if (e.pointerType !== 'mouse') e.stopPropagation();
+});
+
+// The touch way out of the pause screen is a real button (the panel
+// scrolls now, so tap-anywhere-to-resume would fire mid-swipe). The first
+// press is the drop-in: it asks for motion permission and fullscreen,
+// both of which must happen inside the gesture.
+document.getElementById('resumebtn')!.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
   tryFullscreen();
   if (!tiltAsked) {
@@ -209,19 +214,17 @@ pauseScreen.addEventListener('pointerdown', (e) => {
     audio.unlock();
   }
 });
+document.getElementById('restartbtn')!.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  openConfirm();
+});
 
 // In tilt mode the thumbs own the screen edges, so the whole middle band
-// is the pause button (the chip up top is its visible tip).
+// is the pause button.
 window.addEventListener('pointerdown', (e) => {
   if (!tiltOn || paused || confirming || e.pointerType === 'mouse') return;
   const frac = e.clientX / window.innerWidth;
   if (frac > THUMB_ZONE && frac < 1 - THUMB_ZONE) setPaused(true);
-});
-
-// A deliberate pause affordance for thumbs (besides tilting the phone flat).
-document.getElementById('pausechip')!.addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
-  if (!paused && !confirming) setPaused(true);
 });
 document.getElementById('confirmy')!.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
@@ -377,10 +380,6 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     multText.textContent = `×${sim.trickMult}`;
     multText.style.color = sim.trickMult >= 5 ? '#ff3ddc' : '#ffd34d';
   }
-  // The thumb-zone chips light up while their touch is live, so the
-  // invisible controls answer back.
-  padTricks.classList.toggle('active', !!lastInput.trickSpin || !!lastInput.trickFlip);
-  padBoost.classList.toggle('active', !!lastInput.boost);
   boostFill.style.height = `${sim.boost * 100}%`;
   boostFill.style.background = sim.boosting
     ? 'hsl(18, 100%, 58%)'

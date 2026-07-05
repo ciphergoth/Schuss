@@ -277,49 +277,65 @@
         margin: 10px 8px 0;
         pointer-events: auto;
       }
-      #pausechip {
-        position: fixed;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 6px 14px;
-        border-radius: 10px;
-        background: rgba(18, 24, 64, 0.55);
-        color: rgba(255, 255, 255, 0.85);
-        font-size: 15px;
-        user-select: none;
-      }
-      /* Thumb-zone chips: the visible tips of the invisible controls, shown
-         only once tilt mode is live (body.tilt). They light up while their
-         touch is held. Never targets themselves — touches pass through. */
-      .padchip {
-        position: fixed;
-        bottom: 14px;
-        padding: 8px 16px;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        background: rgba(18, 24, 64, 0.45);
-        color: rgba(255, 255, 255, 0.7);
-        font-family: 'Bungee', system-ui, sans-serif;
-        font-size: 13px;
-        letter-spacing: 1px;
-        user-select: none;
-        pointer-events: none;
+      /* On touch the keyboard guide is dead weight — the touch guide
+         replaces it wholesale. */
+      body.touch .keyonly {
         display: none;
       }
-      body.tilt .padchip {
-        display: block;
+      body.touch table.touchonly {
+        display: table;
       }
-      #padtricks {
-        left: 16px;
+      /* The pause panel scrolls like a normal widget on a small screen.
+         touch-action is none globally (the game owns the screen), but the
+         effective action is computed up to the nearest scroll container,
+         so pan-y here is enough. */
+      #pause .panel {
+        max-height: 84vh;
+        overflow-y: auto;
+        touch-action: pan-y;
+        -webkit-overflow-scrolling: touch;
       }
-      #padboost {
-        right: 16px;
+      /* The three touch regions, drawn as the tricolor they are. */
+      #zonemap {
+        display: flex;
+        height: 92px;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        margin: 2px 0 12px;
+        text-align: center;
       }
-      .padchip.active {
-        border-color: rgba(255, 211, 77, 0.9);
+      #zonemap .zone {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 3px;
+        padding: 0 4px;
+      }
+      #zonemap .zone b {
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 14px;
+        letter-spacing: 1px;
+        font-weight: normal;
+      }
+      #zonemap .zone span {
+        font-size: 11px;
+        opacity: 0.85;
+      }
+      #zonemap .zl {
+        flex: 38;
+        background: rgba(125, 255, 138, 0.16);
+        color: #7dff8a;
+      }
+      #zonemap .zm {
+        flex: 24;
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+      }
+      #zonemap .zr {
+        flex: 38;
+        background: rgba(255, 211, 77, 0.16);
         color: #ffd34d;
-        background: rgba(60, 50, 20, 0.55);
       }
     </style>
   </head>
@@ -342,7 +358,65 @@
     <div id="pause">
       <div class="panel">
         <h1 id="pausetitle">Schuss!</h1>
-        <table>
+        <!-- Touch guide: what the screen means, then the two actions. The
+             keyboard table below is hidden on touch devices. -->
+        <div class="touchonly">
+          <div id="zonemap">
+            <div class="zone zl">
+              <b>TRICKS</b>
+              <span>drag + hold in the air</span>
+              <span>up = front &middot; down = back &middot; sides = spin</span>
+            </div>
+            <div class="zone zm">
+              <b>PAUSE</b>
+              <span>tap</span>
+            </div>
+            <div class="zone zr">
+              <b>BOOST</b>
+              <span>hold to burn &amp; charge</span>
+              <span>release = jump</span>
+            </div>
+          </div>
+          <table class="touchonly">
+            <tr>
+              <td>Tilt</td>
+              <td>
+                Twist = steer &middot; tip away = tuck (faster) &middot; pull back = brake. Your
+                grip at drop-in is neutral; tilting way off also pauses
+              </td>
+            </tr>
+            <tr>
+              <td>Left bar</td>
+              <td>Boost tank &mdash; tricks and coins fill it, holding BOOST burns it for speed</td>
+            </tr>
+            <tr>
+              <td>Beside it</td>
+              <td>
+                Jump charge &mdash; grows while BOOST is held; the marker is the strongest human
+                jump; release to pop
+              </td>
+            </tr>
+            <tr>
+              <td>Top right</td>
+              <td>
+                Score &amp; course best; &times;N is a grabbed star multiplying your next trick
+              </td>
+            </tr>
+            <tr>
+              <td>Every 250 m</td>
+              <td>Sector pace grade &mdash; fast sectors pay savage points</td>
+            </tr>
+            <tr>
+              <td>The finish, 3.2 km</td>
+              <td>Score locks at the checkered gate</td>
+            </tr>
+          </table>
+          <div>
+            <button class="tapbtn" id="resumebtn">Drop in</button>
+            <button class="tapbtn" id="restartbtn">Restart</button>
+          </div>
+        </div>
+        <table class="keyonly">
           <tr>
             <td>Mouse left / right</td>
             <td>Steer &mdash; in the air, aims your landing</td>
@@ -388,14 +462,10 @@
             <td>Mute</td>
           </tr>
         </table>
-        <div class="hint">
+        <div class="hint keyonly">
           Esc or ? resumes &middot; ride the walls, graze the obstacles, thread the gold
         </div>
-        <div class="hint touchonly">
-          <b>Tap to drop in</b> &mdash; tilt steers (twist = turn, tip away = tuck, pull back =
-          brake; your grip at drop-in is neutral). Left thumb drags for tricks, right thumb holds to
-          boost &amp; charge. Tap the middle of the screen &mdash; or tilt way off &mdash; to pause.
-        </div>
+        <div class="hint touchonly">Ride the walls, graze the obstacles, thread the gold</div>
       </div>
     </div>
     <div id="confirm">
@@ -423,9 +493,6 @@
         </div>
       </div>
     </div>
-    <div id="pausechip" class="touchonly">&#10074;&#10074;</div>
-    <div id="padtricks" class="padchip">TRICKS &mdash; drag + hold</div>
-    <div id="padboost" class="padchip">BOOST &mdash; hold</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
