@@ -96,10 +96,21 @@ export function tiltZone(deviation: number): { zone: 'in' | 'edge' | 'far'; edge
 // The left thumb's invisible joystick: drag direction from the touch-down
 // point, held, maps to the trick keys. Up = frontflip (W = -1), down =
 // backflip (S = +1), left/right = spin (A/D). Screen y grows downward.
+//
+// It's an EIGHT-way pad, not four: a diagonal drag engages BOTH axes at
+// once — the pad's answer to holding two keys on desktop — so the four
+// corners arm spin+flip combos (the variety bonus). Each axis switches on
+// when the drag points within 67.5 degrees of it, giving eight equal 45-
+// degree sectors (four cardinals, four diagonals).
 export const TRICK_DRAG_PX = 24;
+const DIAG_RATIO = Math.tan(22.5 * DEG); // ~0.414: the cardinal/diagonal boundary
 
 export function trickFromDrag(dx: number, dy: number): { spin: number; flip: number } {
   if (Math.hypot(dx, dy) < TRICK_DRAG_PX) return { spin: 0, flip: 0 };
-  if (Math.abs(dx) > Math.abs(dy)) return { spin: Math.sign(dx), flip: 0 };
-  return { spin: 0, flip: Math.sign(dy) };
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  return {
+    spin: ax > ay * DIAG_RATIO ? Math.sign(dx) : 0,
+    flip: ay > ax * DIAG_RATIO ? Math.sign(dy) : 0,
+  };
 }

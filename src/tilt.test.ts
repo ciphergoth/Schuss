@@ -118,10 +118,24 @@ describe('trick drag pad', () => {
     expect(trickFromDrag(5, 5)).toEqual({ spin: 0, flip: 0 });
   });
 
-  it('maps the four directions like WASD', () => {
+  it('maps the four cardinals like single WASD keys', () => {
     expect(trickFromDrag(40, 3)).toEqual({ spin: 1, flip: 0 }); // D: spin right
     expect(trickFromDrag(-40, -3)).toEqual({ spin: -1, flip: 0 }); // A: spin left
     expect(trickFromDrag(3, -40)).toEqual({ spin: 0, flip: -1 }); // W: frontflip
     expect(trickFromDrag(3, 40)).toEqual({ spin: 0, flip: 1 }); // S: backflip
+  });
+
+  it('maps the four diagonals to spin+flip combos, like holding two keys', () => {
+    expect(trickFromDrag(40, -40)).toEqual({ spin: 1, flip: -1 }); // D+W
+    expect(trickFromDrag(-40, -40)).toEqual({ spin: -1, flip: -1 }); // A+W
+    expect(trickFromDrag(40, 40)).toEqual({ spin: 1, flip: 1 }); // D+S
+    expect(trickFromDrag(-40, 40)).toEqual({ spin: -1, flip: 1 }); // A+S
+  });
+
+  it('splits the cardinal and diagonal sectors at 22.5 degrees', () => {
+    // Just inside the cardinal cone (~20 deg off horizontal): spin only.
+    expect(trickFromDrag(50, 18)).toEqual({ spin: 1, flip: 0 });
+    // Just past the boundary (~25 deg off horizontal): the flip engages too.
+    expect(trickFromDrag(50, 24)).toEqual({ spin: 1, flip: 1 });
   });
 });

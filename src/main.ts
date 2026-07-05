@@ -158,22 +158,24 @@ setPaused(true);
 if (navigator.maxTouchPoints > 0) document.body.classList.add('touch');
 
 // iOS only grants motion access inside a user gesture, so the drop-in tap
-// on the title screen is where we ask. Denial (or no sensor) leaves the
-// legacy touch scheme: first finger steers, second snowplows.
-let tiltAsked = false;
+// on the title screen is where we ask. The tilt IS the only touch control
+// scheme — there is no finger-steering fallback — so if we can't get it, we
+// show an error instead of dropping into an unsteerable run.
+const tiltError = document.getElementById('tilterror')!;
 let tiltOn = false; // tilt granted: thumb zones live, center tap pauses
-async function enableTilt(): Promise<void> {
-  const DOE = DeviceOrientationEvent as unknown as {
-    requestPermission?: () => Promise<string>;
-  };
+async function enableTilt(): Promise<boolean> {
+  const DOE = (window as { DeviceOrientationEvent?: unknown }).DeviceOrientationEvent as
+    { requestPermission?: () => Promise<string> } | undefined;
+  if (!DOE) return false; // no orientation sensor at all
   try {
     if (typeof DOE.requestPermission === 'function') {
-      if ((await DOE.requestPermission()) !== 'granted') return;
+      if ((await DOE.requestPermission()) !== 'granted') return false;
     }
     input.setTiltMode(true);
     tiltOn = true;
+    return true;
   } catch {
-    // Permission prompt rejected or unavailable: stay on legacy touch.
+    return false;
   }
 }
 
@@ -199,20 +201,26 @@ pauseScreen.addEventListener('pointerdown', (e) => {
 // The touch way out of the pause screen is a real button (the panel
 // scrolls now, so tap-anywhere-to-resume would fire mid-swipe). The first
 // press is the drop-in: it asks for motion permission and fullscreen,
-// both of which must happen inside the gesture.
+// both of which must happen inside the gesture. If tilt can't be granted
+// we surface the error and stay paused — there is no fallback to fall into.
 document.getElementById('resumebtn')!.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
   tryFullscreen();
-  if (!tiltAsked) {
-    tiltAsked = true;
-    void enableTilt().finally(() => {
-      setPaused(false);
-      audio.unlock();
-    });
-  } else {
+  if (tiltOn) {
+    // Already granted (a mid-run pause and resume): drop straight back in.
     setPaused(false);
     audio.unlock();
+    return;
   }
+  tiltError.classList.remove('show');
+  void enableTilt().then((ok) => {
+    if (ok) {
+      setPaused(false);
+      audio.unlock();
+    } else {
+      tiltError.classList.add('show');
+    }
+  });
 });
 document.getElementById('restartbtn')!.addEventListener('pointerdown', (e) => {
   e.stopPropagation();

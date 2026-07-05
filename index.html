@@ -266,6 +266,18 @@
       body.touch #confirm .touchonly {
         display: inline-block;
       }
+      /* Shown only when tilt can't be granted (main.ts adds .show). There is
+         no touch fallback, so this is the whole story on failure. */
+      #tilterror {
+        display: none;
+        margin-top: 14px;
+        color: #ff8a8a;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      #tilterror.show {
+        display: block;
+      }
       button.tapbtn {
         font-family: 'Bungee', system-ui, sans-serif;
         font-size: 17px;
@@ -366,6 +378,7 @@
               <b>TRICKS</b>
               <span>drag + hold in the air</span>
               <span>up = front &middot; down = back &middot; sides = spin</span>
+              <span>corners = spin + flip combo</span>
             </div>
             <div class="zone zm">
               <b>PAUSE</b>
@@ -414,6 +427,12 @@
           <div>
             <button class="tapbtn" id="resumebtn">Drop in</button>
             <button class="tapbtn" id="restartbtn">Restart</button>
+          </div>
+          <div id="tilterror">
+            Tilt steering needs motion access, and this device won&rsquo;t grant it. Enable Motion
+            &amp; Orientation Access (iOS: Settings &rarr; Apps &rarr; Safari &rarr; Advanced), then
+            tap Drop in again. Schuss! is played by tilting the phone &mdash; there is no
+            finger-steering mode.
           </div>
         </div>
         <table class="keyonly">

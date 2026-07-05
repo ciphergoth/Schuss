@@ -201,8 +201,10 @@ friction braking).
   follow the track, edges = ~66 degrees across it); heading eases toward it
   with no overshoot. Rate-based steering caused pilot-induced weaving.
   y sets stance (top = tuck, bottom = snowplow); hold button for full snowplow
-- Touch: first finger works like the mouse position, second finger = full
-  snowplow — the FALLBACK when motion permission is denied/unavailable.
+- Touch: there is NO finger-steering scheme. The TILT is the only touch
+  control; if motion access can't be granted the drop-in shows an error
+  (#tilterror) and stays paused rather than dropping into an unsteerable
+  run — a phone that can't tilt can't play.
 - Mobile (landscape phone): the TILT is the mouse (src/tilt.ts, pure and
   unit-tested — everything works off the gravity direction in screen
   coordinates, alpha-free, so compass drift and chair-turning can't
@@ -216,7 +218,9 @@ friction braking).
   because that tap no longer reaches the window unlock listener; the tap
   also tries fullscreen — best-effort, iPhone Safari refuses). Thumbs are
   the buttons: the LEFT 38% of the screen is the trick pad (drag ~24px
-  from touch-down and hold = W/S/A/D by dominant axis, up = frontflip),
+  from touch-down and hold = W/S/A/D, up = frontflip; an EIGHT-way pad, so
+  the four diagonals arm a spin+flip combo the way two held keys do on
+  desktop — cardinal/diagonal split at 22.5 degrees, tilt.ts trickFromDrag),
   the RIGHT 38% is boost/charge (hold/release = Space), and the MIDDLE
   band is the pause button (tilt.ts THUMB_ZONE). There are no on-screen
   chips: the touch PAUSE SCREEN is the guide — a tricolor zone map

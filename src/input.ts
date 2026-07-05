@@ -35,23 +35,22 @@ export interface InputSource {
 }
 
 // Mouse: x steers, y sets stance (top = tuck, bottom = snowplow), held button
-// is full snowplow — the mouse owns braking. Touch: first finger works like
-// the mouse position, a second finger is full snowplow. Keyboard steering and
-// stance still work and win while held. R starts a fresh run.
+// is full snowplow — the mouse owns braking. On a phone the tilt IS the mouse
+// and the thumbs are the buttons; there is NO finger-steering fallback, so a
+// non-mouse pointer does nothing until tilt mode is live. R starts a fresh run.
 //
 // Jump: hold Space (or Shift / right mouse) to charge, release to pop. The
 // input layer only reports held/released — the SIM owns the charge meter
 // (sim-time and deterministic; see sim.ts CHARGE_FULL_S).
 export function setupInput(onRestart: () => void): InputSource {
   const down = new Set<string>();
-  const touches = new Map<number, { x: number; y: number }>(); // non-mouse pointers
   let mouse: { x: number; y: number } | null = null; // last known cursor position
   let mouseBrake = false;
 
   // Tilt mode: the phone IS the mouse. World-up is tracked in screen
   // coordinates; the attitude at unpause is calibrated as neutral. Thumbs
   // take over the buttons — left half is the trick pad, right half is
-  // boost/charge — replacing the legacy touch scheme entirely.
+  // boost/charge — the only touch control scheme (no finger-steering).
   let tiltMode = false;
   let tiltUp: Vec3 | null = null; // latest attitude, screen frame
   let tiltRef: Vec3 | null = null; // calibrated neutral
@@ -133,9 +132,9 @@ export function setupInput(onRestart: () => void): InputSource {
       } else if (e.clientX < window.innerWidth * THUMB_ZONE && !trickPad) {
         trickPad = { id: e.pointerId, x0: e.clientX, y0: e.clientY, spin: 0, flip: 0 };
       }
-    } else {
-      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
+    // A non-mouse pointer before tilt is live does nothing: the phone can't
+    // steer without motion access, so there is no finger-steering fallback.
   });
   window.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') {
@@ -144,8 +143,6 @@ export function setupInput(onRestart: () => void): InputSource {
       const held = trickFromDrag(e.clientX - trickPad.x0, e.clientY - trickPad.y0);
       trickPad.spin = held.spin;
       trickPad.flip = held.flip;
-    } else if (touches.has(e.pointerId)) {
-      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
   });
   const release = (e: PointerEvent) => {
@@ -158,7 +155,6 @@ export function setupInput(onRestart: () => void): InputSource {
         releaseCharge();
       }
       if (trickPad && trickPad.id === e.pointerId) trickPad = null;
-      touches.delete(e.pointerId);
     }
   };
   window.addEventListener('pointerup', release);
@@ -168,11 +164,9 @@ export function setupInput(onRestart: () => void): InputSource {
     const key = (...codes: string[]) => codes.some((c) => down.has(c));
 
     // The mouse is required and NEVER changes meaning: x steers, y is stance,
-    // buttons brake/boost. WASD exists only for tricks — unambiguous digital
-    // keys, active only in real air (the sim gates them).
-    const firstTouch = touches.values().next();
-    const pointer = !firstTouch.done ? firstTouch.value : mouse;
-
+    // buttons brake/boost. On a phone the tilt replaces it. WASD exists only
+    // for tricks — unambiguous digital keys, active only in real air (the sim
+    // gates them).
     let steer: number;
     let stance: number;
     if (tiltMode && tiltUp && tiltRef) {
@@ -180,13 +174,8 @@ export function setupInput(onRestart: () => void): InputSource {
       steer = axes.steer;
       stance = axes.stance;
     } else {
-      steer = pointer ? pointerAxis(pointer.x, window.innerWidth) : 0;
-      stance =
-        mouseBrake || touches.size >= 2
-          ? 1
-          : pointer
-            ? pointerAxis(pointer.y, window.innerHeight)
-            : 0;
+      steer = mouse ? pointerAxis(mouse.x, window.innerWidth) : 0;
+      stance = mouseBrake ? 1 : mouse ? pointerAxis(mouse.y, window.innerHeight) : 0;
     }
     const trickSpin = (trickPad?.spin || 0) + (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0);
     // Push forward to flip forward: W = frontflip, S (pull back) = backflip.
