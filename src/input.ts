@@ -1,4 +1,5 @@
 import { SkierInput } from './sim/skier';
+import { tiltAxes, tiltDeviation, toScreen, trickFromDrag, upFromOrientation, Vec3 } from './tilt';
 
 // Analog axis from a pointer coordinate: a small dead zone around the viewport
 // center, then a linear ramp that saturates at SATURATION of the half-extent,
@@ -20,6 +21,9 @@ export interface InputSource {
   peek: () => SkierInput; // current state, safe to call from anywhere
   acted: () => boolean; // has a real (trusted) user input landed this run?
   resetActed: () => void; // a fresh run must earn its "played" flag again
+  setTiltMode: (on: boolean) => void; // phone-as-mouse: tilt steers, thumbs work
+  calibrateTilt: () => void; // current attitude becomes neutral (on unpause)
+  tiltDeviation: () => number; // radians off the calibrated attitude (envelope)
 }
 
 // Mouse: x steers, y sets stance (top = tuck, bottom = snowplow), held button
@@ -35,6 +39,31 @@ export function setupInput(onRestart: () => void): InputSource {
   const touches = new Map<number, { x: number; y: number }>(); // non-mouse pointers
   let mouse: { x: number; y: number } | null = null; // last known cursor position
   let mouseBrake = false;
+
+  // Tilt mode: the phone IS the mouse. World-up is tracked in screen
+  // coordinates; the attitude at unpause is calibrated as neutral. Thumbs
+  // take over the buttons — left half is the trick pad, right half is
+  // boost/charge — replacing the legacy touch scheme entirely.
+  let tiltMode = false;
+  let tiltUp: Vec3 | null = null; // latest attitude, screen frame
+  let tiltRef: Vec3 | null = null; // calibrated neutral
+  let tiltCalibratePending = false; // unpaused before the first event arrived
+  let trickPad: { id: number; x0: number; y0: number; spin: number; flip: number } | null = null;
+  let chargeTouch: number | null = null;
+
+  window.addEventListener('deviceorientation', (e) => {
+    if (e.beta === null || e.gamma === null) return;
+    tiltUp = toScreen(upFromOrientation(e.beta, e.gamma), screen.orientation?.angle ?? 0);
+    if (tiltCalibratePending) {
+      tiltRef = tiltUp;
+      tiltCalibratePending = false;
+    }
+    // Tilt steering counts as playing (a tilt-only run must be able to set
+    // a BEST) — but only real movement off neutral: a phone lying on a
+    // table streams events too, and that's the idle self-play the acted
+    // flag exists to reject.
+    if (e.isTrusted && tiltMode && tiltRef && tiltDeviation(tiltUp, tiltRef) > 0.05) acted = true;
+  });
 
   // A run only counts as PLAYED once a real user input lands: an idle tab
   // self-piloting downhill (or a debug script poking the sim) must never
@@ -83,6 +112,17 @@ export function setupInput(onRestart: () => void): InputSource {
     if (e.pointerType === 'mouse') {
       if (e.button === 2) beginCharge();
       else mouseBrake = true;
+    } else if (tiltMode) {
+      // Thumb zones: right half is the boost/charge button, left half is
+      // the trick pad (an invisible joystick from the touch-down point).
+      if (e.clientX > window.innerWidth / 2) {
+        if (chargeTouch === null) {
+          chargeTouch = e.pointerId;
+          beginCharge();
+        }
+      } else if (!trickPad) {
+        trickPad = { id: e.pointerId, x0: e.clientX, y0: e.clientY, spin: 0, flip: 0 };
+      }
     } else {
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
@@ -90,6 +130,10 @@ export function setupInput(onRestart: () => void): InputSource {
   window.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') {
       mouse = { x: e.clientX, y: e.clientY };
+    } else if (trickPad && trickPad.id === e.pointerId) {
+      const held = trickFromDrag(e.clientX - trickPad.x0, e.clientY - trickPad.y0);
+      trickPad.spin = held.spin;
+      trickPad.flip = held.flip;
     } else if (touches.has(e.pointerId)) {
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
@@ -99,6 +143,11 @@ export function setupInput(onRestart: () => void): InputSource {
       if (e.button === 2) releaseCharge();
       else mouseBrake = false;
     } else {
+      if (chargeTouch === e.pointerId) {
+        chargeTouch = null;
+        releaseCharge();
+      }
+      if (trickPad && trickPad.id === e.pointerId) trickPad = null;
       touches.delete(e.pointerId);
     }
   };
@@ -114,16 +163,24 @@ export function setupInput(onRestart: () => void): InputSource {
     const firstTouch = touches.values().next();
     const pointer = !firstTouch.done ? firstTouch.value : mouse;
 
-    const steer = pointer ? pointerAxis(pointer.x, window.innerWidth) : 0;
-    const stance =
-      mouseBrake || touches.size >= 2
-        ? 1
-        : pointer
-          ? pointerAxis(pointer.y, window.innerHeight)
-          : 0;
-    const trickSpin = (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0);
+    let steer: number;
+    let stance: number;
+    if (tiltMode && tiltUp && tiltRef) {
+      const axes = tiltAxes(tiltUp, tiltRef);
+      steer = axes.steer;
+      stance = axes.stance;
+    } else {
+      steer = pointer ? pointerAxis(pointer.x, window.innerWidth) : 0;
+      stance =
+        mouseBrake || touches.size >= 2
+          ? 1
+          : pointer
+            ? pointerAxis(pointer.y, window.innerHeight)
+            : 0;
+    }
+    const trickSpin = (trickPad?.spin || 0) + (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0);
     // Push forward to flip forward: W = frontflip, S (pull back) = backflip.
-    const trickFlip = (key('KeyS') ? 1 : 0) - (key('KeyW') ? 1 : 0);
+    const trickFlip = (trickPad?.flip || 0) + (key('KeyS') ? 1 : 0) - (key('KeyW') ? 1 : 0);
     return { steer, stance, boost: holding, trickSpin, trickFlip };
   };
 
@@ -133,6 +190,14 @@ export function setupInput(onRestart: () => void): InputSource {
     resetActed: () => {
       acted = false;
     },
+    setTiltMode: (on: boolean) => {
+      tiltMode = on;
+    },
+    calibrateTilt: () => {
+      if (tiltUp) tiltRef = tiltUp;
+      else tiltCalibratePending = true; // permission granted, no event yet
+    },
+    tiltDeviation: () => (tiltMode && tiltUp && tiltRef ? tiltDeviation(tiltUp, tiltRef) : 0),
     read: () => {
       const input = current();
       if (pendingJump) {

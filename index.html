@@ -254,6 +254,41 @@
         font-size: 14px;
         opacity: 0.75;
       }
+      /* Touch-device variants: tap targets for the keyboard-only flows.
+         body.touch is set from main.ts when the device has touch points. */
+      .touchonly {
+        display: none;
+      }
+      body.touch .touchonly {
+        display: block;
+      }
+      body.touch button.touchonly,
+      body.touch #confirm .touchonly {
+        display: inline-block;
+      }
+      button.tapbtn {
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 17px;
+        color: white;
+        background: rgba(70, 90, 200, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-radius: 10px;
+        padding: 10px 22px;
+        margin: 10px 8px 0;
+        pointer-events: auto;
+      }
+      #pausechip {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 6px 14px;
+        border-radius: 10px;
+        background: rgba(18, 24, 64, 0.55);
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 15px;
+        user-select: none;
+      }
     </style>
   </head>
   <body>
@@ -324,6 +359,11 @@
         <div class="hint">
           Esc or ? resumes &middot; ride the walls, graze the obstacles, thread the gold
         </div>
+        <div class="hint touchonly">
+          <b>Tap to drop in</b> &mdash; tilt steers (twist = turn, tip away = tuck, pull back =
+          brake; your grip at drop-in is neutral). Left thumb drags for tricks, right thumb holds to
+          boost &amp; charge. Tilt way off and it pauses.
+        </div>
       </div>
     </div>
     <div id="confirm">
@@ -331,6 +371,10 @@
         <h1>Fresh run?</h1>
         <div class="keys">
           <b>Y</b> &mdash; restart &nbsp;&middot;&nbsp; <b>N</b> &mdash; keep skiing
+        </div>
+        <div>
+          <button class="tapbtn touchonly" id="confirmy">Restart</button>
+          <button class="tapbtn touchonly" id="confirmn">Keep skiing</button>
         </div>
       </div>
     </div>
@@ -342,8 +386,12 @@
         <div class="keys">
           <b>Space</b> &mdash; next course &nbsp;&middot;&nbsp; <b>R</b> &mdash; retry
         </div>
+        <div>
+          <button class="tapbtn touchonly" id="nextcourse">Next course</button>
+        </div>
       </div>
     </div>
+    <div id="pausechip" class="touchonly">&#10074;&#10074;</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

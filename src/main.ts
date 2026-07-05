@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
 import { FLIP_TOLERANCE, SPIN_TOLERANCE, SkierInput } from './sim/skier';
 import { setupInput } from './input';
+import { FAR_HOLD_S, tiltZone } from './tilt';
 import { createScene } from './render/scene';
 import { ZONE_LENGTH } from './render/palette';
 import { ChunkRenderer } from './render/chunks';
@@ -82,8 +83,14 @@ let pausedBeforeConfirm = false;
 function setPaused(next: boolean): void {
   // The guide opens as the title screen; once the player drops in, later
   // pauses are just pauses.
-  if (paused && !next) document.getElementById('pausetitle')!.textContent = 'Paused';
+  if (paused && !next) {
+    document.getElementById('pausetitle')!.textContent = 'Paused';
+    // Unpausing calibrates tilt: however the phone is held right now
+    // becomes neutral. Re-unpause any time to recalibrate.
+    input.calibrateTilt();
+  }
   paused = next;
+  if (paused) audio.setTiltWarning(0);
   pauseScreen.classList.toggle('visible', paused && !confirming);
   audio.setPaused(paused);
 }
@@ -143,6 +150,70 @@ const audio = new GameAudio();
 // The game opens paused: the key guide doubles as the title screen, and the
 // run doesn't start rolling until the player is actually looking.
 setPaused(true);
+
+// ---- Touch & tilt ----------------------------------------------------
+// On a phone the tilt IS the mouse (roll steers, pitch is stance) and the
+// thumbs are the buttons. The body class switches the panels to their
+// tappable variants.
+if (navigator.maxTouchPoints > 0) document.body.classList.add('touch');
+
+// iOS only grants motion access inside a user gesture, so the drop-in tap
+// on the title screen is where we ask. Denial (or no sensor) leaves the
+// legacy touch scheme: first finger steers, second snowplows.
+let tiltAsked = false;
+async function enableTilt(): Promise<void> {
+  const DOE = DeviceOrientationEvent as unknown as {
+    requestPermission?: () => Promise<string>;
+  };
+  try {
+    if (typeof DOE.requestPermission === 'function') {
+      if ((await DOE.requestPermission()) !== 'granted') return;
+    }
+    input.setTiltMode(true);
+  } catch {
+    // Permission prompt rejected or unavailable: stay on legacy touch.
+  }
+}
+
+pauseScreen.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse') return; // desktop resumes with Esc / ?
+  // A panel tap is UI, not game input: without this, tilt mode would grab
+  // the drop-in tap itself as a trick-pad or charge touch.
+  e.stopPropagation();
+  if (!tiltAsked) {
+    tiltAsked = true;
+    void enableTilt().finally(() => {
+      setPaused(false);
+      audio.unlock();
+    });
+  } else {
+    setPaused(false);
+    audio.unlock();
+  }
+});
+
+// A deliberate pause affordance for thumbs (besides tilting the phone flat).
+document.getElementById('pausechip')!.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  if (!paused && !confirming) setPaused(true);
+});
+document.getElementById('confirmy')!.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  closeConfirm(true);
+});
+document.getElementById('confirmn')!.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  closeConfirm(false);
+});
+document.getElementById('nextcourse')!.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  if (finishScreen.classList.contains('visible')) startCourse(currentSeed + 1);
+});
+
+// Tilting far outside the control envelope, sustained, pauses the game:
+// putting the phone down IS the pause gesture. The warning dyad rises
+// through the edge zone so the pause never comes as a surprise.
+let farTiltFor = 0;
 
 window.__game = {
   get sim() {
@@ -345,6 +416,18 @@ function frame(): void {
     requestAnimationFrame(frame);
     return;
   }
+  // The tilt envelope: warn through the edge zone, pause when far-out
+  // holds for FAR_HOLD_S (a flick through doesn't count).
+  const zone = tiltZone(input.tiltDeviation());
+  audio.setTiltWarning(zone.zone === 'far' ? 1 : zone.edgeLevel);
+  farTiltFor = zone.zone === 'far' ? farTiltFor + delta : 0;
+  if (farTiltFor >= FAR_HOLD_S) {
+    farTiltFor = 0;
+    setPaused(true);
+    requestAnimationFrame(frame);
+    return;
+  }
+
   accumulator += delta;
   const events: SimEvent[] = [];
   while (accumulator >= SIM_DT) {

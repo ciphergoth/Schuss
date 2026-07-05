@@ -12,6 +12,8 @@ interface AudioNodes {
   crudGain: GainNode;
   spinGain: GainNode; // mid-air rotation whoosh
   spinFilter: BiquadFilterNode;
+  warnGain: GainNode; // tilt-envelope warning dyad
+  warnOscs: [OscillatorNode, OscillatorNode];
   noise: AudioBuffer;
 }
 
@@ -35,19 +37,22 @@ export class GameAudio {
   private lastZone = 0;
 
   constructor() {
-    const unlock = () => {
-      // The autoplay unlock must not defeat the game pause: without this
-      // guard, any keypress or click resumed the context behind the pause
-      // screen (including the Escape that paused it).
-      if (this.gamePaused) return;
-      if (!this.nodes) this.nodes = this.build();
-      else if (this.nodes.ctx.state === 'suspended') void this.nodes.ctx.resume();
-    };
-    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('pointerdown', () => this.unlock());
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyM') this.toggleMute();
-      unlock();
+      this.unlock();
     });
+  }
+
+  // The autoplay unlock must not defeat the game pause: without the guard,
+  // any keypress or click resumed the context behind the pause screen
+  // (including the Escape that paused it). Public because the drop-in tap
+  // handler stops propagation (a panel tap is not game input), so it calls
+  // this directly instead of relying on the window listener.
+  unlock(): void {
+    if (this.gamePaused) return;
+    if (!this.nodes) this.nodes = this.build();
+    else if (this.nodes.ctx.state === 'suspended') void this.nodes.ctx.resume();
   }
 
   get running(): boolean {
@@ -111,6 +116,22 @@ export class GameAudio {
     spinGain.gain.value = 0;
     source.connect(spinFilter).connect(spinGain).connect(master);
 
+    // Tilt-envelope warning: a detuned two-tone edge, silent in-envelope,
+    // that fades in and sharpens as the phone tilts toward the pause
+    // threshold — unmistakably "you're leaving the controls".
+    const warnGain = ctx.createGain();
+    warnGain.gain.value = 0;
+    const warnA = ctx.createOscillator();
+    warnA.type = 'triangle';
+    warnA.frequency.value = 520;
+    const warnB = ctx.createOscillator();
+    warnB.type = 'triangle';
+    warnB.frequency.value = 520 * 1.06; // a rough, beating detune
+    warnA.connect(warnGain).connect(master);
+    warnB.connect(warnGain);
+    warnA.start();
+    warnB.start();
+
     source.start();
     this.music = new Music(ctx, master, noise);
     return {
@@ -123,8 +144,21 @@ export class GameAudio {
       crudGain,
       spinGain,
       spinFilter,
+      warnGain,
+      warnOscs: [warnA, warnB],
       noise,
     };
+  }
+
+  // level 0 = inside the envelope (silent) .. 1 = at the pause threshold.
+  setTiltWarning(level: number): void {
+    if (!this.nodes) return;
+    const { ctx, warnGain, warnOscs } = this.nodes;
+    const t = ctx.currentTime;
+    warnGain.gain.setTargetAtTime(level * 0.18, t, 0.06);
+    const base = 520 + level * 340; // sharpens as the pause approaches
+    warnOscs[0].frequency.setTargetAtTime(base, t, 0.06);
+    warnOscs[1].frequency.setTargetAtTime(base * 1.06, t, 0.06);
   }
 
   update(state: SkierState, input: SkierInput, boosting = false, stickiness = 0, zone = 0): void {

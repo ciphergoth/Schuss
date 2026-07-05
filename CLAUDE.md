@@ -196,7 +196,28 @@ friction braking).
   with no overshoot. Rate-based steering caused pilot-induced weaving.
   y sets stance (top = tuck, bottom = snowplow); hold button for full snowplow
 - Touch: first finger works like the mouse position, second finger = full
-  snowplow
+  snowplow — the FALLBACK when motion permission is denied/unavailable.
+- Mobile (landscape phone): the TILT is the mouse (src/tilt.ts, pure and
+  unit-tested — everything works off the gravity direction in screen
+  coordinates, alpha-free, so compass drift and chair-turning can't
+  steer). Roll (steering-wheel twist) = steer, pitch = stance with
+  top-edge-away = tuck; UNPAUSING calibrates the current grip as neutral
+  (re-unpause to recalibrate; if permission resolves before the first
+  orientation event, calibration completes on that event). The drop-in tap
+  on the title panel requests iOS motion permission (must be in-gesture)
+  and is UI, not game input (stopPropagation — otherwise tilt mode grabs
+  it as a thumb touch; GameAudio.unlock() is public and called explicitly
+  because that tap no longer reaches the window unlock listener). Thumbs
+  are the buttons: LEFT half is the trick pad (drag ~24px from touch-down
+  and hold = W/S/A/D by dominant axis, up = frontflip), RIGHT half is
+  boost/charge (hold/release = Space). Past ~35 degrees off neutral a
+  detuned warning dyad rises (engine.setTiltWarning); past ~60 degrees
+  sustained 0.4s the game pauses — putting the phone down IS the pause
+  gesture (plus a top-center pause chip). Tilt-only runs still set BEST:
+  trusted orientation events >3 degrees off neutral mark the run as
+  played (a phone flat on a table streams events but never deviates).
+  Panels grow tap buttons on touch devices (body.touch + .touchonly);
+  feel constants live at the top of tilt.ts for on-device tuning.
 - WASD: trick keys ONLY (in real air: A/D spin, W frontflip, S backflip —
   push forward to flip forward, pull back to flip back).
   There is no keyboard steering — the mouse is required.
