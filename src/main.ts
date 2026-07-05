@@ -390,11 +390,11 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   const clockMin = Math.floor(clock / 60);
   timeText.textContent = `${clockMin}:${(clock - clockMin * 60).toFixed(2).padStart(5, '0')}`;
   courseNum.textContent = `COURSE ${currentSeed}`;
-  // Segmented course progress under the score: fill completed segments
-  // fully, the current one partway.
+  // Segmented course progress under the score: a vertical stack that fills
+  // completed segments fully, the current one partway, top-to-bottom.
   const scaled = Math.min(1, distanceSkied(sim) / sim.terrain.courseLength) * segFills.length;
   segFills.forEach((fill, i) => {
-    fill.style.width = `${Math.max(0, Math.min(1, scaled - i)) * 100}%`;
+    fill.style.height = `${Math.max(0, Math.min(1, scaled - i)) * 100}%`;
   });
 
   // The ceremony: once the finish barrage has landed, raise the panel.
