@@ -80,6 +80,65 @@ simulated flights) · ⚠️ open item.
 | The ×5 arc              | Superhuman pop (charge 1) at boost pace (25 m/s), 1.9s downrange (~40m+). Slower or unpopped flights pass meters beneath it; early hops crest short. Plunges gate softly — speed is free downhill there.                                                                                                                   | 📐 spec-tested per kicker kind |
 | Hip ×5                  | **Withheld.** Where a popped flight leaves the curved hip core under leg-reach contact resisted four measurement attempts; rather than hang a star no flight can reach, hips pay only their ×3 (on the slung line, collected by riding it at pace) until the popped-off-the-curve flight is measured honestly.             | ⚠️ the open item               |
 
+## Case history: would this file have saved us?
+
+The scorecard exists because of a specific arc of bugs. Honest accounting of
+which ones a written physics ledger would have caught — and which ones
+nothing but measurement would have found.
+
+### Where it would have saved us
+
+- **The tap that flew (the founding bug).** `vy = max(vy, 0) + pop` — the
+  pop silently discarded the −7 m/s terrain-following descent, a hidden
+  upward impulse nearly twice the full charge, free with any tap. It
+  survived _two_ rounds of charge-curve tuning because we tuned constants
+  instead of auditing laws. A scorecard row reading "the pop is an impulse
+  on the velocity the skier actually has" would have been falsified by one
+  read of the line. (Paul's question — "is it possible you've glued him
+  there?" — is exactly the audit this file formalizes.)
+- **The wall-ride moon-shot.** Riding up a bank, the kinematic glue minted
+  vy the skier's kinetic energy could never pay for; leaving the wall
+  inherited it raw — 100m launches. "No transition ever adds energy" as a
+  standing bar makes this a one-question review, and that bar is now at the
+  top of this file.
+- **The perpetual landing bounce.** Landing zeroed vy; the next step saw the
+  ground descending and relaunched, forever. There was no stated landing
+  law at all — being forced to write one ("inelastic projection onto the
+  slope") _is_ the fix. Empty cells in this table are where those bugs live.
+- **The super-g glue, eventually.** `LAUNCH_EXTRA_ACCEL = 6` was a declared,
+  deliberate cheat that worked fine for a long time — until it compounded
+  with the pop semantics and made roller air fake. A ⚠️ row wouldn't have
+  _prevented_ it, but the day the jumps felt wrong, the suspect list would
+  have had one name on it instead of requiring code archaeology.
+
+### Where it wouldn't have
+
+- **The pre-ramp hop exploit.** Jumping early converted the track's grade
+  into altitude and beat timing the lip. Every law involved was honest; the
+  exploit was emergent geometry, found only by simulating flights. No
+  ledger of principles catches this — probes do.
+- **The steering controller eating the hip throw.** The gravity turn pushed
+  0.2 rad/s; the position-target controller treated it as an error and
+  steered it out to a 0.05 rad equilibrium. Two individually-honest systems,
+  one systemic failure. The fix (hipAim bends the course line itself) came
+  from measuring the equilibrium, not from auditing either system.
+- **Star tables dying with every physics change.** Three full re-probes in
+  one day — not a lie anywhere, just hand-tuned constants downstream of
+  laws that kept improving. The cure was architectural (stars computed on
+  reference flights), and the general lesson is baked into the status
+  column: 📐 rows are the ones that break when ✅ rows change; minimize 📐.
+- **Measurement bugs measuring the physics.** Test labs that teleported with
+  `vy = 0` onto a slope created step-function launches; probe triggers
+  fired while the rider was already airborne and measured unpopped flights
+  labeled as popped. The scorecard can't audit the instruments. Slope-
+  matched setup and first-flight-only sampling are probe discipline, not
+  physics.
+
+**The moral:** this file catches _broken laws_ — hidden resets, minted
+energy, undeclared super-g forces. It does not catch _emergent interactions_
+or _tuning couplings_; those fall to the probe methodology below. The repo
+needs both.
+
 ## House rules
 
 - `src/sim/` is pure TypeScript: no Three.js, no DOM, no wall clock. Same
