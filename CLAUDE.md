@@ -7,8 +7,9 @@ is 3.2km ending at a checkered finish gate; Space on the ceremony panel
 rolls the next course (seed+1, so course numbers are shareable; ?seed=N
 picks the start). Static site, no server.
 
-Design rules: punishment is light — obstacle hits cost a 1.3s tumble and most
-of your speed, never the run; the walls contain you physically (rideable
+Design rules: punishment is light — obstacle hits cost a brief 0.7s tumble
+and a little speed (you keep 60%), a wobble to recover from and never the
+run; the walls contain you physically (rideable
 banks that steepen), no fences or fail states. The economy is two ledgers
 doing one loop. The BOOST TANK (tall vertical bar, left edge; big and slow
 on both ends) is the mechanical loop: it fills only from deliberate rewards

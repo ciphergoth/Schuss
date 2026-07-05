@@ -81,11 +81,13 @@ const BOUNCE_DAMP = 0.7;
 // being stranded at zero speed forever.
 const FALL_LINE_RATE = 1.6;
 
-// Punishment is light by design: a tree hit costs most of your speed and a
-// moment of comedy, never the run.
-const TUMBLE_TIME = 1.3; // seconds without control after a hit
-const TUMBLE_SPEED_KEEP = 0.25;
-const TUMBLE_FRICTION = 0.35;
+// Punishment is light by design: a tree hit costs a stumble and a beat of
+// comedy, never the run — and now deliberately gentle. You keep most of
+// your speed (0.6), the beat is short (0.7s), and the skid bleeds little
+// (0.25), so a hit is a wobble to recover from, not a run-killer.
+const TUMBLE_TIME = 0.7; // seconds without control after a hit
+const TUMBLE_SPEED_KEEP = 0.6;
+const TUMBLE_FRICTION = 0.25;
 const AIR_TURN_FACTOR = 0.5; // reduced but real steering mid-air
 
 // Tricks live on their own keys (WASD), which do nothing else — the mouse

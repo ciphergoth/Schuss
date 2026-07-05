@@ -474,7 +474,7 @@ describe('skier', () => {
     expect(sim.skier.speed).toBeGreaterThan(1);
   });
 
-  it('tumbles on an obstacle hit, loses most speed, then recovers', () => {
+  it('tumbles on an obstacle hit but keeps most of its speed, then recovers', () => {
     const sim = createSim(1);
     let oi = 5;
     while (sim.terrain.obstaclesForChunk(oi).length === 0) oi++;
@@ -484,7 +484,10 @@ describe('skier', () => {
     teleport(sim, obstacle.x, obstacle.z + 3, 10);
     run(sim, 0.6, COAST);
     expect(sim.skier.tumbling).toBeGreaterThan(0);
-    expect(sim.skier.speed).toBeLessThan(5);
+    // A hit is now a gentle wobble: it costs speed (was 10) but leaves you
+    // most of it, rather than dropping you to a crawl.
+    expect(sim.skier.speed).toBeLessThan(9);
+    expect(sim.skier.speed).toBeGreaterThan(4);
     // Pushed clear of the trunk, not stuck inside it.
     expect(Math.hypot(obstacle.x - sim.skier.x, obstacle.z - sim.skier.z)).toBeGreaterThan(
       obstacle.radius
