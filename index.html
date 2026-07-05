@@ -77,19 +77,24 @@
       #mult.visible {
         display: block;
       }
-      /* Course progress under the score: one segment per course section,
-         stacked vertically, each filling top-to-bottom as you descend it. */
+      /* Course progress mirrors the boost tank on the right edge — same
+         position and length — but broken into one segment per course
+         section, each filling top-to-bottom as you descend it. */
       #progress {
+        position: fixed;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 72vh;
         display: flex;
         flex-direction: column;
-        gap: 3px;
-        width: 10px;
-        margin: 10px 0 0 auto;
+        gap: 4px;
       }
       #progress .seg {
-        height: 16px;
-        border-radius: 2px;
-        background: rgba(255, 255, 255, 0.16);
+        flex: 1;
+        border-radius: 7px;
+        background: rgba(10, 20, 50, 0.4);
         overflow: hidden;
       }
       #progress .seg > i {
@@ -406,7 +411,6 @@
     <div id="scoreboard">
       <div id="score">0</div>
       <div id="best"></div>
-      <div id="progress"></div>
     </div>
     <div id="mult"></div>
     <div id="boostbar"><div id="boostfill"></div></div>
@@ -414,6 +418,8 @@
       <div id="chargefill"></div>
       <div id="chargemark"></div>
     </div>
+    <!-- Course progress: the boost tank's mirror image on the right edge. -->
+    <div id="progress"></div>
     <div id="overlay">Wipeout!</div>
     <div id="trick"></div>
     <div id="pause">
