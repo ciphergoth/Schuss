@@ -78,8 +78,10 @@
         display: block;
       }
       /* Course progress mirrors the boost tank on the right edge — same
-         position and length — but broken into one segment per course
-         section, each filling top-to-bottom as you descend it. */
+         position and length, and it fills bottom-to-top like the tank —
+         but broken into one segment per course section. column-reverse puts
+         the first section at the bottom; each segment's fill is anchored to
+         its own bottom so it grows upward. */
       #progress {
         position: fixed;
         right: 14px;
@@ -88,7 +90,7 @@
         width: 14px;
         height: 72vh;
         display: flex;
-        flex-direction: column;
+        flex-direction: column-reverse;
         gap: 4px;
       }
       #progress .seg {
@@ -96,9 +98,12 @@
         border-radius: 7px;
         background: rgba(10, 20, 50, 0.4);
         overflow: hidden;
+        position: relative;
       }
       #progress .seg > i {
-        display: block;
+        position: absolute;
+        bottom: 0;
+        left: 0;
         width: 100%;
         height: 0;
         background: #7dd3ff;
