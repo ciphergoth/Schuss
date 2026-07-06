@@ -24,6 +24,20 @@ export function pointerAxis(clientPos: number, viewportExtent: number): number {
   return Math.sign(raw) * Math.min((magnitude - DEAD_ZONE) / (1 - DEAD_ZONE), 1);
 }
 
+// A snapshot for the ?debug on-device readout: is the sensor streaming, is
+// touch landing, and what does that produce.
+export interface InputDebug {
+  tiltEvents: number; // valid orientation readings so far (a heartbeat)
+  lastBeta: number | null;
+  lastGamma: number | null;
+  hasReading: boolean; // a reading has landed (tiltUp set)
+  hasRef: boolean; // calibrated (tiltRef set)
+  tiltMode: boolean;
+  pointerEvents: number; // pointer events reaching the window (another heartbeat)
+  steer: number;
+  stance: number;
+}
+
 export interface InputSource {
   read: () => SkierInput; // consumes one-shot events (jump); sim stepping only
   peek: () => SkierInput; // current state, safe to call from anywhere
@@ -33,6 +47,7 @@ export interface InputSource {
   startTiltListening: () => void; // bind deviceorientation (call in the grant gesture)
   waitForTilt: (timeoutMs: number) => Promise<boolean>; // resolves once a real reading lands
   tiltEventCount: () => number; // heartbeat: bumps per reading; frozen = sensor stalled
+  debugSnapshot: () => InputDebug; // live input state for the ?debug readout
   calibrateTilt: () => void; // current attitude becomes neutral (on unpause)
   tiltDeviation: () => number; // radians off the calibrated attitude (envelope)
 }
@@ -68,9 +83,13 @@ export function setupInput(onRestart: () => void): InputSource {
   let orientationBound = false;
   let tiltReadyWaiters: Array<() => void> = [];
   let tiltEvents = 0; // a heartbeat: bumps on every valid reading (see waitForTilt / the liveness watchdog)
+  let lastBeta: number | null = null; // raw sensor values, for the ?debug readout
+  let lastGamma: number | null = null;
   const onOrientation = (e: DeviceOrientationEvent) => {
     if (e.beta === null || e.gamma === null) return;
     tiltEvents++;
+    lastBeta = e.beta;
+    lastGamma = e.gamma;
     tiltUp = toScreen(upFromOrientation(e.beta, e.gamma), screen.orientation?.angle ?? 0);
     if (tiltCalibratePending) {
       tiltRef = tiltUp;
@@ -101,6 +120,15 @@ export function setupInput(onRestart: () => void): InputSource {
   };
   window.addEventListener('pointermove', noteActivity);
   window.addEventListener('pointerdown', noteActivity);
+
+  // A raw pointer tally for the ?debug readout: counts every pointer event
+  // reaching the window in the CAPTURE phase, so nothing downstream (a
+  // panel's stopPropagation) can hide it. A frozen tally while you tap means
+  // touches stopped reaching the page — the wedge, caught in the act.
+  let pointerEvents = 0;
+  const countPointer = () => pointerEvents++;
+  window.addEventListener('pointerdown', countPointer, true);
+  window.addEventListener('pointermove', countPointer, true);
 
   // Right mouse button is boost+charge; keep the context menu out of the way.
   window.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -229,6 +257,20 @@ export function setupInput(onRestart: () => void): InputSource {
         setTimeout(() => done(false), timeoutMs);
       }),
     tiltEventCount: () => tiltEvents,
+    debugSnapshot: () => {
+      const c = current();
+      return {
+        tiltEvents,
+        lastBeta,
+        lastGamma,
+        hasReading: tiltUp !== null,
+        hasRef: tiltRef !== null,
+        tiltMode,
+        pointerEvents,
+        steer: c.steer,
+        stance: c.stance,
+      };
+    },
     calibrateTilt: () => {
       if (tiltUp) tiltRef = tiltUp;
       else tiltCalibratePending = true; // permission granted, no event yet

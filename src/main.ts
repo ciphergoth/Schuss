@@ -551,4 +551,41 @@ function frame(): void {
   requestAnimationFrame(frame);
 }
 
+// ?debug: an on-device input readout for chasing the "controls go dead"
+// bug. Driven by a TIMER, not the rAF loop, so it keeps reporting even if
+// that loop wedges. The Δ columns are the tell: tilt the phone and `orient
+// Δ` should climb; tap and `touch Δ` should climb. A Δ stuck at 0 while
+// you're moving/tapping is the exact moment those events stop reaching the
+// page — which tells us whether it's the sensor, the touch, or both.
+if (new URLSearchParams(location.search).has('debug')) {
+  // Bind the sensor now (not at grant) so the readout shows orientation
+  // activity from the title screen — letting you tell "sensor never starts"
+  // apart from "sensor stops after drop-in." (On iOS events still gate on
+  // the permission grant; on Android they stream immediately.)
+  input.startTiltListening();
+  const dbg = document.createElement('div');
+  dbg.style.cssText =
+    'position:fixed;left:8px;bottom:8px;z-index:50;pointer-events:none;' +
+    'font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;' +
+    'color:#7dff8a;background:rgba(0,0,0,0.6);padding:6px 9px;border-radius:6px;';
+  document.body.appendChild(dbg);
+  const yn = (b: boolean) => (b ? 'Y' : 'N');
+  let prevOrient = 0;
+  let prevTouch = 0;
+  setInterval(() => {
+    const s = input.debugSnapshot();
+    const dO = s.tiltEvents - prevOrient;
+    prevOrient = s.tiltEvents;
+    const dT = s.pointerEvents - prevTouch;
+    prevTouch = s.pointerEvents;
+    dbg.textContent = [
+      `orient ${s.tiltEvents}  Δ${dO}   β${s.lastBeta?.toFixed(0) ?? '-'} γ${s.lastGamma?.toFixed(0) ?? '-'}`,
+      `up ${yn(s.hasReading)}  ref ${yn(s.hasRef)}   steer ${s.steer.toFixed(2)} stance ${s.stance.toFixed(2)}`,
+      `touch ${s.pointerEvents}  Δ${dT}`,
+      `tiltMode ${yn(s.tiltMode)}  tiltOn ${yn(tiltOn)}  paused ${yn(paused)}`,
+      `angle ${screen.orientation?.angle ?? '-'}  hidden ${yn(document.hidden)}  fs ${yn(!!document.fullscreenElement)}`,
+    ].join('\n');
+  }, 100);
+}
+
 frame();

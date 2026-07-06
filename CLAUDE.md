@@ -175,7 +175,11 @@ input), `renderFrame(dt)` (force a render while rAF is paused, e.g. hidden
 tab), and `step(seconds)` (advance sim + render while paused). After mutating
 state for verification, restart with R before handing the game back. The
 localStorage BEST only persists for runs with real (isTrusted) user input —
-idle self-play and synthetic debug events can never set it.
+idle self-play and synthetic debug events can never set it. `?debug` adds an
+on-device input readout (timer-driven, so it survives a wedged rAF loop):
+the orient/touch Δ columns are heartbeats — a Δ stuck at 0 while you tilt or
+tap is the moment those events stop reaching the page (sensor vs touch vs
+both), for chasing the mobile "controls go dead" bug.
 
 ## Running
 
