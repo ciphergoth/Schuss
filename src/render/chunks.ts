@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { CHUNK_LENGTH, Terrain, WALL_WIDTH, jumpDrift } from '../sim/terrain';
-import { SECTOR_LENGTH } from '../sim/sim';
+import { CHUNK_LENGTH, SECTION_LENGTH, Terrain, WALL_WIDTH, jumpDrift } from '../sim/terrain';
 import { hash2, mulberry32 } from '../sim/rng';
 
 // The course renders as a ribbon that follows the centerline — beyond its
@@ -71,8 +70,6 @@ export class ChunkRenderer {
     roughness: 0.3,
     flatShading: true,
   });
-  private banner = new THREE.MeshBasicMaterial({ color: 0xff8b1a });
-  private pole = new THREE.MeshStandardMaterial({ color: 0xe8ecff, roughness: 0.5 });
   private gold = new THREE.MeshBasicMaterial({ color: 0xffd34d });
   private city = new THREE.MeshBasicMaterial({ color: 0x10173a });
   private cloud = new THREE.MeshBasicMaterial({
@@ -288,18 +285,17 @@ export class ChunkRenderer {
       group.add(halo);
     }
 
-    // Sector gates: a glowing neon arc spans the channel at every 250m pace
-    // line, so the scoring rhythm is built into the course. Cross one fast
-    // and the fireworks are yours (fx layer). None past the finish — the
-    // outrun has nothing left to grade.
+    // Section-boundary gates: a glowing neon arc spans the channel where one
+    // section personality gives way to the next, every 400m — the course's
+    // structure made visible. None past the finish — the outrun is over.
     // A gate lives in the chunk whose [zTop, zTop - CHUNK_LENGTH) span holds
     // it, boundary included at the top (matching chunkIndexAt).
     for (
-      let k = Math.max(1, Math.ceil(-zTop / SECTOR_LENGTH));
-      k * SECTOR_LENGTH < Math.min(-zTop + CHUNK_LENGTH, this.terrain.courseLength);
+      let k = Math.max(1, Math.ceil(-zTop / SECTION_LENGTH));
+      k * SECTION_LENGTH < Math.min(-zTop + CHUNK_LENGTH, this.terrain.courseLength);
       k++
     ) {
-      const zg = -k * SECTOR_LENGTH;
+      const zg = -k * SECTION_LENGTH;
       const cX = this.terrain.centerX(zg);
       const floorY = this.terrain.height(cX, zg);
       const radius = this.terrain.channelHalfWidth(zg) + 2.5;
@@ -311,24 +307,6 @@ export class ChunkRenderer {
       const halo = new THREE.Mesh(new THREE.TorusGeometry(radius, 1.1, 8, 40, Math.PI), glow);
       halo.position.copy(arc.position);
       group.add(halo);
-    }
-
-    // A banner arch every few chunks.
-    if (index % 3 === 0) {
-      const zA = zTop - 20;
-      const cX = this.terrain.centerX(zA);
-      const floorY = this.terrain.height(cX, zA);
-      const span = (this.terrain.channelHalfWidth(zA) + 2) * 2;
-      for (const side of [-1, 1]) {
-        const x = cX + (side * span) / 2;
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 8, 8), this.pole);
-        pole.position.set(x, this.terrain.height(x, zA) + 4, zA);
-        pole.castShadow = true;
-        group.add(pole);
-      }
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(span, 1.1, 0.25), this.banner);
-      bar.position.set(cX, floorY + 7.4, zA);
-      group.add(bar);
     }
 
     // Obstacles: ice crystals and fat striped bollards on the floor. Visual

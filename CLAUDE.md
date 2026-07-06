@@ -54,7 +54,8 @@ is hard acceleration with flames, rainbow trail, FOV slam, rumble. The
 spectacle scales with play: the course crosses a new color world every
 600m (dusk → neon night → rose dawn → emerald; palette.ts cross-fades
 sky/fog/lights) under a waving aurora that blazes in the night zone; a
-glowing neon arc spans the track at every 250m sector line; paid sectors
+glowing neon arc spans the track at every SECTION BOUNDARY (400m, where one
+section personality gives way to the next); paid sectors
 and star-multiplied tricks launch firework volleys over the course (grander
 for jackpots); an armed star dyes the flow trail (its orbit-sparkle days
 are over: orbiting dots are now a brief score AFTERGLOW in the payout's
@@ -150,7 +151,7 @@ src/
 ├── render/            - Three.js only
 │   ├── scene.ts       - Lights, dynamic sky/fog, aurora, shadow-casting sun
 │   ├── palette.ts     - Color zones: palettes cross-fading every 600m of course
-│   ├── chunks.ts      - Track ribbon, bollards, arches, sector gates, obstacles,
+│   ├── chunks.ts      - Track ribbon, bollards, section-boundary gates, obstacles,
 │   │                    pickups, star beams, skyline/clouds; created and
 │   │                    disposed as you ski
 │   ├── skierView.ts   - Articulated skier model (posable legs/torso)
