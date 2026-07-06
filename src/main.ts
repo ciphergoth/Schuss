@@ -224,13 +224,17 @@ pauseScreen.addEventListener('pointerdown', (e) => {
   if (e.pointerType !== 'mouse') e.stopPropagation();
 });
 
-// The touch way out of the pause screen is a real button (the panel
-// scrolls now, so tap-anywhere-to-resume would fire mid-swipe). The first
-// press is the drop-in: it asks for motion permission and fullscreen,
-// both of which must happen inside the gesture. If tilt can't be granted
-// we surface the error and stay paused — there is no fallback to fall into.
-document.getElementById('resumebtn')!.addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
+// The touch way out of the pause screen is a real button, wired to CLICK,
+// not pointerdown. Fullscreen and motion permission both need a user
+// gesture — but requesting them mid-pointerdown, while the touch is still
+// down, WEDGES Android Chrome's input: the fullscreen transition cancels
+// the in-flight touch and the page stops receiving further pointer (and
+// sensor) events, leaving a run where nothing but that first touch ever
+// worked. click fires after pointerup, so the gesture is already complete
+// — and it only fires on a real tap, never a mid-scroll swipe on the
+// panel. If tilt can't be granted we surface the error and stay on the
+// guide — there is no fallback to fall into.
+document.getElementById('resumebtn')!.addEventListener('click', () => {
   tryFullscreen();
   if (tiltOn) {
     // Already granted (a mid-run pause and resume): drop straight back in.
@@ -255,8 +259,7 @@ document.getElementById('resumebtn')!.addEventListener('pointerdown', (e) => {
     }
   });
 });
-document.getElementById('restartbtn')!.addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
+document.getElementById('restartbtn')!.addEventListener('click', () => {
   openConfirm();
 });
 
@@ -267,16 +270,13 @@ window.addEventListener('pointerdown', (e) => {
   const frac = e.clientX / window.innerWidth;
   if (frac > THUMB_ZONE && frac < 1 - THUMB_ZONE) setPaused(true);
 });
-document.getElementById('confirmy')!.addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
+document.getElementById('confirmy')!.addEventListener('click', () => {
   closeConfirm(true);
 });
-document.getElementById('confirmn')!.addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
+document.getElementById('confirmn')!.addEventListener('click', () => {
   closeConfirm(false);
 });
-document.getElementById('nextcourse')!.addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
+document.getElementById('nextcourse')!.addEventListener('click', () => {
   if (finishScreen.classList.contains('visible')) {
     tryFullscreen(); // the ceremony doesn't re-pause, so ask here directly
     startCourse(currentSeed + 1);
@@ -287,6 +287,14 @@ document.getElementById('nextcourse')!.addEventListener('pointerdown', (e) => {
 // putting the phone down IS the pause gesture. The warning dyad rises
 // through the edge zone so the pause never comes as a surprise.
 let farTiltFor = 0;
+
+// Controls-liveness watchdog. A live tilt sensor streams readings
+// continuously (even dead still), so a frozen heartbeat means the controls
+// are gone — the sensor stalled, or the input got wedged. Rather than run a
+// game nobody can steer or pause, bail to the guide with the error.
+const TILT_STALL_S = 1.5;
+let lastTiltCount = 0;
+let tiltStallFor = 0;
 
 window.__game = {
   get sim() {
@@ -509,6 +517,28 @@ function frame(): void {
     setPaused(true);
     requestAnimationFrame(frame);
     return;
+  }
+
+  // Controls-liveness watchdog (tilt runs only): if the reading heartbeat
+  // freezes, the controls are dead — bail to the guide with the error
+  // rather than run an unsteerable, unpausable game. Reset tilt so the
+  // retry re-verifies through enableTilt/waitForTilt.
+  if (tiltOn) {
+    const count = input.tiltEventCount();
+    if (count === lastTiltCount) tiltStallFor += delta;
+    else {
+      tiltStallFor = 0;
+      lastTiltCount = count;
+    }
+    if (tiltStallFor >= TILT_STALL_S) {
+      tiltStallFor = 0;
+      input.setTiltMode(false);
+      tiltOn = false;
+      setPaused(true);
+      tiltError.classList.add('show');
+      requestAnimationFrame(frame);
+      return;
+    }
   }
 
   accumulator += delta;
