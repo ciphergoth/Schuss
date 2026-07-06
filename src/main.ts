@@ -58,6 +58,7 @@ const finishScreen = document.getElementById('finish')!;
 const finishStats = document.getElementById('finishstats')!;
 const finishBest = document.getElementById('finishbest')!;
 const trickText = document.getElementById('trick')!;
+const countdownEl = document.getElementById('countdown')!;
 
 // A short-lived banner: live spin readout while airborne, result on landing.
 let trickBannerUntil = 0;
@@ -94,6 +95,25 @@ const input = setupInput(() => openConfirm());
 let paused = false;
 let confirming = false; // the R restart ask; a special flavor of paused
 let pausedBeforeConfirm = false;
+
+// Race start: when a run begins fresh (first drop-in, restart, next course),
+// the sim is held at the gate for a 3-2-1-GO countdown; the clock (sim.time)
+// only starts on GO. Armed at course start, consumed by the loop. A mid-run
+// pause/resume is NOT a fresh start, so it gets no countdown.
+let countdownArmed = true;
+let countingDown = false;
+let countdownLeft = 0; // seconds until GO
+let countdownShown = -1; // last integer painted, so each new count beeps once
+
+function showCount(text: string, go: boolean): void {
+  countdownEl.textContent = text;
+  countdownEl.classList.toggle('go', go);
+  countdownEl.classList.add('visible');
+  // Restart the pop animation for each new number.
+  countdownEl.style.animation = 'none';
+  void countdownEl.offsetWidth;
+  countdownEl.style.animation = 'cd-pop 0.55s ease-out';
+}
 
 function setPaused(next: boolean): void {
   // The guide opens as the title screen; once the player drops in, later
@@ -137,6 +157,7 @@ function startCourse(seed: number): void {
   trickBannerUntil = 0; // sim.time resets to 0; don't let a stale banner linger
   trickText.classList.remove('visible');
   input.resetActed();
+  countdownArmed = true; // every fresh course starts with a 3-2-1-GO
 }
 
 function closeConfirm(restart: boolean): void {
@@ -508,6 +529,34 @@ function frame(): void {
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
     return;
+  }
+  // Race start: hold the sim at the gate and count 3-2-1-GO. The clock
+  // (sim.time) doesn't advance until GO, so the timed run starts on GO.
+  if (countdownArmed) {
+    countdownArmed = false;
+    countingDown = true;
+    countdownLeft = 3;
+    countdownShown = -1;
+  }
+  if (countingDown) {
+    countdownLeft -= delta;
+    if (countdownLeft > 0) {
+      const n = Math.ceil(countdownLeft);
+      if (n !== countdownShown) {
+        countdownShown = n;
+        showCount(String(n), false);
+        audio.playCountdown(false);
+      }
+      accumulator = 0; // no sim time passes at the gate
+      renderFrame(delta, []);
+      requestAnimationFrame(frame);
+      return;
+    }
+    // GO: release the run this frame, flash GO, start the clock.
+    countingDown = false;
+    showCount('GO!', true);
+    audio.playCountdown(true);
+    setTimeout(() => countdownEl.classList.remove('visible'), 700);
   }
   // The tilt envelope: warn through the edge zone, pause when far-out
   // holds for FAR_HOLD_S (a flick through doesn't count).

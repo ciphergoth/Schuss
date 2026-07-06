@@ -297,6 +297,26 @@ export class GameAudio {
     }
   }
 
+  // Race start: a crisp electronic timing beep. Three level tones on the
+  // 3-2-1 counts, then a higher, longer tone on GO — the classic start
+  // signal.
+  playCountdown(go: boolean): void {
+    if (!this.nodes) return;
+    const { ctx, master } = this.nodes;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = go ? 1175 : 740; // GO a fifth up
+    const gain = ctx.createGain();
+    const dur = go ? 0.5 : 0.16;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(go ? 0.2 : 0.14, t + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(gain).connect(master);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
   // Game pause: silence everything by suspending the context (also stops the
   // wind loop from burning CPU), resume picks up exactly where it left off.
   setPaused(paused: boolean): void {

@@ -271,6 +271,11 @@ friction braking).
   the charged pop.
 - Esc or ? pauses (freezes the sim, suspends audio) and shows the key guide;
   the game starts paused, so the guide doubles as the title screen
+- Every fresh run (first drop-in, restart, next course — NOT a mid-run
+  resume) opens with a 3-2-1-GO race countdown: the sim is held at the gate
+  and the clock (sim.time) doesn't start until GO, so the timed run begins
+  on GO. Purely a main-loop/render concern — the deterministic sim is
+  untouched (armed in startCourse, run by the frame loop, tones in engine)
 - R pauses onto a Y/N confirm (Y restarts, N or Esc resumes) — a stray
   keypress never throws away a run
 - M toggles sound (sound starts on the first input, per browser autoplay rules)

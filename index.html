@@ -196,6 +196,40 @@
       #trick.visible {
         display: flex;
       }
+      /* Race start countdown: a big 3-2-1-GO over the frozen start gate. */
+      #countdown {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 150px;
+        color: #fff;
+        text-shadow:
+          0 6px 30px rgba(0, 0, 50, 0.9),
+          0 0 40px rgba(120, 180, 255, 0.5);
+        user-select: none;
+        pointer-events: none;
+        z-index: 15;
+      }
+      #countdown.visible {
+        display: flex;
+      }
+      #countdown.go {
+        color: #7dff8a;
+        text-shadow:
+          0 6px 30px rgba(0, 0, 50, 0.9),
+          0 0 55px rgba(125, 255, 138, 0.75);
+      }
+      @keyframes cd-pop {
+        from {
+          transform: scale(1.7);
+        }
+        to {
+          transform: scale(1);
+        }
+      }
       /* Stacking order of the full-screen overlays: the finish ceremony sits
          below the pause guide and its restart confirm, so pausing during the
          ceremony always brings the pause screen frontmost. */
@@ -427,6 +461,7 @@
     <div id="progress"></div>
     <div id="overlay">Wipeout!</div>
     <div id="trick"></div>
+    <div id="countdown"></div>
     <div id="pause">
       <div class="panel">
         <h1 id="pausetitle">Schuss!</h1>
