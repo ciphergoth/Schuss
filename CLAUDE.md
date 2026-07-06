@@ -38,12 +38,17 @@ is REQUIRED and never changes meaning (x steers / aims the landing, y is
 stance, buttons brake/boost); WASD exists only for tricks: in real air (past
 MIN_TRICK_AIR — never roller hops) A/D spins, W frontflips, S backflips, and
 you can aim with the mouse mid-trick. Land within tolerance of whole
-rotations for the payout; spinning WHILE flipping syncs the
-spin to the flip's rate so combos land as one package, and a landed
-spin+flip mix earns a 1.35x variety bonus, while repeating your own last
-trick docks the base points to 70% before any star multiplies them (fuel
-is never docked; the banner asks AGAIN?) — the praise ladder reserves
-INCREDIBLE for mixes, OUTSTANDING for big same-type tricks, NICE for
+rotations for the payout, and HOW you combine two axes matters
+(sim.combineTrick): a PARALLEL combo — spin AND flip at once — locks both
+axes to the flip's rate, slowed a touch (PARALLEL_SLOWDOWN) so it's a
+little slower and harder than either alone, and scores sub-additively
+(bigger axis + 0.6·smaller: more than either alone, less than their sum);
+a SERIAL spin-THEN-flip (never overlapping, tracked by skier.parallel)
+keeps full solo rates and is the showpiece — the plain sum ×1.35, a
+complexity bonus on top. Repeating your own last trick docks the base
+points to 70% before any star multiplies them (fuel is never docked; the
+banner asks AGAIN?) — the praise ladder reserves INCREDIBLE for serial
+mixes, COMBO for parallel, OUTSTANDING for big same-type tricks, NICE for
 singles. Land within tolerance of the correct facing on every rotated axis
 (spin ~52 degrees, flip ~43 — ONE gate for payout and bail alike) or the
 rotation doesn't count: past commit that's a tumble — spins commit just

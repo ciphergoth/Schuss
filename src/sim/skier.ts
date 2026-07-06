@@ -23,6 +23,7 @@ export interface SkierState {
   tumbling: number; // seconds of tumble remaining; 0 = on skis
   spin: number; // trick yaw accumulated this flight (radians)
   flip: number; // trick pitch accumulated this flight (radians)
+  parallel: boolean; // this flight ever spun AND flipped at once (vs serial)
   gap: number; // ballistic daylight the legs are currently bridging (< LEG_REACH)
 }
 
@@ -104,6 +105,10 @@ const MIN_TRICK_AIR = 0.35; // seconds aloft before the trick keys engage
 const SPIN_RATE = 6; // full 360 in ~1.05s
 const FRONTFLIP_RATE = 5; // ~1.26s per rotation
 const BACKFLIP_RATE = 4.2; // ~1.5s per rotation — the money trick
+// Spin AND flip at once (a PARALLEL combo) locks both axes to one rate — the
+// flip's — slowed a touch, so doing both together is a little slower, and so
+// harder, than either axis alone. Serial tricks keep their full solo rates.
+const PARALLEL_SLOWDOWN = 0.85;
 export const TRICK_COMMIT = 3.6; // radians of spin (~200 deg) before you must complete
 export const FLIP_COMMIT = 1.4; // radians of flip (~80 deg) before you must complete
 // Land within tolerance of the correct facing, on every rotated axis, or it
@@ -126,6 +131,7 @@ export function createSkier(): SkierState {
     tumbling: 0,
     spin: 0,
     flip: 0,
+    parallel: false,
     gap: 0,
   };
 }
@@ -237,11 +243,15 @@ export function stepSkier(
       const spinInput = input.trickSpin ?? 0;
       const flipInput = input.trickFlip ?? 0; // positive = backflip (S)
       const flipRate = flipInput > 0 ? BACKFLIP_RATE : FRONTFLIP_RATE;
-      // Combo sync: spinning WHILE flipping slows the spin to the flip's
-      // rate, so both rotations complete in lockstep and can land together.
-      const spinRate = flipInput !== 0 ? flipRate : SPIN_RATE;
-      state.spin += spinRate * spinInput * dt;
-      state.flip += flipRate * flipInput * dt;
+      // Parallel combo: spinning WHILE flipping locks BOTH axes to one rate
+      // (the flip's, slowed by PARALLEL_SLOWDOWN) so they land in lockstep
+      // and the combo is a touch slower — harder — than either alone. Any
+      // overlap this flight marks it parallel (vs a serial spin-then-flip).
+      const both = spinInput !== 0 && flipInput !== 0;
+      if (both) state.parallel = true;
+      const lockedRate = flipRate * PARALLEL_SLOWDOWN;
+      state.spin += (both ? lockedRate : SPIN_RATE) * spinInput * dt;
+      state.flip += (both ? lockedRate : flipRate) * flipInput * dt;
     }
     state.speed = Math.max(
       0,

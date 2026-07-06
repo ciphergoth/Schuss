@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SIM_DT, Sim, SimEvent, createSim, stepSim } from './sim';
+import { SIM_DT, Sim, SimEvent, combineTrick, createSim, stepSim } from './sim';
 import { SKIER_RADIUS, SkierInput } from './skier';
 
 const COAST = { steer: 0, stance: 0 };
@@ -9,6 +9,30 @@ function runCollecting(sim: Sim, seconds: number, input = COAST): SimEvent[] {
   for (let i = 0; i < Math.round(seconds / SIM_DT); i++) events.push(...stepSim(sim, input));
   return events;
 }
+
+describe('combineTrick: serial vs parallel', () => {
+  const a = 500; // spin
+  const b = 1100; // backflip
+
+  it('a solo axis is just its own value', () => {
+    expect(combineTrick(a, 0, false)).toBe(a);
+    expect(combineTrick(0, b, true)).toBe(b);
+  });
+
+  it('parallel pays more than either alone but less than the sum', () => {
+    const p = combineTrick(a, b, true);
+    expect(p).toBeGreaterThan(Math.max(a, b));
+    expect(p).toBeLessThan(a + b);
+    expect(p).toBe(1400); // 1100 + 0.6*500
+  });
+
+  it('serial pays the sum plus a complexity bonus — and beats parallel', () => {
+    const serial = combineTrick(a, b, false);
+    expect(serial).toBeGreaterThan(a + b);
+    expect(serial).toBeGreaterThan(combineTrick(a, b, true));
+    expect(serial).toBe(2160); // (500 + 1100) * 1.35
+  });
+});
 
 function teleport(sim: Sim, x: number, z: number, speed: number): void {
   const s = sim.skier;
@@ -318,19 +342,21 @@ describe('boost economy', () => {
     expect(Math.abs(sim.skier.spin)).toBeCloseTo(Math.abs(sim.skier.flip), 6);
   });
 
-  it('a mixed combo pays more than the sum of its tricks', () => {
+  it('a parallel combo pays more than either alone but less than the sum', () => {
     const sim = createSim(1);
     launch(sim, 18, 3); // room for the slow synced rotation
     while (
       sim.skier.airTime > 0 &&
       Math.min(Math.abs(sim.skier.spin), Math.abs(sim.skier.flip)) < 2 * Math.PI - 0.12
     ) {
-      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1, trickFlip: 1 }); // 360 + backflip
+      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1, trickFlip: 1 }); // spin AND backflip at once
     }
     while (sim.skier.airTime > 0) stepSim(sim, COAST);
     expect(sim.skier.tumbling).toBe(0);
-    // Un-multiplied sum is 0.15 + 0.26 = 0.41; the variety bonus beats it.
-    expect(sim.boost).toBeGreaterThan(0.5);
+    // Fuel sum would be 0.15 + 0.26 = 0.41; parallel is sub-additive — more
+    // than the backflip alone (0.26), less than the sum.
+    expect(sim.boost).toBeGreaterThan(0.26);
+    expect(sim.boost).toBeLessThan(0.41);
   });
 
   it('harder tricks pay more, in fuel and in points', () => {
@@ -427,18 +453,44 @@ describe('boost economy', () => {
     expect(sim.score).toBe(2450); // the spin is fresh again after the flip
   });
 
-  it('a mixed combo scores the variety bonus', () => {
+  it('a parallel combo scores between the bigger trick and the full sum', () => {
     const sim = createSim(1);
     launch(sim, 18, 3);
+    const events: SimEvent[] = [];
     while (
       sim.skier.airTime > 0 &&
       Math.min(Math.abs(sim.skier.spin), Math.abs(sim.skier.flip)) < 2 * Math.PI - 0.12
     ) {
-      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1, trickFlip: 1 }); // 360 + backflip
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1, trickFlip: 1 })); // at once
     }
-    while (sim.skier.airTime > 0) stepSim(sim, COAST);
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(sim.skier.tumbling).toBe(0);
-    expect(sim.score).toBe(2160); // (500 + 1100) x 1.35
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick && trick.type === 'trick' && trick.parallel).toBe(true);
+    // spin 500 + backflip 1100. Parallel: 1100 + 0.6*500 = 1400 (sum is 1600).
+    expect(sim.score).toBe(1400);
+  });
+
+  it('a serial spin-then-flip scores the sum plus a complexity bonus', () => {
+    const sim = createSim(1);
+    launch(sim, 70, 9); // lots of air: a full spin, THEN a full backflip
+    const events: SimEvent[] = [];
+    const nearTurn = (v: number) => Math.abs(v) >= 2 * Math.PI - 0.12;
+    // Phase 1: spin only, to just short of a full turn.
+    while (sim.skier.airTime > 0 && !nearTurn(sim.skier.spin)) {
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
+    }
+    // Phase 2: backflip only, no overlap — this makes it SERIAL, not parallel.
+    while (sim.skier.airTime > 0 && !nearTurn(sim.skier.flip)) {
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickFlip: 1 }));
+    }
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    expect(sim.skier.tumbling).toBe(0);
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick && trick.type === 'trick' && trick.parallel).toBe(false);
+    // spin 500 + backflip 1100, serial: (500 + 1100) * 1.35 = 2160 — beats the
+    // sum, and beats the same two tricks done in parallel (1400).
+    expect(sim.score).toBe(2160);
   });
 
   it('crossing the line fires finish once, locks the score, ends the pay', () => {

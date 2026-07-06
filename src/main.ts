@@ -362,9 +362,11 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       audio.playBonus(e.mult);
       showTrick(`×${e.mult}!`, e.mult >= 5 ? '#ff3ddc' : '#ffd34d', 0.9);
     } else if (e.type === 'trick') {
-      // Praise ladder: INCREDIBLE is reserved for mixed combos; big
-      // same-type tricks are OUTSTANDING; a single rotation is NICE.
+      // Praise ladder: a SERIAL spin+flip (the big scorer) is INCREDIBLE, a
+      // PARALLEL combo (spin & flip at once) is a COMBO, big same-type tricks
+      // are OUTSTANDING, a single rotation is NICE.
       const mixed = e.spins >= 1 && e.flips >= 1;
+      const serial = mixed && !e.parallel;
       audio.playTrick(e.spins + e.flips, e.mult, mixed);
       // The showpieces get fireworks in the sky AND in the mix.
       if (e.mult >= 3) audio.playFireworks(e.mult, e.mult >= 5);
@@ -377,7 +379,15 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       }
       const big = e.spins >= 2 || e.flips >= 2;
       // Repeating your last trick demotes the praise: the judges are bored.
-      const word = e.repeat ? 'AGAIN?' : mixed ? 'INCREDIBLE!' : big ? 'OUTSTANDING!' : 'NICE!';
+      const word = e.repeat
+        ? 'AGAIN?'
+        : serial
+          ? 'INCREDIBLE!'
+          : mixed
+            ? 'COMBO!'
+            : big
+              ? 'OUTSTANDING!'
+              : 'NICE!';
       const mult = e.mult > 1 ? ` ×${e.mult}` : '';
       const color =
         e.mult >= 5 ? '#ff3ddc' : e.mult >= 3 ? '#ffd34d' : e.repeat ? '#b9c4d6' : '#7dff8a';

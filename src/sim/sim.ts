@@ -27,6 +27,7 @@ export type SimEvent =
       spins: number;
       flips: number;
       flipBack: boolean;
+      parallel: boolean; // spin+flip at once (combo) vs serial spin-then-flip
       mult: number;
       points: number;
       repeat: boolean; // same trick as the last one landed: docked pay
@@ -77,14 +78,28 @@ const SECTOR_MIN_SPEED = 12; // average m/s before a sector pays anything
 const SECTOR_COEFF = 25;
 const SECTOR_EXP = 2.2;
 // Trick pay follows difficulty (slower rotation = more air needed = more
-// money): spin < frontflip < backflip. Mixing TYPES in one flight is the
-// hardest thing of all — variety multiplies, repetition merely adds.
+// money): spin < frontflip < backflip. Two axes in one flight is the hardest
+// thing of all, but HOW you did them matters — see combineTrick.
 const BOOST_PER_SPIN = 0.15;
 const BOOST_PER_FRONTFLIP = 0.2;
 const BOOST_PER_BACKFLIP = 0.26;
-const COMBO_MULT = 1.35; // spin AND flip landed in the same flight
+// SERIAL (spin then flip, never overlapping) is the showpiece: the plain SUM
+// of both, plus a complexity bonus. PARALLEL (spin AND flip at once — the
+// slower, locked-rate combo) pays MORE than either axis alone but LESS than
+// their sum: diminishing returns on the second axis.
+const SERIAL_MULT = 1.35; // serial: (spin + flip) x this
+const PARALLEL_SECOND = 0.6; // parallel: bigger axis + this x smaller axis
 const REPEAT_FACTOR = 0.7; // same trick as last time: the judges are bored
 const BOOST_TRICK_CAP = 0.65; // per landing
+
+// Fold two per-axis values (points or fuel) by how the tricks related in the
+// air. One axis zero = a solo, just the value. Both present = serial (super-
+// additive: sum + bonus) or parallel (sub-additive: > either alone, < sum).
+export function combineTrick(a: number, b: number, parallel: boolean): number {
+  if (a === 0 || b === 0) return a + b;
+  if (parallel) return Math.max(a, b) + PARALLEL_SECOND * Math.min(a, b);
+  return (a + b) * SERIAL_MULT;
+}
 const BOOST_DRAIN = 0.15; // per second while burning
 // The jump bar: 6 seconds of hold to a full superhuman charge, with the
 // strongest HUMAN jump at the halfway marker (3s). Energy is linear in hold
@@ -187,19 +202,20 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     if (s.tumbling === 0) {
       if (airBefore > MIN_STYLISH_AIR) events.push({ type: 'landing', airTime: airBefore });
       if (scoring && (turns >= 1 || flipTurns >= 1)) {
+        // Serial vs parallel: only meaningful with both axes, and only if the
+        // second axis actually landed (a blown axis scores 0 turns).
+        const parallel = s.parallel && turns >= 1 && flipTurns >= 1;
         // Fuel is flat and capped — the mechanical loop.
         const perFlip = flipBack ? BOOST_PER_BACKFLIP : BOOST_PER_FRONTFLIP;
-        let fuel = turns * BOOST_PER_SPIN + flipTurns * perFlip;
-        if (turns >= 1 && flipTurns >= 1) fuel *= COMBO_MULT; // variety bonus
+        const fuel = combineTrick(turns * BOOST_PER_SPIN, flipTurns * perFlip, parallel);
         earnBoost(sim, Math.min(BOOST_TRICK_CAP, fuel));
         // Points are uncapped and star-multiplied — the ledger of glory.
         // Repeating your own last trick bores the judges: the base pay is
         // docked before the star multiplies it. Fuel is never docked — the
         // mechanical loop doesn't judge style.
         const perFlipPts = flipBack ? POINTS_PER_BACKFLIP : POINTS_PER_FRONTFLIP;
-        let points = turns * POINTS_PER_SPIN + flipTurns * perFlipPts;
-        if (turns >= 1 && flipTurns >= 1) points *= COMBO_MULT;
-        const signature = `${turns}:${flipTurns}:${flipTurns > 0 ? (flipBack ? 'b' : 'f') : '-'}`;
+        let points = combineTrick(turns * POINTS_PER_SPIN, flipTurns * perFlipPts, parallel);
+        const signature = `${turns}:${flipTurns}:${flipTurns > 0 ? (flipBack ? 'b' : 'f') : '-'}:${parallel ? 'p' : 's'}`;
         const repeat = sim.lastTrick === signature;
         if (repeat) points *= REPEAT_FACTOR;
         sim.lastTrick = signature;
@@ -210,6 +226,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
           spins: turns,
           flips: flipTurns,
           flipBack,
+          parallel,
           mult: sim.trickMult,
           points,
           repeat,
@@ -221,6 +238,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     }
     s.spin = 0;
     s.flip = 0;
+    s.parallel = false;
   }
 
   const grounded = s.airTime === 0 && s.tumbling === 0;
