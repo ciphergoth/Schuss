@@ -1,4 +1,4 @@
-import { Terrain } from './terrain';
+import { SECTION_LENGTH, Terrain } from './terrain';
 import {
   FLIP_COMMIT,
   FLIP_TOLERANCE,
@@ -65,7 +65,12 @@ const POINTS_COIN = 50;
 const POINTS_PER_SPIN = 500;
 const POINTS_PER_FRONTFLIP = 800;
 const POINTS_PER_BACKFLIP = 1100;
-export const SECTOR_LENGTH = 250;
+// Scoring sectors ARE the terrain sections now (one rhythm): every section
+// boundary is a graded pace line, and the glowing arc there marks both. The
+// grade is average SPEED (length cancels in avg = length/time), so aligning
+// to 400m needs no re-tuning of the curve — it just means 8 graded lines a
+// course instead of ~13.
+export const SECTOR_LENGTH = SECTION_LENGTH;
 const SECTOR_MIN_SPEED = 12; // average m/s before a sector pays anything
 // Savage: points = 25 * (avg - 12)^2.2 — a 20 m/s sector ~2400, a
 // full-boost 30 m/s sector ~20000, worth several big tricks.
@@ -259,8 +264,9 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     }
   }
 
-  // Sector pace grade: every 250m of course, average speed converts to
-  // points on a savage curve. This is where burned boost becomes score.
+  // Sector pace grade: at every section boundary (400m), average speed
+  // converts to points on a savage curve. This is where burned boost
+  // becomes score — and the arc marks the line you were just graded on.
   if (scoring && s.z <= sim.nextSectorZ) {
     const elapsed = sim.time - sim.sectorStartTime;
     const avg = SECTOR_LENGTH / Math.max(elapsed, 0.001);

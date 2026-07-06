@@ -475,7 +475,7 @@ describe('boost economy', () => {
     const slow = createSim(1);
     teleport(slow, 0, -8, 15);
     slow.nextSectorZ = -10;
-    slow.sectorStartTime = slow.time - 25; // 250m in 25s: 10 m/s average
+    slow.sectorStartTime = slow.time - 40; // 400m in 40s: 10 m/s average
     const sector = runCollecting(slow, 1).find((e) => e.type === 'sector');
     expect(sector && sector.type === 'sector' && sector.points).toBe(0);
   });

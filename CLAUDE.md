@@ -21,8 +21,10 @@ points (500 spin / 800 frontflip / 1100 backflip per rotation), BONUS STARS
 multiply the next trick's POINTS (never fuel; armed until a trick attempt
 settles — spent by the landed trick it multiplied or by a blown-trick
 tumble, kept through plain landings and crashes; a HUD ×N glows in the
-star's color while armed), and every 250m a SECTOR popup grades average pace on a savage curve
-(25·(avg−12)^2.2 — a full-boost sector outearns several tricks), so fuel
+star's color while armed), and at every SECTION BOUNDARY (400m) a SECTOR popup grades average pace on a savage curve
+(25·(avg−12)^2.2 — a full-boost sector outearns several tricks; SECTOR_LENGTH
+= SECTION_LENGTH, so the graded line, the section change, and the glowing arc
+all coincide), so fuel
 burned into speed converts to points: tricks → fuel → speed → score. Every
 star is COMPUTED onto a reference flight integrated against the real
 heightfield (terrain.starOnArc): the gold x3 rides the human-pop-at-cruise
