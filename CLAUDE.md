@@ -212,7 +212,12 @@ friction braking).
   steer). Roll (steering-wheel twist) = steer, pitch = stance with
   top-edge-away = tuck; UNPAUSING calibrates the current grip as neutral
   (re-unpause to recalibrate; if permission resolves before the first
-  orientation event, calibration completes on that event). The drop-in tap
+  orientation event, calibration completes on that event). The
+  deviceorientation listener binds at GRANT time, not page load (iOS is
+  flaky binding it at load — the silent dead-tilt run), and the drop-in
+  WAITS for a real reading (input.waitForTilt) before entering the run: if
+  the sensor never streams it stays on the guide with the error rather than
+  stranding you in an unsteerable, unpausable run. The drop-in tap
   on the title panel requests iOS motion permission (must be in-gesture)
   and is UI, not game input (stopPropagation — otherwise tilt mode grabs
   it as a thumb touch; GameAudio.unlock() is public and called explicitly

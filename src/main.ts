@@ -191,6 +191,9 @@ async function enableTilt(): Promise<boolean> {
     if (typeof DOE.requestPermission === 'function') {
       if ((await DOE.requestPermission()) !== 'granted') return false;
     }
+    // Bind the listener HERE, inside the grant gesture — iOS is far more
+    // reliable this way than binding at page load.
+    input.startTiltListening();
     input.setTiltMode(true);
     tiltOn = true;
     return true;
@@ -236,11 +239,18 @@ document.getElementById('resumebtn')!.addEventListener('pointerdown', (e) => {
     return;
   }
   tiltError.classList.remove('show');
-  void enableTilt().then((ok) => {
-    if (ok) {
+  void enableTilt().then(async (ok) => {
+    // Permission granted isn't enough: on some sessions iOS never actually
+    // streams readings, and dropping in then strands you in a dead,
+    // unsteerable, unpausable run. Wait for a real reading first; if none
+    // comes, surface the error and stay on the guide (its Drop-in button
+    // still works, and a retry usually kicks the sensor awake).
+    if (ok && (await input.waitForTilt(1500))) {
       setPaused(false);
       audio.unlock();
     } else {
+      input.setTiltMode(false);
+      tiltOn = false;
       tiltError.classList.add('show');
     }
   });

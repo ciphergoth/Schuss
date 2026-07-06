@@ -30,6 +30,8 @@ export interface InputSource {
   acted: () => boolean; // has a real (trusted) user input landed this run?
   resetActed: () => void; // a fresh run must earn its "played" flag again
   setTiltMode: (on: boolean) => void; // phone-as-mouse: tilt steers, thumbs work
+  startTiltListening: () => void; // bind deviceorientation (call in the grant gesture)
+  waitForTilt: (timeoutMs: number) => Promise<boolean>; // resolves once a real reading lands
   calibrateTilt: () => void; // current attitude becomes neutral (on unpause)
   tiltDeviation: () => number; // radians off the calibrated attitude (envelope)
 }
@@ -58,19 +60,33 @@ export function setupInput(onRestart: () => void): InputSource {
   let trickPad: { id: number; x0: number; y0: number; spin: number; flip: number } | null = null;
   let chargeTouch: number | null = null;
 
-  window.addEventListener('deviceorientation', (e) => {
+  // The orientation listener is added at GRANT time (startTiltListening),
+  // not here: iOS is markedly more reliable when deviceorientation is bound
+  // in the same user gesture as requestPermission. Bound at page load it
+  // sometimes never fires at all — the silent dead-tilt run.
+  let orientationBound = false;
+  let tiltReadyWaiters: Array<() => void> = [];
+  const onOrientation = (e: DeviceOrientationEvent) => {
     if (e.beta === null || e.gamma === null) return;
     tiltUp = toScreen(upFromOrientation(e.beta, e.gamma), screen.orientation?.angle ?? 0);
     if (tiltCalibratePending) {
       tiltRef = tiltUp;
       tiltCalibratePending = false;
     }
+    // First real reading: wake anyone waiting on it (the drop-in blocks
+    // until the sensor is actually streaming, so a stalled sensor can't
+    // strand the player in an unsteerable run).
+    if (tiltReadyWaiters.length) {
+      const waiters = tiltReadyWaiters;
+      tiltReadyWaiters = [];
+      for (const w of waiters) w();
+    }
     // Tilt steering counts as playing (a tilt-only run must be able to set
     // a BEST) — but only real movement off neutral: a phone lying on a
     // table streams events too, and that's the idle self-play the acted
     // flag exists to reject.
     if (e.isTrusted && tiltMode && tiltRef && tiltDeviation(tiltUp, tiltRef) > 0.05) acted = true;
-  });
+  };
 
   // A run only counts as PLAYED once a real user input lands: an idle tab
   // self-piloting downhill (or a debug script poking the sim) must never
@@ -192,6 +208,23 @@ export function setupInput(onRestart: () => void): InputSource {
     setTiltMode: (on: boolean) => {
       tiltMode = on;
     },
+    startTiltListening: () => {
+      if (orientationBound) return;
+      orientationBound = true;
+      window.addEventListener('deviceorientation', onOrientation);
+    },
+    waitForTilt: (timeoutMs: number) =>
+      new Promise<boolean>((resolve) => {
+        if (tiltUp) return resolve(true); // sensor already streaming
+        let settled = false;
+        const done = (ok: boolean) => {
+          if (settled) return;
+          settled = true;
+          resolve(ok);
+        };
+        tiltReadyWaiters.push(() => done(true));
+        setTimeout(() => done(false), timeoutMs);
+      }),
     calibrateTilt: () => {
       if (tiltUp) tiltRef = tiltUp;
       else tiltCalibratePending = true; // permission granted, no event yet
