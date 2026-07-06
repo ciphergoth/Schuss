@@ -46,7 +46,6 @@ export interface InputSource {
   setTiltMode: (on: boolean) => void; // phone-as-mouse: tilt steers, thumbs work
   startTiltListening: () => void; // bind deviceorientation (call in the grant gesture)
   waitForTilt: (timeoutMs: number) => Promise<boolean>; // resolves once a real reading lands
-  tiltEventCount: () => number; // heartbeat: bumps per reading; frozen = sensor stalled
   debugSnapshot: () => InputDebug; // live input state for the ?debug readout
   calibrateTilt: () => void; // current attitude becomes neutral (on unpause)
   tiltDeviation: () => number; // radians off the calibrated attitude (envelope)
@@ -256,7 +255,6 @@ export function setupInput(onRestart: () => void): InputSource {
         tiltReadyWaiters.push(() => done(true));
         setTimeout(() => done(false), timeoutMs);
       }),
-    tiltEventCount: () => tiltEvents,
     debugSnapshot: () => {
       const c = current();
       return {

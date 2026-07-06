@@ -144,7 +144,9 @@ function closeConfirm(restart: boolean): void {
   confirmScreen.classList.remove('visible');
   if (restart) {
     startCourse(currentSeed);
-    setPaused(false);
+    // Re-enter through the ONE door: a restart on touch must re-verify tilt,
+    // never drop into an uncontrollable run just because tilt wasn't on.
+    dropIntoRun();
   } else {
     // Back to wherever they came from: the run, or the pause guide.
     setPaused(pausedBeforeConfirm);
@@ -234,21 +236,24 @@ pauseScreen.addEventListener('pointerdown', (e) => {
 // — and it only fires on a real tap, never a mid-scroll swipe on the
 // panel. If tilt can't be granted we surface the error and stay on the
 // guide — there is no fallback to fall into.
-document.getElementById('resumebtn')!.addEventListener('click', () => {
-  tryFullscreen();
-  if (tiltOn) {
-    // Already granted (a mid-run pause and resume): drop straight back in.
+// The single door into a run — used by Drop in AND Restart AND Next course.
+// On touch a run REQUIRES live tilt: if it isn't on, run the enable-and-
+// wait-for-a-reading flow, and if that fails, stay on the guide with the
+// error. NEVER unpause a touch run with tilt off — that is the "slides
+// straight, nothing responds, can't even pause" dead run (it needs only
+// tiltMode/tiltOn false, which the score/pace still tick through). On
+// desktop there is no tilt to wait for, so just unpause.
+function dropIntoRun(): void {
+  if (tiltOn || !document.body.classList.contains('touch')) {
     setPaused(false);
     audio.unlock();
     return;
   }
   tiltError.classList.remove('show');
   void enableTilt().then(async (ok) => {
-    // Permission granted isn't enough: on some sessions iOS never actually
-    // streams readings, and dropping in then strands you in a dead,
-    // unsteerable, unpausable run. Wait for a real reading first; if none
-    // comes, surface the error and stay on the guide (its Drop-in button
-    // still works, and a retry usually kicks the sensor awake).
+    // Permission granted isn't enough: the sensor must actually stream.
+    // Wait for a real reading; if none comes, show the error and stay on
+    // the guide (its Drop-in button still works, a retry usually wakes it).
     if (ok && (await input.waitForTilt(1500))) {
       setPaused(false);
       audio.unlock();
@@ -258,6 +263,11 @@ document.getElementById('resumebtn')!.addEventListener('click', () => {
       tiltError.classList.add('show');
     }
   });
+}
+
+document.getElementById('resumebtn')!.addEventListener('click', () => {
+  tryFullscreen();
+  dropIntoRun();
 });
 document.getElementById('restartbtn')!.addEventListener('click', () => {
   openConfirm();
@@ -287,14 +297,6 @@ document.getElementById('nextcourse')!.addEventListener('click', () => {
 // putting the phone down IS the pause gesture. The warning dyad rises
 // through the edge zone so the pause never comes as a surprise.
 let farTiltFor = 0;
-
-// Controls-liveness watchdog. A live tilt sensor streams readings
-// continuously (even dead still), so a frozen heartbeat means the controls
-// are gone — the sensor stalled, or the input got wedged. Rather than run a
-// game nobody can steer or pause, bail to the guide with the error.
-const TILT_STALL_S = 1.5;
-let lastTiltCount = 0;
-let tiltStallFor = 0;
 
 window.__game = {
   get sim() {
@@ -517,28 +519,6 @@ function frame(): void {
     setPaused(true);
     requestAnimationFrame(frame);
     return;
-  }
-
-  // Controls-liveness watchdog (tilt runs only): if the reading heartbeat
-  // freezes, the controls are dead — bail to the guide with the error
-  // rather than run an unsteerable, unpausable game. Reset tilt so the
-  // retry re-verifies through enableTilt/waitForTilt.
-  if (tiltOn) {
-    const count = input.tiltEventCount();
-    if (count === lastTiltCount) tiltStallFor += delta;
-    else {
-      tiltStallFor = 0;
-      lastTiltCount = count;
-    }
-    if (tiltStallFor >= TILT_STALL_S) {
-      tiltStallFor = 0;
-      input.setTiltMode(false);
-      tiltOn = false;
-      setPaused(true);
-      tiltError.classList.add('show');
-      requestAnimationFrame(frame);
-      return;
-    }
   }
 
   accumulator += delta;
