@@ -136,7 +136,17 @@
         width: 10px;
         height: 72vh;
         border-radius: 5px;
-        background: rgba(10, 20, 50, 0.4);
+        /* Two-tone track marks the midpoint: the darker lower half is the
+           human charge (topping out at the strongest human jump), the lighter
+           upper half is superhuman and costs boost. The two halves mark the
+           midpoint themselves, no marker line needed. */
+        background: linear-gradient(
+          to top,
+          rgba(10, 20, 50, 0.4) 0%,
+          rgba(10, 20, 50, 0.4) 50%,
+          rgba(60, 80, 140, 0.45) 50%,
+          rgba(60, 80, 140, 0.45) 100%
+        );
         overflow: hidden;
         display: none;
         align-items: flex-end;
@@ -149,16 +159,6 @@
         height: 0;
         border-radius: 5px;
         background: #ffd34d;
-      }
-      /* The strongest human jump lives at the halfway marker; everything
-         above it is superhuman and costs boost. */
-      #chargemark {
-        position: absolute;
-        left: -2px;
-        right: -2px;
-        bottom: 50%;
-        height: 2px;
-        background: rgba(255, 255, 255, 0.9);
       }
       #overlay {
         position: fixed;
@@ -455,7 +455,6 @@
     <div id="boostbar"><div id="boostfill"></div></div>
     <div id="chargebar">
       <div id="chargefill"></div>
-      <div id="chargemark"></div>
     </div>
     <!-- Course progress: the boost tank's mirror image on the right edge. -->
     <div id="progress"></div>
@@ -500,8 +499,8 @@
             <tr>
               <td>Beside it</td>
               <td>
-                Jump charge &mdash; grows while BOOST is held; the marker is the strongest human
-                jump; release to pop
+                Jump charge &mdash; grows while BOOST is held; the darker lower half tops out at the
+                strongest human jump; release to pop
               </td>
             </tr>
             <tr>
@@ -542,9 +541,9 @@
           <tr>
             <td>Space / Shift / right mouse</td>
             <td>
-              Hold: burn boost &amp; charge a jump. The marker on the bar (~3s) is the strongest
-              HUMAN jump &mdash; past it the charge goes superhuman, and only fills while you have
-              boost to burn. Release to pop; a tap does nothing at all
+              Hold: burn boost &amp; charge a jump. The darker lower half of the bar (~3s) tops out
+              at the strongest HUMAN jump &mdash; the lighter upper half is superhuman, and only
+              fills while you have boost to burn. Release to pop; a tap does nothing at all
             </td>
           </tr>
           <tr>
