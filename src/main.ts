@@ -258,10 +258,14 @@ function tryFullscreen(): void {
 
 // Panel touches are UI — scrolling the guide, pressing its buttons —
 // never game input: without this, tilt mode would grab them as trick-pad
-// or charge touches.
-pauseScreen.addEventListener('pointerdown', (e) => {
-  if (e.pointerType !== 'mouse') e.stopPropagation();
-});
+// or charge touches, or (for a centered button like Next course) as the
+// middle-band pause, so tapping the ceremony's buttons just paused the run.
+// Every full-screen panel gets the same guard.
+for (const panel of [pauseScreen, confirmScreen, finishScreen]) {
+  panel.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse') e.stopPropagation();
+  });
+}
 
 // The touch way out of the pause screen is a real button, wired to CLICK,
 // not pointerdown. Fullscreen and motion permission both need a user
