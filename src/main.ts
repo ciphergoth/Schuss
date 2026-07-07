@@ -487,7 +487,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     ? 'hsl(18, 100%, 58%)'
     : `hsl(${35 + sim.boost * 10}, 95%, 58%)`;
   // The jump charge bar lives beside the tank and only exists while charge
-  // is banked: gold through the human half, magenta past the marker
+  // is banked: gold through the human half, magenta past the shading seam
   // (superhuman, paid in boost), white-hot at full.
   const charge = sim.charge;
   chargeBar.classList.toggle('visible', charge > 0);
