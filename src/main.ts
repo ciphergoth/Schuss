@@ -145,6 +145,14 @@ function showCount(text: string, go: boolean): void {
   countdownEl.style.animation = 'cd-pop 0.55s ease-out';
 }
 
+// The mute button mirrors the M key — the only way to mute on a phone, which
+// has no keyboard. The label tracks state; refresh it whenever the pause
+// screen opens so an M-key toggle mid-run is reflected next time it's shown.
+const muteLabel = document.getElementById('mutelabel')!;
+function updateMuteLabel(): void {
+  muteLabel.textContent = audio.muted ? 'Unmute' : 'Mute';
+}
+
 function setPaused(next: boolean): void {
   // The guide opens as the title screen; once the player drops in, later
   // pauses read as "Paused".
@@ -158,7 +166,10 @@ function setPaused(next: boolean): void {
     tryFullscreen();
   }
   paused = next;
-  if (paused) audio.setTiltWarning(0);
+  if (paused) {
+    audio.setTiltWarning(0);
+    updateMuteLabel();
+  }
   pauseScreen.classList.toggle('visible', paused && !selecting);
   audio.setPaused(paused);
 }
@@ -358,6 +369,10 @@ document.getElementById('selectorback')!.addEventListener('click', () => {
 document.getElementById('choosecourse')!.addEventListener('click', () => {
   tryFullscreen(); // the ceremony doesn't re-pause, so ask here directly
   openSelector();
+});
+document.getElementById('mutebtn')!.addEventListener('click', () => {
+  audio.toggleMute();
+  updateMuteLabel();
 });
 
 // In tilt mode the thumbs own the screen edges, so the whole middle band

@@ -29,7 +29,7 @@ const MASTER_LEVEL = 0.6;
 export class GameAudio {
   private nodes: AudioNodes | null = null;
   private music: Music | null = null;
-  private muted = false;
+  private _muted = false;
   private gamePaused = false;
   private wasTumbling = false;
   private prevSpin = 0;
@@ -62,7 +62,9 @@ export class GameAudio {
   private build(): AudioNodes {
     const ctx = new AudioContext();
     const master = ctx.createGain();
-    master.gain.value = MASTER_LEVEL;
+    // A mute chosen before the graph existed (e.g. on the touch pause screen,
+    // before the first drop-in built any nodes) has to survive the build.
+    master.gain.value = this._muted ? 0 : MASTER_LEVEL;
     master.connect(ctx.destination);
 
     const noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
@@ -514,13 +516,21 @@ export class GameAudio {
     }
   }
 
+  get muted(): boolean {
+    return this._muted;
+  }
+
+  // Flip mute. Works even before the audio graph is built (the touch pause
+  // screen can mute pre-drop-in): the flag is the source of truth and build()
+  // honors it. When the graph exists, ramp the master so the change is smooth.
   toggleMute(): void {
-    if (!this.nodes) return;
-    this.muted = !this.muted;
-    this.nodes.master.gain.setTargetAtTime(
-      this.muted ? 0 : MASTER_LEVEL,
-      this.nodes.ctx.currentTime,
-      0.02
-    );
+    this._muted = !this._muted;
+    if (this.nodes) {
+      this.nodes.master.gain.setTargetAtTime(
+        this._muted ? 0 : MASTER_LEVEL,
+        this.nodes.ctx.currentTime,
+        0.02
+      );
+    }
   }
 }
