@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
 import { SECTION_LENGTH } from './sim/terrain';
-import { FLIP_TOLERANCE, SPIN_TOLERANCE, SkierInput } from './sim/skier';
+import { SkierInput } from './sim/skier';
 import { setupInput } from './input';
 import { FAR_HOLD_S, THUMB_ZONE, tiltZone } from './tilt';
 import { createScene } from './render/scene';
@@ -398,8 +398,8 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       // other reads as the two tricks it was, not a squashed total. Spins
       // carry a rotation arrow so the two directions are distinct.
       const parts = e.segments.map((s) => {
-        if (s.kind === 'spinL') return `${s.turns * 360}°↺`;
-        if (s.kind === 'spinR') return `${s.turns * 360}°↻`;
+        if (s.kind === 'spinL') return s.turns > 1 ? `${s.turns}× SPIN ↺` : 'SPIN ↺';
+        if (s.kind === 'spinR') return s.turns > 1 ? `${s.turns}× SPIN ↻` : 'SPIN ↻';
         const name = s.kind === 'back' ? 'BACKFLIP' : 'FRONTFLIP';
         return s.turns > 1 ? `${s.turns}× ${name}` : name;
       });
@@ -516,27 +516,11 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   }
   overlay.classList.toggle('visible', skier.tumbling > 0);
 
-  // Live rotation readout while airborne: spin and flip degrees, turning
-  // green with a ✓ once every started rotation is lined up to land clean.
-  // Result banners (set by showTrick) take priority while they last.
+  // Nothing is drawn DURING a trick — the skier's own rotation is the only
+  // readout in the air, so it stays clean and legible. The result banner
+  // (set by showTrick on landing) describes what you did, then clears.
   if (sim.time >= trickBannerUntil) {
-    const spinDeg = Math.round((Math.abs(skier.spin) * 180) / Math.PI);
-    const flipDeg = Math.round((Math.abs(skier.flip) * 180) / Math.PI);
-    if (skier.tumbling === 0 && (spinDeg >= 20 || flipDeg >= 20)) {
-      const res = (a: number) => Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
-      const clean =
-        (spinDeg < 20 || res(skier.spin) < SPIN_TOLERANCE) &&
-        (flipDeg < 20 || res(skier.flip) < FLIP_TOLERANCE);
-      const committed = spinDeg >= 300 || flipDeg >= 300;
-      const parts = [];
-      if (spinDeg >= 20) parts.push(`${spinDeg}°`);
-      if (flipDeg >= 20) parts.push(`flip ${flipDeg}°`);
-      trickText.textContent = `${parts.join(' · ')}${clean && committed ? ' ✓' : ''}`;
-      trickText.style.color = clean && committed ? '#7dff8a' : '#ffffff';
-      trickText.classList.add('visible');
-    } else {
-      trickText.classList.remove('visible');
-    }
+    trickText.classList.remove('visible');
   }
 
   renderer.render(scene, camera);

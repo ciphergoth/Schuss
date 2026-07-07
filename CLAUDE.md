@@ -59,8 +59,11 @@ singles. Land within tolerance of the correct facing on every rotated axis
 rotation doesn't count: past commit that's a tumble — spins commit just
 past a half-turn, flips at ~80 degrees (a 90-degree-pitched landing is a
 faceplant, not a stumble) — and under commit it's a safe bail that pays
-nothing (never a round-up to a paid 360). A live degree readout (green ✓ when lined up) plus
-NICE!/SPUN OUT banners make it legible. Racing alone never fills the tank —
+nothing (never a round-up to a paid 360). Nothing is drawn in the AIR — the
+skier's own rotation is the only readout, kept clean and legible — and the
+landing banner NAMES the tricks it was (SPIN ↺ / BACKFLIP / 2× ..., no
+degree counts, a + between segments) with the NICE!/SPUN OUT verdict.
+Racing alone never fills the tank —
 but past the first sector line it does score. Burning
 is hard acceleration with flames, rainbow trail, FOV slam, rumble. The
 spectacle scales with play: the course crosses a new color world every
