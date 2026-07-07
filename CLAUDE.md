@@ -35,7 +35,7 @@ physics. Plunge venues gate softly (speed is free downhill there); hips
 carry only the x3 for now. Near misses celebrate (whoosh, puff) but pay
 nothing. The mouse
 is REQUIRED and never changes meaning (x steers / aims the landing, y is
-stance, buttons brake/boost); WASD exists only for tricks: in real air (past
+stance, buttons boost); WASD exists only for tricks: in real air (past
 MIN_TRICK_AIR — never roller hops) A/D spins, W frontflips, S backflips, and
 you can aim with the mouse mid-trick. A flight is a SEQUENCE OF TRICK
 SEGMENTS, split at direction reversals (skier.ts banks a segment's whole
@@ -219,7 +219,7 @@ friction braking).
 - Mouse: x position sets a TARGET direction relative to the course (center =
   follow the track, edges = ~66 degrees across it); heading eases toward it
   with no overshoot. Rate-based steering caused pilot-induced weaving.
-  y sets stance (top = tuck, bottom = snowplow); hold button for full snowplow
+  y sets stance (top = tuck, bottom = snowplow)
 - Touch: there is NO finger-steering scheme. The TILT is the only touch
   control; if motion access can't be granted the drop-in shows an error
   (#tilterror) and stays paused rather than dropping into an unsteerable
@@ -269,7 +269,7 @@ friction braking).
 - WASD: trick keys ONLY (in real air: A/D spin, W frontflip, S backflip —
   push forward to flip forward, pull back to flip back).
   There is no keyboard steering — the mouse is required.
-- Boost/jump is ONE button, SSX-style (Space, Shift, or right mouse): holding
+- Boost/jump is ONE button, SSX-style (Space, Shift, or any mouse button): holding
   burns the tank (grounded only) and banks jump charge (skier crouches; the
   charge bar beside the tank appears while banked). The SIM owns the charge
   (sim-time, deterministic): a 6s bar with the strongest HUMAN jump (3.8
