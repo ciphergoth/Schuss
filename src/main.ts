@@ -314,6 +314,10 @@ document.getElementById('nextcourse')!.addEventListener('click', () => {
     startCourse(currentSeed + 1);
   }
 });
+// Retry on the ceremony: same as R — the Y/N confirm, then restart this seed.
+document.getElementById('retrybtn')!.addEventListener('click', () => {
+  openConfirm();
+});
 
 // Tilting far outside the control envelope, sustained, pauses the game:
 // putting the phone down IS the pause gesture. The warning dyad rises

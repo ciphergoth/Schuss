@@ -278,12 +278,6 @@
         font-family: 'Bungee', system-ui, sans-serif;
         font-size: 26px;
       }
-      #confirm .keys {
-        font-size: 17px;
-      }
-      #confirm .keys b {
-        color: #ffd34d;
-      }
       #finish {
         position: fixed;
         inset: 0;
@@ -321,14 +315,6 @@
         font-family: 'Bungee', system-ui, sans-serif;
         font-size: 18px;
         min-height: 24px;
-      }
-      #finish .keys {
-        margin-top: 12px;
-        font-size: 16px;
-        opacity: 0.9;
-      }
-      #finish .keys b {
-        color: #ffd34d;
       }
       #pause table {
         border-collapse: collapse;
@@ -379,6 +365,20 @@
         padding: 10px 22px;
         margin: 10px 8px 0;
         pointer-events: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+      }
+      /* The keyboard shortcut lives ON the button as a gold keycap — shown on
+         desktop, hidden on touch (there is no keyboard there). */
+      .tapbtn kbd {
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 0.62em;
+        line-height: 1;
+        background: #ffd34d;
+        color: #1a2148;
+        border-radius: 5px;
+        padding: 3px 6px;
       }
       /* On touch the keyboard guide is dead weight — the touch guide
          replaces it wholesale. */
@@ -572,25 +572,20 @@
             <td>Mute</td>
           </tr>
         </table>
-        <div class="hint keyonly">
-          Esc or ? resumes &middot; ride the walls, graze the obstacles, thread the gold
-        </div>
+        <div class="hint keyonly">ride the walls, graze the obstacles, thread the gold</div>
         <div class="hint touchonly">Ride the walls, graze the obstacles, thread the gold</div>
         <div>
-          <button class="tapbtn" id="resumebtn">Drop in</button>
-          <button class="tapbtn" id="restartbtn">Restart</button>
+          <button class="tapbtn" id="resumebtn"><kbd class="keyonly">Esc</kbd>Drop in</button>
+          <button class="tapbtn" id="restartbtn"><kbd class="keyonly">R</kbd>Restart</button>
         </div>
       </div>
     </div>
     <div id="confirm">
       <div class="panel">
         <h1>Fresh run?</h1>
-        <div class="keys">
-          <b>Y</b> &mdash; restart &nbsp;&middot;&nbsp; <b>N</b> &mdash; keep skiing
-        </div>
         <div>
-          <button class="tapbtn" id="confirmy">Restart</button>
-          <button class="tapbtn" id="confirmn">Keep skiing</button>
+          <button class="tapbtn" id="confirmy"><kbd class="keyonly">Y</kbd>Restart</button>
+          <button class="tapbtn" id="confirmn"><kbd class="keyonly">N</kbd>Keep skiing</button>
         </div>
       </div>
     </div>
@@ -599,11 +594,9 @@
         <h1>FINISH!</h1>
         <div id="finishstats"></div>
         <div id="finishbest"></div>
-        <div class="keys">
-          <b>N</b> &mdash; next course &nbsp;&middot;&nbsp; <b>R</b> &mdash; retry
-        </div>
         <div>
-          <button class="tapbtn" id="nextcourse">Next course</button>
+          <button class="tapbtn" id="nextcourse"><kbd class="keyonly">N</kbd>Next course</button>
+          <button class="tapbtn" id="retrybtn"><kbd class="keyonly">R</kbd>Retry</button>
         </div>
       </div>
     </div>
