@@ -23,16 +23,16 @@ export const GRADE = 0.35; // average drop per meter of z
 export const SECTION_LENGTH = 400;
 const SECTION_BLEND = 0.15; // fraction of the section that fades into the next
 
-// THE COURSE is a run you can finish — and there is exactly ONE: the MEGA
-// COURSE, every idea the mountain has packed into a single 8km run (20
-// sections, 2.5x the old per-course length). It has an arc — a gentle
-// cruise opening (section 0, as ever), a mixed middle that deals EVERY
-// section type exactly twice (see sectionType), and a forced PLUNGE finale
-// into the checkered gate at the line. Past the line the mountain becomes
-// a clean celebratory outrun: cruise terrain, nothing to hit, nothing left
-// to collect. Tests that need arbitrary depth can construct Terrain with
-// courseLength Infinity (an endless mountain).
-export const COURSE_LENGTH = SECTION_LENGTH * 20;
+// THE COURSE is a run you can finish — and there is exactly ONE: nine
+// sections, nine DIFFERENT personalities, 3.6km. Every section justifies
+// itself with something new; nothing ever repeats within a run. It has an
+// arc — a gentle cruise opening (section 0, as ever), a mixed middle that
+// deals each of the other seven types exactly once (see sectionType), and
+// a forced PLUNGE finale into the checkered gate at the line. Past the
+// line the mountain becomes a clean celebratory outrun: cruise terrain,
+// nothing to hit, nothing left to collect. Tests that need arbitrary depth
+// can construct Terrain with courseLength Infinity (an endless mountain).
+export const COURSE_LENGTH = SECTION_LENGTH * 9;
 
 // The one course announces itself by name — over the start gate, on the
 // HUD clock line, and at the ceremony.
@@ -242,20 +242,21 @@ const SECTION_ORDER: readonly SectionType[] = [
   'powder',
 ];
 
-// THE MEGA DEAL: the course's mixed middle (sections 1..18) is TWO full
-// decks of all nine section types, each deck a seeded shuffle — one run
-// tours every idea the mountain has, exactly twice, and no idea can crowd
-// out another. (This replaced the nine ARCHETYPE courses, which reweighted
-// one shared deck per seed: nine menu entries, not nine ideas. All the
-// ideas now live in the one course.) A shuffled deck of nine distinct
-// types is internally repeat-free by construction; the joints are patched
-// by local swaps — the head can't echo its predecessor (section 0's
-// cruise, or the previous block's tail), the mid-block seam can't repeat
-// across decks, and the slot before the finale can't be a plunge (the
-// finale is earned, not doubled). The endless test mountain just keeps
-// dealing double-deck blocks forever, so every type stays reachable at
-// any depth.
-const DECK_BLOCK = SECTION_ORDER.length * 2; // sections per dealt block
+// THE TOUR: the course's mixed middle (sections 1..7) is ONE seeded
+// shuffle of the seven types that aren't already pinned to the arc (cruise
+// opens the run, plunge closes it), so every section of the course is a
+// personality you haven't ridden yet — pure novelty, front to back. (This
+// replaced first the nine ARCHETYPE courses — nine menu entries reweighting
+// one shared deck, not nine ideas — and then an 8km double-deck mega course
+// whose second helping of every idea was padding, not variety. All the
+// ideas, once each, is the whole show.) A shuffle of distinct types is
+// repeat-free by construction, and with cruise and plunge out of the deck
+// both joints are safe unpatched. The endless test mountain continues past
+// the tour with shuffled FULL decks (heads patched against the previous
+// tail), so every type stays reachable at any depth.
+const TOUR_TYPES: readonly SectionType[] = SECTION_ORDER.filter(
+  (t) => t !== 'cruise' && t !== 'plunge'
+);
 
 // Superelevation: floor cross-slope per unit of centerline curvature, capped
 // so the bank helps the carve without becoming a wall of its own.
@@ -454,6 +455,7 @@ export class Terrain {
   private chunkBonuses = new Map<number, TrickBonus[]>();
   private chunkJumps = new Map<number, Jump | null>();
   private chunkSinceFeat = new Map<number, number>();
+  private tour: SectionType[] | undefined;
   private blockDeals = new Map<number, SectionType[]>();
   private sectionDrops = new Map<number, number>();
 
@@ -532,50 +534,50 @@ export class Terrain {
     return Math.floor(-z / SECTION_LENGTH);
   }
 
-  // The personality of section s: the MEGA DEAL. Section 0 is always
-  // cruise, the final section is always the plunge finale, everything past
-  // the line is outrun cruise — and the middle is dealt in double-deck
-  // blocks (two seeded shuffles of all nine types back to back), so the
-  // default 20-section course's middle (1..18) is exactly one block: every
-  // section type, exactly twice, never repeating its predecessor (a
-  // Narrows into a Narrows would just be one long Narrows).
+  // The personality of section s: THE TOUR. Section 0 is always cruise,
+  // the final section is always the plunge finale, everything past the
+  // line is outrun cruise — and the middle (1..7) is the seeded shuffle of
+  // the other seven types, once each. Nine sections, nine different ideas;
+  // nothing ever repeats within the course (a Narrows into a Narrows would
+  // just be one long Narrows, and a second helping of anything is padding).
   sectionType(s: number): SectionType {
     if (s <= 0) return 'cruise';
     if (s > this.lastSection()) return 'cruise'; // the outrun
     if (s === this.lastSection()) return 'plunge'; // the finale
-    const block = Math.floor((s - 1) / DECK_BLOCK);
-    return this.blockDeal(block)[(s - 1) % DECK_BLOCK]!;
+    if (s <= TOUR_TYPES.length) return this.tourDeal()[s - 1]!;
+    // Past the tour only the endless test mountain continues: keep dealing
+    // shuffled full decks so every type stays reachable at any depth.
+    const block = Math.floor((s - 1 - TOUR_TYPES.length) / SECTION_ORDER.length);
+    return this.blockDeal(block)[(s - 1 - TOUR_TYPES.length) % SECTION_ORDER.length]!;
   }
 
-  // One dealt block: two shuffled decks of the nine types, joints patched
-  // by local swaps. A shuffled deck has no internal repeats (nine distinct
-  // cards), so only three seams need care: the head against the previous
-  // block's tail (or section 0's cruise), the mid-block seam between the
-  // decks, and — when this block's tail sits just above the finale — a
-  // plunge there (the finale must be earned, not doubled). Each swap trades
-  // with a same-deck neighbor, which is distinct by construction, so a
-  // patch can never create a new repeat.
+  // The course's one middle deal: the seven unpinned types, shuffled. No
+  // joint needs patching — cruise and plunge aren't in the deck, so the
+  // head can't echo the opening and the tail can't double the finale.
+  private tourDeal(): SectionType[] {
+    return (this.tour ??= this.shuffled(TOUR_TYPES, 1));
+  }
+
+  // An endless-mountain block: one shuffled full deck of the nine types.
+  // Internally repeat-free (distinct cards); the head is patched against
+  // the previous tail (or the tour's last card) by a same-deck neighbor
+  // swap, which is distinct by construction and can't create a new repeat.
   private blockDeal(block: number): SectionType[] {
     const cached = this.blockDeals.get(block);
     if (cached) return cached;
-    const deal = [...this.shuffledDeck(2 * block), ...this.shuffledDeck(2 * block + 1)];
-    const n = SECTION_ORDER.length;
-    const prev = block === 0 ? 'cruise' : this.blockDeal(block - 1)[DECK_BLOCK - 1]!;
+    const deal = this.shuffled(SECTION_ORDER, 100 + block);
+    const prev =
+      block === 0
+        ? this.tourDeal()[TOUR_TYPES.length - 1]!
+        : this.blockDeal(block - 1)[SECTION_ORDER.length - 1]!;
     if (deal[0] === prev) [deal[0], deal[1]] = [deal[1]!, deal[0]!];
-    if (deal[n] === deal[n - 1]) [deal[n], deal[n + 1]] = [deal[n + 1]!, deal[n]!];
-    if (
-      block * DECK_BLOCK + DECK_BLOCK === this.lastSection() - 1 &&
-      deal[DECK_BLOCK - 1] === 'plunge'
-    ) {
-      [deal[DECK_BLOCK - 2], deal[DECK_BLOCK - 1]] = [deal[DECK_BLOCK - 1]!, deal[DECK_BLOCK - 2]!];
-    }
     this.blockDeals.set(block, deal);
     return deal;
   }
 
-  private shuffledDeck(salt: number): SectionType[] {
+  private shuffled(types: readonly SectionType[], salt: number): SectionType[] {
     const rng = mulberry32(Math.floor(hash2(this.seed, 7307, salt) * 2 ** 31));
-    const deck = [...SECTION_ORDER];
+    const deck = [...types];
     for (let i = deck.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [deck[i], deck[j]] = [deck[j]!, deck[i]!];

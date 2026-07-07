@@ -2,13 +2,16 @@ import * as THREE from 'three';
 import { hash2, mulberry32 } from '../sim/rng';
 
 // The course skis through color worlds: every ZONE_LENGTH meters the sky,
-// fog, and light cross-fade into the next palette. Which worlds — and what
-// weather rides along — is the course's own: each seed draws its zone
-// sequence from the library, so an all-cold ice course and a golden-hour
-// course are different places before the terrain even registers. Pure
-// function of (seed, z): the same course always looks the same.
+// fog, and light cross-fade into the next palette. Which order — and what
+// weather rides along — is the course's own: each seed shuffles the whole
+// library, so a run reads differently before the terrain even registers.
+// Pure function of (seed, z): the same course always looks the same.
 
-export const ZONE_LENGTH = 600;
+// Paced so the eight-world library completes EXACTLY once over the 3.6km
+// course (8 x 450 = COURSE_LENGTH): like the section tour, every zone
+// crossing is a world you haven't seen this run, and the eighth carries
+// you across the line. (Purely cosmetic if the lengths ever drift apart.)
+export const ZONE_LENGTH = 450;
 const BLEND = 80; // meters of cross-fade at each zone boundary
 
 export interface Palette {
@@ -71,10 +74,9 @@ export const LIBRARY: readonly Palette[] = [
   palette('ice blue', 0x5b7fa8, 0xcfe6ff, 0x2e4258, 1.05, 0xdff1ff, 1.6, 620, 0.35),
 ];
 
-// The course's zone timeline: the mega course tours the WHOLE library —
-// all eight palettes in a seeded order (8km crosses ~13 zones, so every
-// world appears before the cycle comes back around). Deterministic per
-// seed.
+// The course's zone timeline: the WHOLE library, all eight palettes in a
+// seeded order — one world per zone, each exactly once per run (see
+// ZONE_LENGTH). Deterministic per seed.
 export function courseZones(seed: number): Palette[] {
   const rng = mulberry32(Math.floor(hash2(seed, 4177, 23) * 2 ** 31));
   const deck = [...LIBRARY];

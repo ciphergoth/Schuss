@@ -3,12 +3,14 @@
 A 3D browser-based skiing game in the spirit of PS2-era SSX Tricky: a
 procedurally generated walled COURSE — a banked ice channel floating in a
 dusk sky above a city — with obstacles, jumps, and pickup lines. There is
-ONE course: the MEGA COURSE, "The Grand Tour" (COURSE_NAME in terrain.ts),
-8km ending at a checkered finish gate — every idea the mountain has packed
-into a single run. (It replaced nine named archetype courses that
-reweighted one shared section deck per seed: nine menu entries, not nine
-ideas.) ?seed=N still forces an arbitrary reshuffle of the deal. Static
-site, no server.
+ONE course: "The Grand Tour" (COURSE_NAME in terrain.ts), 3.6km to a
+checkered finish gate — nine sections, nine DIFFERENT personalities,
+every idea the mountain has exactly once, so every segment justifies
+itself with something new. (It replaced nine named archetype courses —
+nine menu entries reweighting one shared deck, not nine ideas — and then
+an 8km double-deck mega course whose second helping of everything was
+padding, not variety.) ?seed=N still forces an arbitrary reshuffle of the
+deal. Static site, no server.
 
 Design rules: punishment is light — obstacle hits cost a brief 0.7s tumble
 and a little speed (you keep 60%), a wobble to recover from and never the
@@ -81,10 +83,11 @@ Racing alone never fills the tank —
 but past the first sector line it does score. Burning
 is hard acceleration with flames, rainbow trail, FOV slam, rumble. The
 spectacle scales with play: the course crosses a new color world every
-600m — and it tours the WHOLE eight-palette library in a seeded order
-(the classic dusk / neon night / rose dawn / emerald plus golden hour /
-blizzard white / violet storm / ice blue; palette.courseZones — 8km
-crosses ~13 zones, so every world appears before the cycle wraps) and
+450m — the WHOLE eight-palette library in a seeded order, each world
+EXACTLY ONCE per run (the classic dusk / neon night / rose dawn / emerald
+plus golden hour / blizzard white / violet storm / ice blue;
+palette.courseZones — ZONE_LENGTH is paced so 8 zones = COURSE_LENGTH and
+the eighth carries you across the line) and
 carries its own WEATHER (courseWeather:
 seeded snowfall — clear/flurries/heavy, a deterministic flake box riding
 with the skier — and drifting fog banks that swell on a seeded rhythm in
@@ -123,15 +126,14 @@ friction AND turn authority in skier.ts — speed nearly free, turns
 arrive late; stickiness is drag-only and can't express faster-than-snow)
 / powder (deep drifts, one groomed ribbon: crudThreshold 0 buries all
 but the clean golden-path corridor; powder is drag, never a trap).
-WHICH sections the course deals is the MEGA DEAL (terrain.ts sectionType /
-blockDeal): the mixed middle (sections 1..18) is TWO full decks of all
-nine types, each deck a seeded shuffle — every section personality appears
-EXACTLY TWICE per run, so no idea can crowd out another. A shuffled deck
-of nine distinct cards has no internal repeats by construction; the three
-joints (head against section 0's cruise, the mid-block seam, the slot
-before the finale — never a plunge there) are patched by local same-deck
-swaps, which can't create new repeats. The endless test mountain
-(courseLength Infinity) keeps dealing double-deck blocks forever. The
+WHICH sections the course deals is THE TOUR (terrain.ts sectionType /
+tourDeal): the mixed middle (sections 1..7) is one seeded shuffle of the
+seven types not already pinned to the arc (cruise opens, plunge closes),
+so every section of the run is a personality you haven't ridden yet —
+nothing repeats, and a shuffle of distinct cards needs no joint patching.
+The endless test mountain (courseLength Infinity) continues past the tour
+with shuffled FULL nine-type decks (blockDeal, heads patched against the
+previous tail) so every type stays reachable at any depth. The
 course name is announced over the start gate, on the HUD clock line, and
 at the ceremony. The course carries BOTH SETPIECES (terrain.setpieces):
 the WATERFALL (10m dive over a 16m face) and the CASCADES (three 5m
@@ -170,24 +172,22 @@ stays stopped — rollers, moguls, bank flips (curvature on a ±20m
 stencil, 12m BANK_ARM), carved step-down landings (CARVE_SLOPE), and
 hip tilt releases all fit inside the grade's slope budget; only kicker
 ramp faces are exempt (a lip that launches is necessarily near-flat to
-a crawler — documented ⚠️ in PHYSICS.md). THE COURSE has an arc (COURSE_LENGTH = 20 sections, 8km — 2.5x the
-old per-course length, within the "no more than 2-3x" budget): section 0
-cruise, the double-deck middle, and a forced plunge FINALE into the gate;
+a crawler — documented ⚠️ in PHYSICS.md). THE COURSE has an arc (COURSE_LENGTH = 9 sections, 3.6km): section 0
+cruise, the seven-type tour, and a forced plunge FINALE into the gate;
 the outrun past the line is clean cruise — no kickers, obstacles, coins,
 or crud patches (Terrain takes a courseLength param; tests probe an
 endless mountain with Infinity). Crossing the line locks the score
 (SimEvent 'finish'; the outrun pays nothing), fires the grandest barrage
-
-- a victory fanfare, and raises the ceremony panel ~1.8s later: score,
-  time, BEST (localStorage key skigame-best-<seed>), and one action — S /
-  Ski again — that restarts from the gate (with one course there is no
-  picker and no separate retry button; the restart IS the menu).
-  The
-  section framework is where moving hazards will plug in.
-  The render layer
-  draws the course as a ribbon clipped just past the bounce barrier, so the
-  walls stay low and the world beyond shows: neon edge poles, a city skyline
-  with beacon-topped towers, hot-air balloons, clouds below.
+plus a victory fanfare, and raises the ceremony panel ~1.8s later: score,
+time, BEST (localStorage key skigame-best-<seed>), and one action — S /
+Ski again — that restarts from the gate (with one course there is no
+picker and no separate retry button; the restart IS the menu).
+The
+section framework is where moving hazards will plug in.
+The render layer
+draws the course as a ribbon clipped just past the bounce barrier, so the
+walls stay low and the world beyond shows: neon edge poles, a city skyline
+with beacon-topped towers, hot-air balloons, clouds below.
 
 ## Tech stack
 
@@ -216,7 +216,7 @@ src/
 │                        SimEvents (nearMiss/landing/tumble) for fx + audio
 ├── render/            - Three.js only
 │   ├── scene.ts       - Lights, dynamic sky/fog, aurora, shadow-casting sun
-│   ├── palette.ts     - Color zones: palettes cross-fading every 600m of course
+│   ├── palette.ts     - Color zones: palettes cross-fading every 450m of course
 │   ├── chunks.ts      - Track ribbon, bollards, section-boundary gates, obstacles,
 │   │                    pickups, star beams, skyline/clouds; created and
 │   │                    disposed as you ski
