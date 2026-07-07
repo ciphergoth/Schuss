@@ -63,8 +63,12 @@ describe('skier', () => {
 
   it('a banked sweeper carries a hands-off rider around the turn at speed', () => {
     // Before the gravity-turn force, this ride scrubbed 23 -> 15 m/s off
-    // the walls; the superelevation now does the steering. (Endless
-    // mountain: courses don't guarantee every section type.)
+    // the walls; the superelevation now does the steering. With the lagged
+    // steering reference the hands-off line rides UP the bank (carving the
+    // superelevation IS the racing line) — the bank still carries it around
+    // at pace without scrubbing, and it stays on the rideable bank rather
+    // than bouncing the barrier. (Endless mountain: courses don't guarantee
+    // every section type.)
     const sim = createSim(1);
     sim.terrain = new Terrain(1, Infinity);
     const t = sim.terrain;
@@ -76,6 +80,7 @@ describe('skier', () => {
     s.x = t.centerX(z0);
     s.y = t.height(s.x, z0);
     s.heading = t.trackHeading(z0);
+    s.headingRef = t.trackHeading(z0); // arrived tracking the course
     s.speed = 23;
     sim.nextSectorZ = -1e9;
     let maxOver = -99;
@@ -84,8 +89,8 @@ describe('skier', () => {
       maxOver = Math.max(maxOver, Math.abs(s.x - t.centerX(s.z)) - t.channelHalfWidth(s.z));
     }
     expect(sim.skier.tumbling).toBe(0);
-    expect(sim.skier.speed).toBeGreaterThan(20); // the bank held the pace
-    expect(maxOver).toBeLessThan(2); // and the line, without wall-bouncing
+    expect(sim.skier.speed).toBeGreaterThan(20); // the bank held the pace, no scrub
+    expect(maxOver).toBeLessThan(WALL_WIDTH - 2); // stays on the rideable bank, never bounces
   });
 
   it('gravity carves a wall-parallel rider back down to the floor', () => {
@@ -97,6 +102,7 @@ describe('skier', () => {
     s.x = t.centerX(z0) - t.channelHalfWidth(z0) - 4; // 4m up the left bank
     s.y = t.height(s.x, z0);
     s.heading = t.trackHeading(z0); // riding parallel: nothing steers home
+    s.headingRef = t.trackHeading(z0); // arrived tracking the course
     s.speed = 14;
     sim.nextSectorZ = -1e9;
     for (let i = 0; i < Math.round(1.5 / SIM_DT); i++) stepSim(sim, COAST);

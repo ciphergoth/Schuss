@@ -218,9 +218,6 @@ function steerToward(
   state: SkierState,
   terrain: Terrain,
   input: SkierInput,
-  courseHeading: number, // the reference "forward": lagged on the ground (so
-  // slaloms must be steered), instantaneous in the air (so a hands-off flight
-  // lands on the course line and the computed stars stay honest)
   maxRate: number,
   dt: number
 ): void {
@@ -229,7 +226,9 @@ function steerToward(
   const over = Math.abs(d) - terrain.channelHalfWidth(state.z);
   const recovery = over > 0 ? -Math.sign(d) * Math.min(1, over / 6) * BANK_RECOVERY : 0;
   const target =
-    courseHeading +
+    state.headingRef + // the LAGGED course heading — the SAME reference on the
+    // ground and in the air, so steering doesn't lurch across the transition;
+    // bends must be steered (even to line up a star mid-flight)
     terrain.hipAim(state.x, state.z) + // hip pads bend the course line itself
     input.steer * MAX_STEER_OFFSET * (1 - TUCK_TURN_CUT * tuck) +
     recovery;
@@ -316,16 +315,10 @@ export function stepSkier(
     // the dedicated trick keys rotate you, and only in real air. Digital keys
     // need no hover deadband.
     const airTuck = Math.max(0, -input.stance);
-    // Air aims at the LIVE course (no lag): the mouse gently aims the landing
-    // and a hands-off flight tracks the course line the computed stars ride.
-    steerToward(
-      state,
-      terrain,
-      input,
-      terrain.trackHeading(state.z),
-      TURN_RATE * AIR_TURN_FACTOR,
-      dt
-    );
+    // Air uses the SAME lagged reference as the ground (no lurch at the
+    // transition): the mouse aims the landing, and lining a star up in a bend
+    // is a deliberate steer, not an automatic follow.
+    steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
     if (state.airTime > MIN_TRICK_AIR) {
       const spinInput = input.trickSpin ?? 0;
       const flipInput = input.trickFlip ?? 0; // positive = backflip (S)
@@ -421,16 +414,9 @@ export function stepSkier(
   const tuck = Math.max(0, -input.stance);
 
   // Turning authority ramps up with speed (skis can't pivot while
-  // stationary); a tuck narrows the target range inside steerToward. On the
-  // ground the reference is the LAGGED course heading, so bends must be steered.
-  steerToward(
-    state,
-    terrain,
-    input,
-    state.headingRef,
-    TURN_RATE * Math.min(state.speed / 4, 1),
-    dt
-  );
+  // stationary); a tuck narrows the target range inside steerToward. The
+  // reference is the LAGGED course heading, so bends must be steered.
+  steerToward(state, terrain, input, TURN_RATE * Math.min(state.speed / 4, 1), dt);
 
   // The banked-turn force: the slope's pull perpendicular to the skis
   // rotates the heading (see GRAVITY_TURN_CAP). This is what makes a

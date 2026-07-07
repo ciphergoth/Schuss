@@ -223,12 +223,13 @@ friction braking).
   follow the track, edges = ~66 degrees across it); heading eases toward it
   with no overshoot. Rate-based steering caused pilot-induced weaving. The
   "follow the track" reference is LAGGED (skier.ts HEADING_LAG_TAU, an
-  exponential decay of ~a couple seconds): on the ground, "forward" trails the
-  course's bends, so a slalom has to be actively steered instead of
-  auto-following — center the mouse through a bend and you drift onto the
-  banks. In the AIR the reference is instantaneous (a hands-off flight tracks
-  the course line the computed stars ride, so placement stays honest).
-  y sets stance (top = tuck, bottom = snowplow)
+  exponential decay of ~a couple seconds): "forward" trails the course's bends,
+  so a slalom has to be actively steered instead of auto-following — center the
+  mouse through a bend and you drift onto the banks. The lag applies on the
+  ground AND in the air (one reference, so steering doesn't lurch across the
+  ground/air transition); the trade is that the computed stars now have to be
+  STEERED into on a curved approach or flight, not hit hands-off. y sets stance
+  (top = tuck, bottom = snowplow)
 - Touch: there is NO finger-steering scheme. The TILT is the only touch
   control; if motion access can't be granted the drop-in shows an error
   (#tilterror) and stays paused rather than dropping into an unsteerable
