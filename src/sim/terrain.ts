@@ -463,11 +463,68 @@ export interface Setpiece {
   falls: readonly [number, number, number][]; // [zTop, drop, face] each
 }
 
+// THE GROTTO: the course's third landmark — a stretch where the channel
+// runs under an ice roof. Pure atmosphere on the sim side: the heightfield
+// is untouched (the floor through a cave is just floor, so drainage and
+// physics can't tell), but the interior is kept clear of kickers and
+// obstacles: in the dark, with the roof low, nothing may launch you or
+// ambush you — the cave itself is the feature. caveAt(z) is the render
+// layer's dimmer (0 outside, easing to 1 inside).
+export interface Grotto {
+  z: number; // the mouth: where the roof begins
+  span: number; // meters of covered channel
+}
+const GROTTO_SPAN = 90;
+const GROTTO_FADE = 14; // meters of portal ease at each end
+
+// SLALOM GATES: the narrows' own economy. The pinched corridor is empty and
+// fast by design — the snapping esses are its feature — so the gates ride
+// those esses: one at each bend apex, centered on the swinging centerline.
+// Threading a gate pays GATE_POINTS x the running chain (150, 300, 450...);
+// missing one quietly resets the chain — no tumble, no speed loss, the
+// punishment is only the forgone escalation. Score only, never fuel: the
+// tank fills from tricks and coins alone.
+export interface SlalomGate {
+  id: string;
+  x: number; // center of the gap
+  z: number;
+  halfGap: number; // thread within this of x
+}
+export const GATE_HEIGHT = 2.6; // fly over the poles and it's not a thread
+export const GATE_POINTS = 150; // x chain
+
+// MOVING HAZARDS: patrol drones sweeping the wide sections — the bowl's
+// playground and the glacier's open ice. Each rides a fixed z, gliding
+// laterally on a seeded sine, a pure function of (seed, time): same seed,
+// same schedule, deterministic to the step. Hitting one is an ordinary
+// obstacle hit (brief tumble, keep most speed); slipping past close pays
+// the same near-miss celebration as a grazed crystal. They never share a
+// chunk with a kicker's launch or landing, never ride a setpiece, and
+// their sweep stays inside the floor.
+export interface Hazard {
+  id: string;
+  z: number;
+  x0: number; // sweep center (the track centerline at z)
+  amp: number; // sweep half-width
+  period: number; // seconds per full back-and-forth
+  phase: number;
+  radius: number; // collision radius
+  height: number; // collision height above the snow
+}
+
+// Where a hazard is right now — shared by the sim's collision and the
+// render layer's drone, so what you see is exactly what hits you.
+export function hazardX(h: Hazard, time: number): number {
+  return h.x0 + h.amp * Math.sin((time * Math.PI * 2) / h.period + h.phase);
+}
+
 export class Terrain {
   private chunkObstacles = new Map<number, Obstacle[]>();
   private chunkPickups = new Map<number, Pickup[]>();
   private chunkBonuses = new Map<number, TrickBonus[]>();
   private chunkJumps = new Map<number, Jump | null>();
+  private chunkGates = new Map<number, SlalomGate[]>();
+  private chunkHazards = new Map<number, Hazard[]>();
   private chunkSinceFeat = new Map<number, number>();
   private tour: SectionType[] | undefined;
   private blockDeals = new Map<number, SectionType[]>();
@@ -480,6 +537,10 @@ export class Terrain {
   // drainage guarantee inherit them for free — a fall face only ever
   // steepens the floor. Landmarks, not a distribution.
   readonly setpieces: readonly Setpiece[];
+
+  // The grotto sits between the two fall setpieces (they land in 25-40% and
+  // 55-70% of the run), so the three landmarks pace the whole descent.
+  readonly grotto: Grotto;
 
   constructor(
     readonly seed: number,
@@ -509,6 +570,28 @@ export class Terrain {
       hash2(seed, 8887, 2) < 0.5
         ? [waterfall(zEarly), cascades(zLate)]
         : [cascades(zEarly), waterfall(zLate)];
+    // The grotto's window (44-50% in) clears the early setpiece's foot and
+    // the late one's approach margin for every seed.
+    this.grotto = { z: -(0.44 + 0.06 * hash2(seed, 8887, 4)) * span, span: GROTTO_SPAN };
+  }
+
+  // How deep under the grotto's roof this z is: 0 in the open, easing to 1
+  // through each portal. The render layer's darkness, snowfall, and aurora
+  // all breathe with it; the sim itself never reads it.
+  caveAt(z: number): number {
+    const into = this.grotto.z - z; // meters past the mouth
+    if (into <= 0 || into >= this.grotto.span) return 0;
+    return (
+      smoothstep(clamp01(into / GROTTO_FADE)) *
+      smoothstep(clamp01((this.grotto.span - into) / GROTTO_FADE))
+    );
+  }
+
+  // Is this z inside the grotto's keep-clear zone? Wider than the roof
+  // itself: a kicker THROWS ~KICKER_THROW downrange, so nothing may launch
+  // a flight (or hang a star) into the dark from just uphill of the mouth.
+  private nearGrotto(z: number): boolean {
+    return z < this.grotto.z + KICKER_THROW && z > this.grotto.z - this.grotto.span - 20;
   }
 
   // The last section of the course; the finish line sits at its far edge.
@@ -775,6 +858,7 @@ export class Terrain {
     // land before the gate, not through it.
     if (this.finishApron(zLip - KICKER_THROW)) return false;
     if (this.onSetpiece(zLip)) return false; // the falls ARE the feature here
+    if (this.nearGrotto(zLip)) return false; // nothing launches into the dark
     const chance = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].kickerChance;
     return hash2(this.seed, index, 31337) < chance;
   }
@@ -798,6 +882,7 @@ export class Terrain {
     if (this.bendsAt(index)) return true;
     const zLip = -index * CHUNK_LENGTH - 24;
     if (this.onSetpiece(zLip)) return true;
+    if (this.nearGrotto(zLip)) return true; // the cave is the feature
     return SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].terraced;
   }
 
@@ -836,6 +921,7 @@ export class Terrain {
       index >= 3 &&
       !this.finishApron(zLip - KICKER_THROW) && // no forced kicker throwing into the run-in
       !this.onSetpiece(zLip) && // never force a kicker onto the falls
+      !this.nearGrotto(zLip) && // nor into the grotto's dark
       !this.bendsAt(index) &&
       !selfFeatured &&
       this.chunksSinceFeature(index - 1) + 1 >= MAX_FEATURE_GAP;
@@ -1097,7 +1183,12 @@ export class Terrain {
       const spec = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zTop - CHUNK_LENGTH / 2))];
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 7919) * 2 ** 31));
       const jump = this.jumpForChunk(index);
-      const count = hash2(this.seed, index, 857) < spec.obstacleChance ? spec.obstacleCount : 0;
+      // A patrol drone owns its chunk: dodging the sweep is the whole game
+      // there, and a static crystal hiding in a drone's shadow would punish
+      // the dodge the drone just demanded.
+      const patrolled = this.hazardsForChunk(index).length > 0;
+      const count =
+        !patrolled && hash2(this.seed, index, 857) < spec.obstacleChance ? spec.obstacleCount : 0;
       for (let t = 0; t < count; t++) {
         const z = zTop - rng() * CHUNK_LENGTH;
         const d = (rng() * 2 - 1) * (this.channelHalfWidth(z) - 2.5);
@@ -1115,8 +1206,9 @@ export class Terrain {
           continue;
         }
         // Never on the setpiece's falls — flying blind off a waterfall
-        // into a bollard would punish riding the landmark.
-        if (this.onSetpiece(z)) continue;
+        // into a bollard would punish riding the landmark — and never in
+        // the grotto's dark, where an unlit crystal is an ambush.
+        if (this.onSetpiece(z) || this.nearGrotto(z)) continue;
         obstacles.push({
           x: this.centerX(z) + d,
           z,
@@ -1301,5 +1393,99 @@ export class Terrain {
       bonuses.push(...this.bonusesForChunk(i));
     }
     return bonuses;
+  }
+
+  // Slalom gates ride the narrows' snapping esses: one gate at each bend
+  // apex (the sine's extremes), centered on the swinging centerline with a
+  // little seeded jitter. The apexes near the section's ends are skipped —
+  // the ease dampens the swing there and a gate on a straight is a cone in
+  // a parking lot. Seeded, cached, and pure like every other generator.
+  gatesForChunk(index: number): SlalomGate[] {
+    const cached = this.chunkGates.get(index);
+    if (cached) return cached;
+    const gates: SlalomGate[] = [];
+    const zTop = -index * CHUNK_LENGTH;
+    // A chunk can straddle a section boundary; check both sections.
+    const sections = new Set([
+      this.sectionIndexAt(zTop - 0.01),
+      this.sectionIndexAt(zTop - CHUNK_LENGTH),
+    ]);
+    for (const s of sections) {
+      if (s < 1 || this.sectionType(s) !== 'narrows') continue;
+      // Apexes of sin(local / wavelength * 2pi) at local = L/4 + k * L/2.
+      for (let k = 0; ; k++) {
+        const local = NARROWS_WAVELENGTH / 4 + k * (NARROWS_WAVELENGTH / 2);
+        if (local > SECTION_LENGTH - 60) break; // the blend tail unwinds the swing
+        if (local < 40) continue; // so does the head's ease-in
+        const z = -(s * SECTION_LENGTH + local);
+        if (z > zTop || z <= zTop - CHUNK_LENGTH) continue; // not this chunk's
+        if (this.finishApron(z)) continue;
+        const jitter = (hash2(this.seed, s * 31 + k, 6841) * 2 - 1) * 1.4;
+        gates.push({ id: `g${s}:${k}`, x: this.centerX(z) + jitter, z, halfGap: 3.1 });
+      }
+    }
+    this.chunkGates.set(index, gates);
+    return gates;
+  }
+
+  gatesNear(z: number): SlalomGate[] {
+    const center = this.chunkIndexAt(z);
+    const gates: SlalomGate[] = [];
+    for (let i = center - 1; i <= center + 1; i++) {
+      gates.push(...this.gatesForChunk(i));
+    }
+    return gates;
+  }
+
+  // Patrol drones: at most one per chunk, only in the wide-open sections
+  // (bowl, glacier), never sharing space with a kicker's ramp OR the
+  // previous chunk's landing zone, never on a setpiece or in the grotto,
+  // and never in the opening stretch — the first drone a run meets should
+  // be read from a distance, not met at the gate.
+  hazardsForChunk(index: number): Hazard[] {
+    const cached = this.chunkHazards.get(index);
+    if (cached) return cached;
+    const hazards: Hazard[] = [];
+    const zTop = -index * CHUNK_LENGTH;
+    const z = zTop - CHUNK_LENGTH / 2 + (hash2(this.seed, index, 7351) * 2 - 1) * 6;
+    const type = this.sectionType(this.sectionIndexAt(z));
+    const chance = type === 'bowl' ? 0.55 : type === 'glacier' ? 0.4 : 0;
+    if (
+      index >= 8 &&
+      chance > 0 &&
+      !this.finishApron(zTop - CHUNK_LENGTH) &&
+      hash2(this.seed, index, 7369) < chance &&
+      this.jumpForChunk(index) === null &&
+      this.jumpForChunk(index - 1) === null && // the uphill lip lands here
+      !this.onSetpiece(z) &&
+      !this.nearGrotto(z)
+    ) {
+      const half = this.channelHalfWidth(z);
+      if (half >= 10) {
+        hazards.push({
+          id: `h${index}`,
+          z,
+          x0: this.centerX(z),
+          // The sweep stays well inside the floor: there is always clean
+          // snow to dodge onto at both ends of the patrol.
+          amp: Math.min(half - 4.5, 15),
+          period: 7 + hash2(this.seed, index, 7393) * 4,
+          phase: hash2(this.seed, index, 7417) * Math.PI * 2,
+          radius: 0.9,
+          height: 2.3,
+        });
+      }
+    }
+    this.chunkHazards.set(index, hazards);
+    return hazards;
+  }
+
+  hazardsNear(z: number): Hazard[] {
+    const center = this.chunkIndexAt(z);
+    const hazards: Hazard[] = [];
+    for (let i = center - 1; i <= center + 1; i++) {
+      hazards.push(...this.hazardsForChunk(i));
+    }
+    return hazards;
   }
 }

@@ -299,6 +299,23 @@ export class GameAudio {
     }
   }
 
+  // Slalom gate threaded: a single crisp tick that climbs a whole step per
+  // link in the chain — the escalation audible without looking at the HUD.
+  playGate(chain: number): void {
+    if (!this.nodes) return;
+    const { ctx, master } = this.nodes;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = 740 * Math.pow(1.122, Math.min(chain - 1, 8));
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.16, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    osc.connect(gain).connect(master);
+    osc.start(t);
+    osc.stop(t + 0.16);
+  }
+
   // Race start: a crisp electronic timing beep. Three level tones on the
   // 3-2-1 counts, then a higher, longer tone on GO — the classic start
   // signal.

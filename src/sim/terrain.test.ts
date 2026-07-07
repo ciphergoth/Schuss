@@ -8,6 +8,7 @@ import {
   SectionType,
   Terrain,
   WALL_WIDTH,
+  hazardX,
 } from './terrain';
 
 // Find the first section of a given type (searching a long way downhill).
@@ -625,6 +626,109 @@ describe('terrain', () => {
     }
     // The demands vary across the mountain — contracts are not one note.
     expect(seen.size).toBeGreaterThan(3);
+  });
+
+  it('slalom gates ride the narrows esses and nothing else', () => {
+    const a = new Terrain(1, Infinity);
+    const b = new Terrain(1, Infinity);
+    const narrows = findSection(a, 'narrows');
+    let gates = 0;
+    for (let i = 0; i < 400; i++) {
+      expect(a.gatesForChunk(i)).toEqual(b.gatesForChunk(i)); // pure
+      for (const g of a.gatesForChunk(i)) {
+        gates++;
+        // Only the narrows deal gates...
+        expect(a.sectionType(a.sectionIndexAt(g.z))).toBe('narrows');
+        // ...centered on the swinging centerline, gap well inside the floor.
+        expect(Math.abs(g.x - a.centerX(g.z))).toBeLessThan(2);
+        expect(Math.abs(g.x - a.centerX(g.z)) + g.halfGap).toBeLessThan(
+          a.channelHalfWidth(g.z) + 0.5
+        );
+      }
+    }
+    expect(gates).toBeGreaterThan(8); // several per narrows over 16km
+    // A single narrows section carries a real chain's worth of gates.
+    let inSection = 0;
+    for (
+      let i = Math.floor((narrows * SECTION_LENGTH) / CHUNK_LENGTH) - 1;
+      i < ((narrows + 1) * SECTION_LENGTH) / CHUNK_LENGTH + 1;
+      i++
+    ) {
+      inSection += a.gatesForChunk(i).filter((g) => a.sectionIndexAt(g.z) === narrows).length;
+    }
+    expect(inSection).toBeGreaterThanOrEqual(4);
+    expect(inSection).toBeLessThanOrEqual(6);
+    // The course build keeps gates out of the finish apron.
+    const course = new Terrain(1);
+    for (let i = 0; i < COURSE_LENGTH / CHUNK_LENGTH + 5; i++) {
+      for (const g of course.gatesForChunk(i)) expect(course.finishApron(g.z)).toBe(false);
+    }
+  });
+
+  it('patrol drones sweep only the wide sections, clear of everything else', () => {
+    const a = new Terrain(1, Infinity);
+    const b = new Terrain(1, Infinity);
+    let drones = 0;
+    for (let i = 0; i < 600; i++) {
+      expect(a.hazardsForChunk(i)).toEqual(b.hazardsForChunk(i)); // pure
+      for (const h of a.hazardsForChunk(i)) {
+        drones++;
+        // Bowls and glaciers only — the playground and the open ice.
+        expect(['bowl', 'glacier']).toContain(a.sectionType(a.sectionIndexAt(h.z)));
+        // The sweep never leaves the floor: clean snow on both flanks.
+        expect(h.amp + h.radius).toBeLessThan(a.channelHalfWidth(h.z) - 3);
+        // Never sharing space with a kicker's ramp or the uphill landing...
+        expect(a.jumpForChunk(i)).toBeNull();
+        expect(a.jumpForChunk(i - 1)).toBeNull();
+        // ...and the drone owns its chunk: no static obstacle hides in the
+        // sweep it forces you to dodge.
+        expect(a.obstaclesForChunk(i)).toEqual([]);
+        // The patrol is a pure function of time and repeats its period.
+        expect(hazardX(h, 3)).toBeCloseTo(hazardX(h, 3 + h.period), 8);
+        expect(Math.abs(hazardX(h, 5) - h.x0)).toBeLessThanOrEqual(h.amp + 1e-9);
+      }
+      // Never in the opening stretch.
+      if (i < 8) expect(a.hazardsForChunk(i)).toEqual([]);
+    }
+    expect(drones).toBeGreaterThan(5);
+  });
+
+  it('the grotto: a roofed stretch mid-run that keeps itself clear', () => {
+    for (const seed of [1, 2, 5]) {
+      const t = new Terrain(seed);
+      // Between the two fall setpieces' windows, clear of both.
+      expect(t.grotto.z).toBeLessThanOrEqual(-0.44 * COURSE_LENGTH);
+      expect(t.grotto.z).toBeGreaterThanOrEqual(-0.5 * COURSE_LENGTH);
+      // caveAt breathes: 0 in the open, 1 deep inside, 0 again past the end.
+      expect(t.caveAt(t.grotto.z + 5)).toBe(0);
+      expect(t.caveAt(t.grotto.z - t.grotto.span / 2)).toBe(1);
+      expect(t.caveAt(t.grotto.z - t.grotto.span - 5)).toBe(0);
+      // Portals ease rather than snap.
+      const brow = t.caveAt(t.grotto.z - 5);
+      expect(brow).toBeGreaterThan(0);
+      expect(brow).toBeLessThan(1);
+      // Nothing launches into (or lurks in) the dark: no kickers whose
+      // throw reaches the roof, no obstacles or stars under it.
+      const first = Math.floor(-(t.grotto.z + 70) / CHUNK_LENGTH);
+      const last = Math.ceil(-(t.grotto.z - t.grotto.span) / CHUNK_LENGTH);
+      for (let i = first; i <= last; i++) {
+        const jump = t.jumpForChunk(i);
+        if (jump) {
+          expect(jump.zLip < t.grotto.z + 70 && jump.zLip > t.grotto.z - t.grotto.span - 20).toBe(
+            false
+          );
+        }
+        for (const o of t.obstaclesForChunk(i)) {
+          expect(o.z < t.grotto.z && o.z > t.grotto.z - t.grotto.span).toBe(false);
+        }
+      }
+      // The heightfield is untouched: a cave is atmosphere, not terrain —
+      // the floor mid-grotto still drains like ordinary floor (same mean
+      // grade class as anywhere else on the spine).
+      const zc = t.grotto.z - t.grotto.span / 2;
+      const [, gz] = t.gradient(t.centerX(zc), zc);
+      expect(gz).toBeGreaterThan(0.05); // downhill toward -z
+    }
   });
 
   it('gradient matches height differences', () => {

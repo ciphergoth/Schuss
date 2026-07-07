@@ -1,4 +1,11 @@
-import { ContractDemand, SECTION_LENGTH, Terrain } from './terrain';
+import {
+  ContractDemand,
+  GATE_HEIGHT,
+  GATE_POINTS,
+  SECTION_LENGTH,
+  Terrain,
+  hazardX,
+} from './terrain';
 import {
   FLIP_COMMIT,
   FLIP_TOLERANCE,
@@ -8,6 +15,7 @@ import {
   SkierInput,
   SkierState,
   createSkier,
+  hitSkier,
   residual,
   stepSkier,
 } from './skier';
@@ -47,6 +55,8 @@ export type SimEvent =
     }
   | { type: 'sector'; speed: number; points: number } // 250m pace grade
   | { type: 'finish'; time: number; score: number } // crossed the line
+  | { type: 'gate'; x: number; z: number; chain: number; points: number } // slalom gate threaded
+  | { type: 'gateMiss'; chain: number } // a running chain broke (chain = what it was)
   | { type: 'tumble'; trick: boolean }; // trick: blown rotation vs plain crash
 
 export interface Sim {
@@ -68,6 +78,7 @@ export interface Sim {
   lastTrick: string | null; // signature of the last landed trick (repeat check)
   finishedAt: number | null; // sim time the line was crossed; score locks there
   score: number; // the ledger of glory: trick points + sector pace, uncapped
+  gateChain: number; // consecutive slalom gates threaded; a miss resets it
   nextSectorZ: number; // where the next 250m pace grade lands
   sectorStartTime: number;
   nearMissCooldown: number;
@@ -188,6 +199,7 @@ export function createSim(seed: number, courseLength?: number): Sim {
     lastTrick: null,
     finishedAt: null,
     score: 0,
+    gateChain: 0,
     nextSectorZ: -SECTOR_LENGTH,
     sectorStartTime: 0,
     nearMissCooldown: 0,
@@ -204,6 +216,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   const s = sim.skier;
   const airBefore = s.airTime;
   const wasTumbling = s.tumbling > 0;
+  const zBefore = s.z;
 
   // Burn boost only where it acts: on the snow, on your feet.
   const grounded0 = s.airTime === 0 && s.tumbling === 0;
@@ -229,6 +242,23 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   stepSkier(s, sim.terrain, skierInput, SIM_DT, sim.boosting);
   sim.time += SIM_DT;
   sim.nearMissCooldown = Math.max(0, sim.nearMissCooldown - SIM_DT);
+
+  // Moving hazards collide like obstacles, but against where the patrol IS
+  // right now (a pure function of sim.time, so what the render layer shows
+  // is exactly what hits). Checked here, before the tumble ledger below, so
+  // a drone hit fires the same tumble event a crystal does.
+  if (s.tumbling === 0) {
+    for (const h of sim.terrain.hazardsNear(s.z)) {
+      const hx = hazardX(h, sim.time);
+      const dx = hx - s.x;
+      const dz = h.z - s.z;
+      const r = h.radius + SKIER_RADIUS;
+      if (dx * dx + dz * dz >= r * r) continue;
+      if (s.y >= sim.terrain.height(hx, h.z) + h.height) continue;
+      hitSkier(s, hx, h.z, r);
+      break;
+    }
+  }
 
   if (s.tumbling > 0 && !wasTumbling) {
     // Rotation still on the clock at the moment of tumbling = a blown trick.
@@ -392,6 +422,18 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
         break;
       }
     }
+    // Slipping past a patrol drone celebrates like grazing a crystal.
+    if (sim.nearMissCooldown === 0) {
+      for (const h of sim.terrain.hazardsNear(s.z)) {
+        const hx = hazardX(h, sim.time);
+        const d = Math.hypot(hx - s.x, h.z - s.z);
+        if (d < h.radius + SKIER_RADIUS + NEAR_MISS_RING) {
+          sim.nearMissCooldown = NEAR_MISS_COOLDOWN;
+          events.push({ type: 'nearMiss', x: hx, z: h.z });
+          break;
+        }
+      }
+    }
   }
 
   // Coins along the floor. Collection is 3D.
@@ -428,6 +470,31 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
           events.push({ type: 'contract', mult: contract.mult, demand: contract.demand });
         }
         events.push({ type: 'bonus', x: star.x, z: star.z, mult: star.mult });
+      }
+    }
+  }
+
+  // Slalom gates settle on the crossing step: thread the gap (on your feet,
+  // under the pole tops) and the chain escalates the pay; anything else —
+  // wide, over the poles, or tumbling through — just resets the chain. The
+  // punishment is only the forgone escalation: no tumble, no lost speed.
+  if (s.z < zBefore) {
+    for (const g of sim.terrain.gatesNear(s.z)) {
+      if (zBefore <= g.z || s.z > g.z) continue; // not crossed this step
+      if (sim.collected.has(g.id)) continue;
+      sim.collected.add(g.id);
+      const threaded =
+        s.tumbling === 0 &&
+        Math.abs(s.x - g.x) <= g.halfGap &&
+        s.y <= sim.terrain.height(g.x, g.z) + GATE_HEIGHT;
+      if (threaded) {
+        sim.gateChain += 1;
+        const points = scoring ? GATE_POINTS * sim.gateChain : 0;
+        sim.score += points;
+        events.push({ type: 'gate', x: g.x, z: g.z, chain: sim.gateChain, points });
+      } else {
+        if (sim.gateChain > 0) events.push({ type: 'gateMiss', chain: sim.gateChain });
+        sim.gateChain = 0;
       }
     }
   }
