@@ -39,8 +39,8 @@ const DEMAND_LABEL: Record<ContractDemand, string> = {
   parallel: 'SPIN + FLIP AT ONCE',
 };
 
-// ?seed=N picks the starting course; finishing advances to seed+1, so
-// course numbers are shareable ("try course 7").
+// The active course's generation seed — normally chosen by the course picker
+// (courseCatalog); ?seed=N still forces an arbitrary start.
 let currentSeed = Number(new URLSearchParams(location.search).get('seed') ?? '1');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
