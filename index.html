@@ -454,10 +454,12 @@
       .pausehead h1 {
         margin: 0;
       }
-      /* Action buttons, now at the top of the panel (above the guide). */
+      /* Action buttons, now at the top of the panel (above the guide). A plain
+         block wrapper — the exact context the button row has always rendered
+         in — so the .tapbtn pills look identical to before, just relocated.
+         (A flex wrapper here blockifies the buttons' inline-flex to flex,
+         which renders inconsistently on some mobile browsers.) */
       .actions {
-        display: flex;
-        flex-wrap: wrap;
         margin-bottom: 6px;
       }
       button.tapbtn {
@@ -473,15 +475,6 @@
         display: inline-flex;
         align-items: center;
         gap: 9px;
-      }
-      /* The actions row owns its own top gap, so the first button doesn't
-         need the tapbtn top margin pushing it away from the header. */
-      .actions .tapbtn {
-        margin-top: 0;
-        margin-left: 0;
-      }
-      .actions .tapbtn + .tapbtn {
-        margin-left: 8px;
       }
       /* The sound toggle is a switch, not a button: a persistent on/off
          setting reads as a track + knob, plainly a different affordance from
