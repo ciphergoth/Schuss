@@ -52,6 +52,7 @@ document.body.appendChild(renderer.domElement);
 
 const sceneSetup = createScene();
 const { scene, sun } = sceneSetup;
+sceneSetup.setCourse(currentSeed); // the first course's zones + weather
 const camera = createCamera();
 const skierView = createSkierView(scene);
 const fx = new Effects(scene);
@@ -181,6 +182,7 @@ function startCourse(seed: number): void {
   bestAtCourseStart = best;
   sim = createSim(currentSeed);
   chunkRenderer.setTerrain(sim.terrain);
+  sceneSetup.setCourse(currentSeed);
   fx.reset();
   finishPanelAt = null;
   finishScreen.classList.remove('visible');

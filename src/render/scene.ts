@@ -1,11 +1,14 @@
 import * as THREE from 'three';
-import { blendPalette, makePalette } from './palette';
+import { hash2 } from '../sim/rng';
+import { Palette, blendPalette, courseWeather, courseZones, makePalette } from './palette';
 
 export interface SceneSetup {
   scene: THREE.Scene;
   sun: THREE.DirectionalLight;
   // Retint the world for the skier's position and animate the aurora.
   update: (x: number, y: number, z: number, time: number) => void;
+  // A new course brings its own zone sequence and weather.
+  setCourse: (seed: number) => void;
 }
 
 // Waving sky ribbons: three additive planes whose columns bob on sine waves
@@ -75,6 +78,69 @@ class Aurora {
   }
 }
 
+// Snowfall: a box of points that rides with the skier, each flake falling
+// on its own seeded track and wrapping within the box. Positions are a pure
+// function of (flake, time), so the storm is deterministic and needs no
+// per-frame physics.
+const SNOW_COUNT = 1400;
+const SNOW_BOX = { x: 130, y: 70, z: 160 };
+
+class Snowfall {
+  readonly points: THREE.Points;
+  private readonly material: THREE.PointsMaterial;
+  private readonly geometry: THREE.BufferGeometry;
+  private readonly tracks: Float32Array; // per-flake x0, z0, fall speed, sway phase
+  intensity = 0;
+
+  constructor(scene: THREE.Scene) {
+    this.geometry = new THREE.BufferGeometry();
+    this.geometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(new Float32Array(SNOW_COUNT * 3), 3)
+    );
+    this.tracks = new Float32Array(SNOW_COUNT * 4);
+    for (let i = 0; i < SNOW_COUNT; i++) {
+      this.tracks[i * 4] = hash2(7, i, 1) * SNOW_BOX.x;
+      this.tracks[i * 4 + 1] = hash2(7, i, 2) * SNOW_BOX.z;
+      this.tracks[i * 4 + 2] = 5 + hash2(7, i, 3) * 5; // fall speed m/s
+      this.tracks[i * 4 + 3] = hash2(7, i, 4) * Math.PI * 2;
+    }
+    this.material = new THREE.PointsMaterial({
+      color: 0xf2f6ff,
+      size: 0.32,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      sizeAttenuation: true,
+    });
+    this.points = new THREE.Points(this.geometry, this.material);
+    this.points.frustumCulled = false;
+    this.points.visible = false;
+    scene.add(this.points);
+  }
+
+  update(x: number, y: number, z: number, time: number): void {
+    this.points.visible = this.intensity > 0;
+    this.material.opacity = this.intensity * 0.85;
+    if (this.intensity === 0) return;
+    const pos = this.geometry.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < SNOW_COUNT; i++) {
+      const fall = this.tracks[i * 4 + 2]!;
+      const phase = this.tracks[i * 4 + 3]!;
+      const fx = this.tracks[i * 4]! + Math.sin(time * 0.8 + phase) * 1.5;
+      const fy = ((this.tracks[i * 4]! * 7 - fall * time) % SNOW_BOX.y) + SNOW_BOX.y;
+      const fz = this.tracks[i * 4 + 1]!;
+      pos.setXYZ(
+        i,
+        x + (((fx % SNOW_BOX.x) + SNOW_BOX.x) % SNOW_BOX.x) - SNOW_BOX.x / 2,
+        y + (fy % SNOW_BOX.y) - SNOW_BOX.y / 4,
+        z + (((fz % SNOW_BOX.z) + SNOW_BOX.z) % SNOW_BOX.z) - SNOW_BOX.z / 2
+      );
+    }
+    pos.needsUpdate = true;
+  }
+}
+
 export function createScene(): SceneSetup {
   const scene = new THREE.Scene();
   // The palette owns the mood: sky, fog, and lights cross-fade between color
@@ -103,20 +169,41 @@ export function createScene(): SceneSetup {
   scene.add(sun.target);
 
   const aurora = new Aurora(scene);
+  const snow = new Snowfall(scene);
   const blended = makePalette();
 
+  // The course's atmosphere identity: its own zone sequence and weather.
+  let zones: readonly Palette[] = courseZones(1);
+  let weather = courseWeather(1);
+  let fogPhase = 0;
+  const setCourse = (seed: number): void => {
+    zones = courseZones(seed);
+    weather = courseWeather(seed);
+    fogPhase = hash2(seed, 4177, 37) * Math.PI * 2;
+    snow.intensity = weather.snow;
+  };
+
   const update = (x: number, y: number, z: number, time: number): void => {
-    blendPalette(z, blended);
+    blendPalette(z, blended, zones);
     sky.copy(blended.sky);
     (scene.fog as THREE.Fog).color.copy(blended.sky);
-    (scene.fog as THREE.Fog).far = blended.fogFar;
+    // Fog banks drift across the course: the palette's visibility swells
+    // and closes on a slow, seeded rhythm in z — pure function of position,
+    // so the same bank always sits on the same stretch.
+    let far = blended.fogFar;
+    if (weather.fogBanks > 0) {
+      const bank = 0.5 + 0.5 * Math.sin(-z / 210 + fogPhase) * Math.sin(-z / 87 + fogPhase * 1.7);
+      far *= 1 - 0.5 * bank * bank;
+    }
+    (scene.fog as THREE.Fog).far = far;
     hemi.color.copy(blended.hemiSky);
     hemi.groundColor.copy(blended.hemiGround);
     hemi.intensity = blended.hemiIntensity;
     sun.color.copy(blended.sun);
     sun.intensity = blended.sunIntensity;
     aurora.update(x, y, z, time, blended.aurora);
+    snow.update(x, y, z, time);
   };
 
-  return { scene, sun, update };
+  return { scene, sun, update, setCourse };
 }
