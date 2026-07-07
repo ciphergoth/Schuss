@@ -3,9 +3,10 @@
 A 3D browser-based skiing game in the spirit of PS2-era SSX Tricky:
 procedurally generated walled COURSES — banked ice channels floating in a
 dusk sky above a city — with obstacles, jumps, and pickup lines. A course
-is 3.2km ending at a checkered finish gate; N on the ceremony panel
-rolls the next course (seed+1, so course numbers are shareable; ?seed=N
-picks the start). Static site, no server.
+is 3.2km ending at a checkered finish gate; a COURSE PICKER (nine named
+archetypes, each bound to its canonical seed — courseCatalog in terrain.ts)
+chooses what to ski (?seed=N still forces an arbitrary start). Static site,
+no server.
 
 Design rules: punishment is light — obstacle hits cost a brief 0.7s tumble
 and a little speed (you keep 60%), a wobble to recover from and never the
@@ -125,8 +126,8 @@ deck), Airfield, Chute, Wall, Garden, Staircase, Pipeline, Glacier,
 Backcountry — that reweight the section deck (never to zero: the MIX
 changes, nothing is banned) and scale kicker chance, kicker-size skew
 (bigAir), obstacle and coin densities. The name is announced over the
-start gate, on the HUD clock line, and at the ceremony (which teases the
-next seed's character). Every course also carries ONE SETPIECE
+start gate, on the HUD clock line, at the ceremony, and on its card in the
+course picker (blurb + canonical seed). Every course also carries ONE SETPIECE
 (terrain.setpiece, seeded mid-run 40-70% in): a WATERFALL (10m dive over
 a 16m face) or the CASCADES (three 5m falls, 30m rhythm) — pure added
 downhill on the spine, so walls/banking/star arcs/drainage inherit it
@@ -169,8 +170,9 @@ the line is clean cruise — no kickers, obstacles, coins, or crud patches
 Infinity). Crossing the line locks the score (SimEvent 'finish'; the
 outrun pays nothing), fires the grandest barrage + a victory fanfare, and
 raises the ceremony panel ~1.8s later: score, time, per-course BEST
-(localStorage key skigame-best-<seed>), N = next course (a dedicated key so
-fumbling Space/boost at the line can't skip ahead), R = retry.
+(localStorage key skigame-best-<seed>), and one action — S / Choose course —
+that opens the course picker (re-pick the same course to retry; there is no
+seed+1 "next" and no separate retry button).
 The
 section framework is where moving hazards will plug in.
 The render layer
@@ -229,7 +231,8 @@ out of `src/sim/`.
 Debugging: `window.__game` exposes live sim state plus `poll()` (current
 input), `renderFrame(dt)` (force a render while rAF is paused, e.g. hidden
 tab), and `step(seconds)` (advance sim + render while paused). After mutating
-state for verification, restart with R before handing the game back. The
+state for verification, leave the game clean (reload, or pause → S → pick a
+course) before handing it back. The
 localStorage BEST only persists for runs with real (isTrusted) user input —
 idle self-play and synthetic debug events can never set it. `?debug` adds an
 on-device input readout (timer-driven, so it survives a wedged rAF loop):
@@ -299,9 +302,9 @@ friction braking).
   chips: the touch PAUSE SCREEN is the guide — a tricolor zone map
   (tricks/pause/boost in true proportion) plus a legend of the HUD,
   scrolling like a normal widget (the panel overrides the global
-  touch-action: none with pan-y), with explicit DROP IN and RESTART
-  buttons (restart routes through the Y/N confirm, which has its own tap
-  buttons). Panel touches stopPropagation — they are UI, never game
+  touch-action: none with pan-y), with explicit SKI ON and START NEW COURSE
+  buttons (the latter opens the course picker — a grid of named cards, itself
+  a scrolling panel). Panel touches stopPropagation — they are UI, never game
   input. Past ~35 degrees off neutral a
   detuned warning dyad rises (engine.setTiltWarning); past ~60 degrees
   sustained 0.4s the game also pauses — putting the phone down IS a pause
@@ -310,11 +313,11 @@ friction braking).
   BOTH axes at once (found on-device). Tilt-only runs still set BEST:
   trusted orientation events >3 degrees off neutral mark the run as
   played (a phone flat on a table streams events but never deviates).
-  The tap buttons (Drop in / Restart / Keep skiing / Next course) now show
-  on DESKTOP too, not just touch — clickable UI alongside the keyboard
-  shortcuts; only the touch-specific guide (zone map, tilt legend, tilterror)
-  stays .touchonly. feel constants live at the top of tilt.ts for on-device
-  tuning.
+  The tap buttons (Ski on / Start new course / the picker's course cards /
+  Choose course) now show on DESKTOP too, not just touch — clickable UI
+  alongside the keyboard shortcuts; only the touch-specific guide (zone map,
+  tilt legend, tilterror) stays .touchonly. feel constants live at the top of
+  tilt.ts for on-device tuning.
 - WASD: trick keys ONLY (in real air: A/D spin, W frontflip, S backflip —
   push forward to flip forward, pull back to flip back).
   There is no keyboard steering — the mouse is required.
@@ -333,12 +336,17 @@ friction braking).
   air comes only from built edges (kicker lips, terraces, step-downs) and
   the charged pop.
 - Esc or ? pauses (freezes the sim, suspends audio) and shows the key guide;
-  the game starts paused, so the guide doubles as the title screen
-- Every fresh run (first drop-in, restart, next course — NOT a mid-run
+  the game starts paused, so the guide doubles as the title screen. Two
+  actions off the pause: Esc / SKI ON resumes, and S / START NEW COURSE opens
+  the COURSE PICKER — a grid of the nine named courses (number keys 1-9 or a
+  card tap pick one; Esc / SKI ON backs out to the current run). The picker
+  IS the confirm: picking a course starts it fresh, re-picking the current one
+  replays it, so there's no separate Y/N restart screen and no R key. Every
+  route back into a run funnels through dropIntoRun (main.ts), which on touch
+  re-verifies live tilt.
+- Every fresh run (first drop-in, a freshly picked course — NOT a mid-run
   resume) opens with a 3-2-1-GO race countdown: the sim is held at the gate
   and the clock (sim.time) doesn't start until GO, so the timed run begins
   on GO. Purely a main-loop/render concern — the deterministic sim is
   untouched (armed in startCourse, run by the frame loop, tones in engine)
-- R pauses onto a Y/N confirm (Y restarts, N or Esc resumes) — a stray
-  keypress never throws away a run
 - M toggles sound (sound starts on the first input, per browser autoplay rules)

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
-import { ContractDemand, SECTION_LENGTH, Terrain } from './sim/terrain';
+import { ContractDemand, SECTION_LENGTH, courseCatalog } from './sim/terrain';
 import { SkierInput } from './sim/skier';
 import { setupInput } from './input';
 import { FAR_HOLD_S, THUMB_ZONE, tiltZone } from './tilt';
@@ -67,7 +67,8 @@ const chargeBar = document.getElementById('chargebar')!;
 const chargeFill = document.getElementById('chargefill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
 const pauseScreen = document.getElementById('pause')!;
-const confirmScreen = document.getElementById('confirm')!;
+const selectorScreen = document.getElementById('selector')!;
+const courseList = document.getElementById('courselist')!;
 const finishScreen = document.getElementById('finish')!;
 const finishStats = document.getElementById('finishstats')!;
 const finishCourse = document.getElementById('finishcourse')!;
@@ -102,15 +103,12 @@ for (let i = 0; i < Math.round(sim.terrain.courseLength / SECTION_LENGTH); i++) 
   progressEl.appendChild(seg);
   segFills.push(fill);
 }
-// R doesn't restart outright anymore — it pauses onto a Y/N confirm, so a
-// stray keypress can't throw away a run.
-const input = setupInput(() => openConfirm());
+const input = setupInput();
 
 // Esc or ? pauses: the sim freezes, the cursor is yours, and the pause screen
 // doubles as the key guide.
 let paused = false;
-let confirming = false; // the R restart ask; a special flavor of paused
-let pausedBeforeConfirm = false;
+let selecting = false; // the course picker is open — a flavor of paused
 
 // Race start: when a run begins fresh (first drop-in, restart, next course),
 // the sim is held at the gate for a 3-2-1-GO countdown; the clock (sim.time)
@@ -131,51 +129,66 @@ function showCount(text: string, go: boolean): void {
   countdownEl.style.animation = 'cd-pop 0.55s ease-out';
 }
 
-// Before the first drop-in the guide is a title screen: "Drop in" and
-// "Restart" would do the exact same thing (there's no run yet), so it shows
-// one plain "Start" button instead. Once a run has begun, later pauses get
-// both.
-let started = false;
-const restartBtn = document.getElementById('restartbtn')!;
-const resumeLabel = document.getElementById('resumelabel')!;
-function updateStartButtons(): void {
-  restartBtn.style.display = started ? '' : 'none';
-  resumeLabel.textContent = started ? 'Drop in' : 'Start';
-}
-updateStartButtons();
-
 function setPaused(next: boolean): void {
   // The guide opens as the title screen; once the player drops in, later
-  // pauses are just pauses.
+  // pauses read as "Paused".
   if (paused && !next) {
     document.getElementById('pausetitle')!.textContent = 'Paused';
-    started = true;
-    updateStartButtons();
-    // Unpausing calibrates tilt: however the phone is held right now
-    // becomes neutral. Re-unpause any time to recalibrate.
+    // Unpausing calibrates tilt: however the phone is held right now becomes
+    // neutral. Re-unpause any time to recalibrate.
     input.calibrateTilt();
-    // Every touch route back into the run funnels through here — the plain
-    // resume and the restart confirm's Yes alike — so re-enter fullscreen
-    // from all of them, not just the first drop-in. (The drop-in also asks
-    // synchronously below, since its unpause happens after an await.)
+    // Every touch route back into the run funnels through here — plain resume,
+    // the picker's Ski on, a fresh course — so re-enter fullscreen from all.
     tryFullscreen();
   }
   paused = next;
   if (paused) audio.setTiltWarning(0);
-  pauseScreen.classList.toggle('visible', paused && !confirming);
+  pauseScreen.classList.toggle('visible', paused && !selecting);
   audio.setPaused(paused);
 }
 
-function openConfirm(): void {
-  if (confirming) return;
-  confirming = true;
-  pausedBeforeConfirm = paused;
-  confirmScreen.classList.add('visible');
-  pauseScreen.classList.remove('visible');
+// The course picker: the nine named courses, built fresh each open so the
+// CURRENT-course highlight is right. Opening always pauses (freeze the world
+// behind the menu). It's the "start a new course" gate from both the pause
+// guide and the finish ceremony, and it IS the old restart confirm — re-pick
+// the current course to replay it.
+const catalog = courseCatalog();
+function buildSelector(): void {
+  courseList.replaceChildren();
+  catalog.forEach((c, i) => {
+    const card = document.createElement('button');
+    card.className = 'course' + (c.seed === currentSeed ? ' current' : '');
+    card.innerHTML =
+      `<kbd class="keyonly">${i + 1}</kbd>` +
+      `<span class="cname"></span><span class="cblurb"></span>`;
+    card.querySelector('.cname')!.textContent = c.name;
+    card.querySelector('.cblurb')!.textContent = c.blurb;
+    card.addEventListener('click', () => pickCourse(c.seed));
+    courseList.appendChild(card);
+  });
+}
+function openSelector(): void {
+  if (selecting) return;
+  selecting = true;
+  buildSelector();
   if (!paused) setPaused(true);
+  pauseScreen.classList.remove('visible');
+  selectorScreen.classList.add('visible');
+}
+function closeSelector(): void {
+  // "Ski on": dismiss the picker, back to the current run.
+  selecting = false;
+  selectorScreen.classList.remove('visible');
+  dropIntoRun();
+}
+function pickCourse(seed: number): void {
+  selecting = false;
+  selectorScreen.classList.remove('visible');
+  startCourse(seed);
+  dropIntoRun();
 }
 
-// Start a course fresh — the current one again, or the next seed up.
+// Start a named course fresh (or the same one again, to replay).
 function startCourse(seed: number): void {
   currentSeed = seed;
   best = Number(localStorage.getItem(bestKey()) ?? '0');
@@ -192,30 +205,21 @@ function startCourse(seed: number): void {
   countdownArmed = true; // every fresh course starts with a 3-2-1-GO
 }
 
-function closeConfirm(restart: boolean): void {
-  confirming = false;
-  confirmScreen.classList.remove('visible');
-  if (restart) {
-    startCourse(currentSeed);
-    // Re-enter through the ONE door: a restart on touch must re-verify tilt,
-    // never drop into an uncontrollable run just because tilt wasn't on.
-    dropIntoRun();
-  } else {
-    // Back to wherever they came from: the run, or the pause guide.
-    setPaused(pausedBeforeConfirm);
-  }
-}
-
 window.addEventListener('keydown', (e) => {
-  if (confirming) {
-    if (e.code === 'KeyY') closeConfirm(true);
-    else if (e.code === 'KeyN' || e.code === 'Escape') closeConfirm(false);
+  // In the picker: number keys pick a course, Esc skis on.
+  if (selecting) {
+    if (e.code === 'Escape') closeSelector();
+    else if (/^Digit[1-9]$/.test(e.code)) {
+      const i = Number(e.code.slice(5)) - 1;
+      if (i < catalog.length) pickCourse(catalog[i]!.seed);
+    }
     return;
   }
-  // On the ceremony panel, N rolls the next course — a dedicated key, so
-  // fumbling the boost button (Space) as you cross the line can't skip ahead.
-  if (e.code === 'KeyN' && finishScreen.classList.contains('visible')) {
-    startCourse(currentSeed + 1);
+  // S opens the picker — but only from the pause guide or the finish ceremony,
+  // the only places it's a menu key. In a live run S is a backflip (input.ts),
+  // never reached here because that path is only open while frozen or finished.
+  if (e.code === 'KeyS' && (paused || finishScreen.classList.contains('visible'))) {
+    openSelector();
     return;
   }
   if (e.code === 'Escape' || e.key === '?') setPaused(!paused);
@@ -278,7 +282,7 @@ function tryFullscreen(): void {
 // or charge touches, or (for a centered button like Next course) as the
 // middle-band pause, so tapping the ceremony's buttons just paused the run.
 // Every full-screen panel gets the same guard.
-for (const panel of [pauseScreen, confirmScreen, finishScreen]) {
+for (const panel of [pauseScreen, selectorScreen, finishScreen]) {
   panel.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse') e.stopPropagation();
   });
@@ -294,7 +298,7 @@ for (const panel of [pauseScreen, confirmScreen, finishScreen]) {
 // — and it only fires on a real tap, never a mid-scroll swipe on the
 // panel. If tilt can't be granted we surface the error and stay on the
 // guide — there is no fallback to fall into.
-// The single door into a run — used by Drop in AND Restart AND Next course.
+// The single door into a run — used by Ski on AND a freshly picked course.
 // On touch a run REQUIRES live tilt: if it isn't on, run the enable-and-
 // wait-for-a-reading flow, and if that fails, stay on the guide with the
 // error. NEVER unpause a touch run with tilt off — that is the "slides
@@ -327,32 +331,25 @@ document.getElementById('resumebtn')!.addEventListener('click', () => {
   tryFullscreen();
   dropIntoRun();
 });
-document.getElementById('restartbtn')!.addEventListener('click', () => {
-  openConfirm();
+document.getElementById('newcoursebtn')!.addEventListener('click', () => {
+  tryFullscreen();
+  openSelector();
+});
+document.getElementById('selectorback')!.addEventListener('click', () => {
+  tryFullscreen();
+  closeSelector();
+});
+document.getElementById('choosecourse')!.addEventListener('click', () => {
+  tryFullscreen(); // the ceremony doesn't re-pause, so ask here directly
+  openSelector();
 });
 
 // In tilt mode the thumbs own the screen edges, so the whole middle band
-// is the pause button.
+// is the pause button. (Picker open ⇒ paused, so that guard covers it too.)
 window.addEventListener('pointerdown', (e) => {
-  if (!tiltOn || paused || confirming || e.pointerType === 'mouse') return;
+  if (!tiltOn || paused || e.pointerType === 'mouse') return;
   const frac = e.clientX / window.innerWidth;
   if (frac > THUMB_ZONE && frac < 1 - THUMB_ZONE) setPaused(true);
-});
-document.getElementById('confirmy')!.addEventListener('click', () => {
-  closeConfirm(true);
-});
-document.getElementById('confirmn')!.addEventListener('click', () => {
-  closeConfirm(false);
-});
-document.getElementById('nextcourse')!.addEventListener('click', () => {
-  if (finishScreen.classList.contains('visible')) {
-    tryFullscreen(); // the ceremony doesn't re-pause, so ask here directly
-    startCourse(currentSeed + 1);
-  }
-});
-// Retry on the ceremony: same as R — the Y/N confirm, then restart this seed.
-document.getElementById('retrybtn')!.addEventListener('click', () => {
-  openConfirm();
 });
 
 // Tilting far outside the control envelope, sustained, pauses the game:
@@ -502,17 +499,16 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     fill.style.height = `${Math.max(0, Math.min(1, scaled - i)) * 100}%`;
   });
 
-  // The ceremony: once the finish barrage has landed, raise the panel.
-  const showFinish = finishPanelAt !== null && sim.time >= finishPanelAt && !confirming;
+  // The ceremony: once the finish barrage has landed, raise the panel (but
+  // not while the picker is up over it).
+  const showFinish = finishPanelAt !== null && sim.time >= finishPanelAt && !selecting;
   if (showFinish && !finishScreen.classList.contains('visible')) {
     const t = sim.finishedAt ?? 0;
     const mins = Math.floor(t / 60);
     const secs = (t - mins * 60).toFixed(1).padStart(4, '0');
     finishStats.textContent = `SCORE ${sim.score.toLocaleString('en')} · TIME ${mins}:${secs}`;
-    // Name the course just run, and tease the next roll of the deck.
-    finishCourse.textContent =
-      `COURSE ${currentSeed} — ${sim.terrain.archetype.name.toUpperCase()} · ` +
-      `NEXT: ${new Terrain(currentSeed + 1).archetype.name.toUpperCase()}`;
+    // Name the course just run.
+    finishCourse.textContent = `COURSE ${currentSeed} — ${sim.terrain.archetype.name.toUpperCase()}`;
     finishBest.textContent =
       sim.score > bestAtCourseStart && input.acted()
         ? 'NEW COURSE BEST!'

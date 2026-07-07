@@ -245,6 +245,7 @@ const SECTION_ORDER: readonly SectionType[] = [
 // changes. Scalars multiply the section specs at their use sites.
 export interface Archetype {
   name: string;
+  blurb: string; // one-line character for the course selector
   weights: Record<SectionType, number>; // section deck for the mixed middle
   kickers: number; // kicker-chance multiplier
   bigAir: number; // 0..1 skew of kicker sizes toward the big end
@@ -256,6 +257,7 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // The balanced mountain this game grew up on — still in the rotation.
     name: 'The Classic',
+    blurb: 'The balanced mountain — a little of everything.',
     weights: {
       cruise: 1,
       narrows: 1,
@@ -275,6 +277,7 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // A kicker circus: wide playgrounds, terraces, XLs everywhere.
     name: 'The Airfield',
+    blurb: 'A kicker circus — wide playgrounds and XLs everywhere.',
     weights: {
       cruise: 1.4,
       narrows: 0.25,
@@ -294,6 +297,7 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // Tight and fast: pinched slaloms into grade breaks, sector money.
     name: 'The Chute',
+    blurb: 'Tight and fast — pinched slaloms into grade breaks.',
     weights: {
       cruise: 1,
       narrows: 3,
@@ -313,6 +317,7 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // Carving country: superelevated S after S — the bank is the line.
     name: 'The Wall',
+    blurb: 'Carving country — superelevated S after S.',
     weights: {
       cruise: 0.8,
       narrows: 1.2,
@@ -332,6 +337,7 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // The playground: wide bowls, obstacle slaloms, coins everywhere.
     name: 'The Garden',
+    blurb: 'The playground — wide bowls, obstacle slaloms, coins.',
     weights: {
       cruise: 1.4,
       narrows: 0.4,
@@ -351,6 +357,7 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // Rhythm country: terrace after terrace, every edge a launch.
     name: 'The Staircase',
+    blurb: 'Rhythm country — terrace after terrace, every edge a launch.',
     weights: {
       cruise: 0.9,
       narrows: 0.4,
@@ -370,6 +377,7 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // The gorge: banked pipe after banked pipe, wall-to-wall carving.
     name: 'The Pipeline',
+    blurb: 'The gorge — banked pipe after pipe, wall-to-wall carving.',
     weights: {
       cruise: 0.8,
       narrows: 1,
@@ -389,6 +397,7 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // Blue ice: everything fast, nothing bites, crystal gardens to thread.
     name: 'The Glacier',
+    blurb: 'Blue ice — everything fast, nothing bites.',
     weights: {
       cruise: 0.8,
       narrows: 0.8,
@@ -408,6 +417,7 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // Backcountry: deep drifts, one groomed ribbon, coins off the line.
     name: 'The Backcountry',
+    blurb: 'Deep drifts, one groomed ribbon — coins off the line.',
     weights: {
       cruise: 1.2,
       narrows: 0.3,
@@ -425,6 +435,24 @@ const ARCHETYPES: readonly Archetype[] = [
     coins: 1.5,
   },
 ];
+
+// A seed's character is a pure function of the seed (same hash the terrain
+// uses), so a course number always names the same archetype.
+export function archetypeForSeed(seed: number): Archetype {
+  return ARCHETYPES[Math.floor(hash2(seed, 9001, 17) * ARCHETYPES.length)]!;
+}
+
+// The course selector's menu: each named archetype bound to its CANONICAL
+// seed — the lowest seed that yields it — so the nine named courses are
+// stable and shareable ("The Chute is course 1"). Listed in archetype order.
+export function courseCatalog(): { name: string; blurb: string; seed: number }[] {
+  const firstSeed = new Map<string, number>();
+  for (let seed = 1; firstSeed.size < ARCHETYPES.length && seed < 1000; seed++) {
+    const name = archetypeForSeed(seed).name;
+    if (!firstSeed.has(name)) firstSeed.set(name, seed);
+  }
+  return ARCHETYPES.map((a) => ({ name: a.name, blurb: a.blurb, seed: firstSeed.get(a.name)! }));
+}
 
 // Superelevation: floor cross-slope per unit of centerline curvature, capped
 // so the bank helps the carve without becoming a wall of its own.
@@ -638,7 +666,7 @@ export class Terrain {
     readonly seed: number,
     readonly courseLength = COURSE_LENGTH
   ) {
-    this.archetype = ARCHETYPES[Math.floor(hash2(seed, 9001, 17) * ARCHETYPES.length)]!;
+    this.archetype = archetypeForSeed(seed);
     // Endless test mountains still get exactly one, on the course-1 span.
     const span = Number.isFinite(courseLength) ? courseLength : COURSE_LENGTH;
     const z = -(0.4 + 0.3 * hash2(seed, 8887, 1)) * span;

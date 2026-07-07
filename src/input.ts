@@ -60,7 +60,7 @@ export interface InputSource {
 // Jump: hold Space (or Shift / any mouse button) to charge, release to pop. The
 // input layer only reports held/released — the SIM owns the charge meter
 // (sim-time and deterministic; see sim.ts CHARGE_FULL_S).
-export function setupInput(onRestart: () => void): InputSource {
+export function setupInput(): InputSource {
   const down = new Set<string>();
   let mouse: { x: number; y: number } | null = null; // last known cursor position
 
@@ -149,10 +149,7 @@ export function setupInput(onRestart: () => void): InputSource {
     code === 'Space' || code === 'ShiftLeft' || code === 'ShiftRight';
 
   window.addEventListener('keydown', (e) => {
-    // R asks to restart (the game layer confirms and calls resetActed when
-    // it actually happens); it doesn't count as playing the run.
-    if (e.code === 'KeyR') onRestart();
-    else noteActivity(e);
+    noteActivity(e);
     if (isBoostKey(e.code)) beginCharge();
     down.add(e.code);
   });
