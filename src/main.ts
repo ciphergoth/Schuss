@@ -115,11 +115,26 @@ function showCount(text: string, go: boolean): void {
   countdownEl.style.animation = 'cd-pop 0.55s ease-out';
 }
 
+// Before the first drop-in the guide is a title screen: "Drop in" and
+// "Restart" would do the exact same thing (there's no run yet), so it shows
+// one plain "Start" button instead. Once a run has begun, later pauses get
+// both.
+let started = false;
+const restartBtn = document.getElementById('restartbtn')!;
+const resumeLabel = document.getElementById('resumelabel')!;
+function updateStartButtons(): void {
+  restartBtn.style.display = started ? '' : 'none';
+  resumeLabel.textContent = started ? 'Drop in' : 'Start';
+}
+updateStartButtons();
+
 function setPaused(next: boolean): void {
   // The guide opens as the title screen; once the player drops in, later
   // pauses are just pauses.
   if (paused && !next) {
     document.getElementById('pausetitle')!.textContent = 'Paused';
+    started = true;
+    updateStartButtons();
     // Unpausing calibrates tilt: however the phone is held right now
     // becomes neutral. Re-unpause any time to recalibrate.
     input.calibrateTilt();
