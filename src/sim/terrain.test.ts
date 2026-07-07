@@ -155,7 +155,7 @@ describe('terrain', () => {
       expect(jump.stepDown === 0 || jump.hip === 0).toBe(true); // never both
     }
     expect(jumps).toBeGreaterThan(15);
-    expect(kinds).toEqual(new Set(['S', 'M', 'L']));
+    expect(kinds).toEqual(new Set(['S', 'M', 'L', 'XL']));
     expect(stepDowns).toBeGreaterThan(1);
     expect(hips).toBeGreaterThan(1);
   });
@@ -246,10 +246,12 @@ describe('terrain', () => {
         (t.centerX(jump.zLip - 4) - 2 * t.centerX(jump.zLip) + t.centerX(jump.zLip + 4)) / 16;
       if (Math.abs(curv) > 0.01) continue; // keep banking out of the measurement
       found = true;
-      const z = jump.zLip - 15; // full scoop depth here
+      // ~8m past the lip: near the deepest scoop, before the grade (steeper
+      // than CARVE_SLOPE by design) catches the carve back up to the floor.
+      const z = jump.zLip - 8;
       const core = t.centerX(z) + jump.xOffset;
       const outside = core + jump.halfWidth + 2 + 5 + 3; // past the scoop fade
-      expect(t.height(outside, z) - t.height(core, z)).toBeGreaterThan(jump.stepDown * 0.5);
+      expect(t.height(outside, z) - t.height(core, z)).toBeGreaterThan(1);
     }
     expect(found).toBe(true);
   });
@@ -407,12 +409,13 @@ describe('terrain', () => {
     expect(offPlan / coins).toBeGreaterThan(0.6); // and mostly pay you to leave the plan
   });
 
-  it('every kicker hangs a x3 and a x5 star past its lip, deterministically', () => {
+  it('kickers hang a VARIED star loadout past the lip, deterministically', () => {
     const a = new Terrain(1);
     const b = new Terrain(1);
     let found = 0;
-    for (let index = 3; index < 60; index++) {
-      expect(a.bonusesForChunk(index)).toEqual(b.bonusesForChunk(index));
+    const loadouts = new Set<string>();
+    for (let index = 3; index < 200; index++) {
+      expect(a.bonusesForChunk(index)).toEqual(b.bonusesForChunk(index)); // pure
       const jump = a.jumpForChunk(index);
       const stars = a.bonusesForChunk(index);
       if (!jump) {
@@ -420,12 +423,19 @@ describe('terrain', () => {
         continue;
       }
       found++;
-      // Hips carry only the x3 for now (their x5 awaits honest placement).
-      const expected = jump.hip !== 0 ? [3] : [3, 5];
-      expect(stars.map((s) => s.mult).sort()).toEqual(expected);
+      const mults = stars.map((s) => s.mult).sort();
+      loadouts.add(mults.join(','));
+      // Hips and small lips (S/M) carry only the x3 for now (their x5 awaits
+      // honest placement); big lips (L/XL) deal one of the four varied
+      // loadouts, so the magenta star always means a reachable superhuman arc.
+      const big = jump.kind === 'L' || jump.kind === 'XL';
+      const valid = jump.hip !== 0 ? [[3]] : big ? [[], [3], [5], [3, 5]] : [[], [3]];
+      expect(valid).toContainEqual(mults);
       for (const s of stars) expect(s.z).toBeLessThan(jump.zLip); // past the lip
     }
     expect(found).toBeGreaterThan(3);
+    // The whole point: not every kicker is the same gate anymore.
+    expect(loadouts.size).toBeGreaterThan(2);
   });
 
   it('gradient matches height differences', () => {

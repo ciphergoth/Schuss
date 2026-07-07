@@ -493,10 +493,22 @@ describe('skier', () => {
       obstacle.radius
     );
 
-    // No steering authority while tumbling.
-    const headingDuringTumble = sim.skier.heading;
-    run(sim, 0.3, { steer: 1, stance: 0 });
-    expect(sim.skier.heading).toBe(headingDuringTumble);
+    // No steering authority while tumbling: a hard steer changes nothing a
+    // coast wouldn't. (Heading can still shift from a wall bounce — that's
+    // physics, not the stick — so compare against a coasting twin from the
+    // identical tumbling state, stepping only for as long as the tumble runs
+    // rather than assuming a fixed window.)
+    const twin = createSim(1);
+    teleport(twin, obstacle.x, obstacle.z + 3, 10);
+    run(twin, 0.6, COAST);
+    let stepped = 0;
+    while (sim.skier.tumbling > 0) {
+      stepSim(sim, { steer: 1, stance: 0 });
+      stepSim(twin, COAST);
+      expect(sim.skier.heading).toBe(twin.skier.heading);
+      stepped++;
+    }
+    expect(stepped).toBeGreaterThan(0); // we actually exercised a live tumble
 
     // Back on skis and accelerating again — the run never ended.
     run(sim, 3, COAST);

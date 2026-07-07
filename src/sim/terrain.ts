@@ -57,13 +57,13 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
   // The baseline course this game grew up on.
   cruise: {
     half: 15,
-    swing: 4,
-    curveAmp: 22,
+    swing: 7,
+    curveAmp: 24,
     rollerScale: 1,
     extraDrop: 0,
     terraced: false,
-    kickerChance: 0.25,
-    kickerKinds: ['S', 'M', 'M', 'L'],
+    kickerChance: 0.4,
+    kickerKinds: ['S', 'M', 'L', 'XL'],
     obstacleChance: 0.3,
     obstacleCount: 1,
     crudThreshold: 0.62,
@@ -72,8 +72,8 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
   // High walls, no room, pure nerve. Nothing in the corridor but you.
   narrows: {
     half: 7,
-    swing: 1,
-    curveAmp: 13,
+    swing: 1.2,
+    curveAmp: 17,
     rollerScale: 0.8,
     extraDrop: 0,
     terraced: false,
@@ -91,12 +91,12 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
   bowl: {
     half: 27,
     swing: 4,
-    curveAmp: 10,
+    curveAmp: 12,
     rollerScale: 0.75,
     extraDrop: 0,
     terraced: false,
-    kickerChance: 0.35,
-    kickerKinds: ['S', 'M', 'L'],
+    kickerChance: 0.45,
+    kickerKinds: ['S', 'M', 'L', 'L', 'XL'],
     obstacleChance: 0.8,
     obstacleCount: 3,
     crudThreshold: 0.55,
@@ -105,13 +105,13 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
   // The grade breaks away mid-section: raw speed, clean snow, big Ls only.
   plunge: {
     half: 17,
-    swing: 3,
+    swing: 6,
     curveAmp: 26,
     rollerScale: 0.7,
     extraDrop: 70,
     terraced: false,
-    kickerChance: 0.12,
-    kickerKinds: ['L'],
+    kickerChance: 0.2,
+    kickerKinds: ['L', 'XL'],
     obstacleChance: 0,
     obstacleCount: 0,
     crudThreshold: 0.78,
@@ -120,8 +120,8 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
   // Giant terraces; every edge is a launch with a landing below.
   steps: {
     half: 15,
-    swing: 3,
-    curveAmp: 8,
+    swing: 6,
+    curveAmp: 12,
     rollerScale: 0.35,
     extraDrop: 0,
     terraced: true,
@@ -138,13 +138,13 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
   // guarantee must survive the flip. A sweeper is about the carve anyway.
   sweeper: {
     half: 13,
-    swing: 2,
+    swing: 4,
     curveAmp: 20,
     rollerScale: 0.5,
     extraDrop: 0,
     terraced: false,
-    kickerChance: 0.18,
-    kickerKinds: ['S', 'M'],
+    kickerChance: 0.3,
+    kickerKinds: ['S', 'M', 'L'],
     obstacleChance: 0.25,
     obstacleCount: 1,
     crudThreshold: 0.62,
@@ -209,7 +209,7 @@ export interface TrickBonus {
 // or a HIP — the approach pad tilts into a banked corner, and the
 // gravity-turn physics slings the launch heading sideways across the track.
 // No fake geometry: the throw is the cross-slope force, honestly earned.
-export type JumpKind = 'S' | 'M' | 'L';
+export type JumpKind = 'S' | 'M' | 'L' | 'XL';
 
 interface JumpGeometry {
   rampLength: number;
@@ -220,6 +220,7 @@ const JUMP_GEOMETRY: Record<JumpKind, JumpGeometry> = {
   S: { rampLength: 10, lipHeight: 1.5 },
   M: { rampLength: 14, lipHeight: 2.2 },
   L: { rampLength: 19, lipHeight: 3.2 },
+  XL: { rampLength: 25, lipHeight: 4.3 }, // a booter — a proper big-air launch
 };
 
 export interface Jump {
@@ -845,12 +846,35 @@ export class Terrain {
     const bonuses: TrickBonus[] = [];
     const jump = this.jumpForChunk(index);
     if (jump) {
-      bonuses.push({ id: `b${index}:3`, mult: 3, ...this.starOnArc(jump, 3) });
-      // Hips pay the x3 for riding the sling; their x5 is withheld until the
-      // popped-off-the-curve flight is measured well enough to place it
-      // honestly (the flat x5 reference arc is meters off a hip's reality).
-      if (jump.hip === 0) {
-        bonuses.push({ id: `b${index}:5`, mult: 5, ...this.starOnArc(jump, 5) });
+      if (jump.hip !== 0) {
+        // Hips pay the x3 for riding the sling; their x5 is withheld until the
+        // popped-off-the-curve flight is measured well enough to place it
+        // honestly (the flat x5 reference arc is meters off a hip's reality).
+        bonuses.push({ id: `b${index}:3`, mult: 3, ...this.starOnArc(jump, 3) });
+      } else if (jump.kind === 'L' || jump.kind === 'XL') {
+        // Big lips deal a VARIED star loadout, so a star means something:
+        // usually both, but some gold-only, some magenta-only (a pro gate),
+        // and some none at all — a pure-air jump you take for the trick
+        // points, not a gate.
+        const roll = hash2(this.seed, index, 5171);
+        if (roll >= 0.15 && roll < 0.5) {
+          bonuses.push({ id: `b${index}:3`, mult: 3, ...this.starOnArc(jump, 3) });
+        } else if (roll >= 0.5) {
+          bonuses.push({ id: `b${index}:3`, mult: 3, ...this.starOnArc(jump, 3) });
+          bonuses.push({ id: `b${index}:5`, mult: 5, ...this.starOnArc(jump, 5) });
+        } else if (roll >= 0.05) {
+          bonuses.push({ id: `b${index}:5`, mult: 5, ...this.starOnArc(jump, 5) });
+        }
+        // roll < 0.05: no star — a pure-air jump.
+      } else {
+        // Small lips (S/M): the superhuman x5 arc lands meters out of reach
+        // off a short ramp, so — like the hip x5 — it's WITHHELD until the
+        // flight off these lips is measured well enough to place it honestly.
+        // They carry the gold x3 (which the human arc threads) most of the
+        // time; a few are pure-air jumps taken for the trick points alone.
+        if (hash2(this.seed, index, 5171) >= 0.1) {
+          bonuses.push({ id: `b${index}:3`, mult: 3, ...this.starOnArc(jump, 3) });
+        }
       }
     }
     this.chunkBonuses.set(index, bonuses);

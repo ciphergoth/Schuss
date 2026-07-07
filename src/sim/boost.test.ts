@@ -82,6 +82,7 @@ describe('boost economy', () => {
     let index = 3;
     while (
       !sim.terrain.jumpForChunk(index) ||
+      !sim.terrain.bonusesForChunk(index).some((b) => b.mult === 5) ||
       sim.terrain.obstaclesForChunk(index).length > 0 ||
       sim.terrain.obstaclesForChunk(index + 1).length > 0
     ) {
@@ -113,8 +114,13 @@ describe('boost economy', () => {
 
   it('the x5 star hangs further out than the x3, both well off the snow', () => {
     const sim = createSim(1);
+    // A big lip that hangs BOTH stars (the x5 lives on L/XL now).
     let index = 3;
-    while (!sim.terrain.jumpForChunk(index)) index++;
+    while (true) {
+      const m = sim.terrain.bonusesForChunk(index).map((b) => b.mult);
+      if (sim.terrain.jumpForChunk(index) && m.includes(3) && m.includes(5)) break;
+      index++;
+    }
     const jump = sim.terrain.jumpForChunk(index)!;
     const stars = sim.terrain.bonusesForChunk(index);
     const b3 = stars.find((b) => b.mult === 3)!;
@@ -171,19 +177,25 @@ describe('boost economy', () => {
   }
 
   it('star gating holds across kicker sizes: the x5 is superhuman + pace', () => {
-    const sim = createSim(1);
-    for (const kind of ['S', 'L'] as const) {
-      let index = 3;
-      while (true) {
-        const jump = sim.terrain.jumpForChunk(index);
-        if (jump && jump.kind === kind && jump.stepDown === 0 && jump.hip === 0) break;
-        index++;
-      }
-      // A superhuman pop at boost pace threads to the x5...
-      expect(rideKicker(27, 1, index)).toContain(5);
-      // ...a human pop at cruise always pays (the x3, or on a plunge's
-      // free-speed grades even the x5)...
-      expect(rideKicker(21, 1, index, 0.5).length).toBeGreaterThan(0);
+    const t = createSim(1).terrain;
+    // The x5 lives on big lips (L/XL), where its superhuman reference arc
+    // places honestly (the short-ramp x5 is withheld — see terrain.ts). Find
+    // one venue of each size that hangs BOTH stars and prove the gate there:
+    // it's a physics rule, not a per-size table.
+    const venues = new Map<string, number>();
+    for (let index = 3; index < 400 && venues.size < 2; index++) {
+      const jump = t.jumpForChunk(index);
+      if (!jump || jump.stepDown !== 0 || jump.hip !== 0) continue;
+      const mults = t.bonusesForChunk(index).map((b) => b.mult);
+      if (!mults.includes(3) || !mults.includes(5)) continue;
+      if (!venues.has(jump.kind)) venues.set(jump.kind, index);
+    }
+    expect(venues.size).toBeGreaterThanOrEqual(2);
+    for (const index of venues.values()) {
+      // A superhuman pop at boost pace (the x5's own reference) threads it...
+      expect(rideKicker(25, 1, index)).toContain(5);
+      // ...a human pop at cruise pays the gold (the x3's reference)...
+      expect(rideKicker(20, 1, index, 0.5)).toContain(3);
       // ...and dawdling off the lip without a pop earns nothing at all.
       expect(rideKicker(17, null, index, 0)).toEqual([]);
     }
@@ -206,13 +218,17 @@ describe('boost economy', () => {
   });
 
   it('the x5 rewards a jump timed at the lip, not a hop before the ramp', () => {
+    const t = createSim(1).terrain;
+    // The first kicker that hangs an x5 (a big lip — see terrain.ts).
+    let venue = 3;
+    while (!t.bonusesForChunk(venue).some((b) => b.mult === 5)) venue++;
     // Superhuman pop 1m before the lip, at boost pace: threads to the x5.
-    expect(rideKicker(27, 1)).toContain(5);
+    expect(rideKicker(25, 1, venue)).toContain(5);
     // The same pop released before the ramp even starts crests early and
     // sinks below the x5 arc — the exploit this placement retires.
-    expect(rideKicker(27, 16)).not.toContain(5);
+    expect(rideKicker(25, 16, venue)).not.toContain(5);
     // And no pop at all gets neither: the natural lip launch drops away.
-    expect(rideKicker(21, null, undefined, 0)).toEqual([]);
+    expect(rideKicker(20, null, venue, 0)).toEqual([]);
   });
 
   it('a tumble still fires its event but keeps the tank', () => {
