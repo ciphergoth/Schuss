@@ -34,6 +34,20 @@ const SECTION_BLEND = 0.15; // fraction of the section that fades into the next
 // can construct Terrain with courseLength Infinity (an endless mountain).
 export const COURSE_LENGTH = SECTION_LENGTH * 9;
 
+// The FINISH APRON: the last stretch of the plunge before the line is kept
+// as empty as the outrun — no kicker lips, no stars, no obstacles, coins,
+// or crud patches inside it. A fast flight covers ~40m, so an apron this
+// deep guarantees your final trick has landed and you're rolling on your
+// skis well before you cross under the checkered flag. The gate is a finish
+// line, not one last jump; nothing worth doing should still be in the air.
+export const FINISH_APRON = 80;
+
+// A kicker THROWS things forward: its flight lands ~40m downrange and its
+// bonus star hangs 30-50m out on the reference arc. So a lip clears a deeper
+// margin than a static obstacle — everything it launches (arc and star) has
+// to come to rest before the apron, not just the lip itself.
+const KICKER_THROW = 70;
+
 // The one course announces itself by name — over the start gate, on the
 // HUD clock line, and at the ceremony.
 export const COURSE_NAME = 'The Grand Tour';
@@ -507,6 +521,16 @@ export class Terrain {
     return -z >= this.courseLength;
   }
 
+  // Is this z inside the clean finish apron — the last FINISH_APRON metres
+  // before the line, or anywhere past it? Everywhere the apron reaches asks
+  // nothing of you and offers nothing: no lips to pop, nothing to hit or
+  // collect, clean snow all the way to the gate. A superset of pastFinish
+  // used to gate feature placement (never terrain shape or the scoring lock,
+  // which key off the line itself).
+  finishApron(z: number): boolean {
+    return -z >= this.courseLength - FINISH_APRON;
+  }
+
   // 1D value noise in [0, 1).
   private noise1(t: number, octave: number): number {
     const it = Math.floor(t);
@@ -746,7 +770,10 @@ export class Terrain {
   private rollsJump(index: number): boolean {
     if (index < 3) return false;
     const zLip = -index * CHUNK_LENGTH - 24;
-    if (this.pastFinish(zLip)) return false; // the outrun asks nothing of you
+    // Nothing this lip throws — flight or star — may reach the apron, so
+    // gate on the far (downrange) end of its throw, not the lip itself:
+    // land before the gate, not through it.
+    if (this.finishApron(zLip - KICKER_THROW)) return false;
     if (this.onSetpiece(zLip)) return false; // the falls ARE the feature here
     const chance = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].kickerChance;
     return hash2(this.seed, index, 31337) < chance;
@@ -807,7 +834,7 @@ export class Terrain {
       !natural &&
       clearBehind &&
       index >= 3 &&
-      !this.pastFinish(zLip) &&
+      !this.finishApron(zLip - KICKER_THROW) && // no forced kicker throwing into the run-in
       !this.onSetpiece(zLip) && // never force a kicker onto the falls
       !this.bendsAt(index) &&
       !selfFeatured &&
@@ -991,7 +1018,7 @@ export class Terrain {
     const berm = this.sectionParam(z, (spec) => spec.bermRoom);
     const wall = Math.min(1, Math.max(0, (Math.abs(d) - this.channelHalfWidth(z) - berm) / 4));
     let patch = 0;
-    if (z < -80 && !this.pastFinish(z) && this.kickerShape(d, z) === 0 && !this.inJumpLane(d, z)) {
+    if (z < -80 && !this.finishApron(z) && this.kickerShape(d, z) === 0 && !this.inJumpLane(d, z)) {
       const threshold = this.sectionParam(z, (spec) => spec.crudThreshold);
       const n = this.noise2(x / 13, z / 13, 5);
       patch = smoothstep(Math.min(1, Math.max(0, (n - threshold) / 0.1)));
@@ -1062,9 +1089,11 @@ export class Terrain {
 
     const obstacles: Obstacle[] = [];
     const zTop = -index * CHUNK_LENGTH;
-    // Chunks 0-5 stay empty so every run starts in the open; the outrun
-    // past the finish stays empty so every run ends in celebration.
-    if (index >= 6 && index * CHUNK_LENGTH < this.courseLength) {
+    // Chunks 0-5 stay empty so every run starts in the open; the finish
+    // apron and the outrun past it stay empty so every run ends clean and
+    // ends in celebration (gate the chunk by its downrange edge, so no
+    // obstacle strays into the run-in to the flag).
+    if (index >= 6 && !this.finishApron(zTop - CHUNK_LENGTH)) {
       const spec = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zTop - CHUNK_LENGTH / 2))];
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 7919) * 2 ** 31));
       const jump = this.jumpForChunk(index);
@@ -1119,7 +1148,9 @@ export class Terrain {
     if (cached) return cached;
 
     const pickups: Pickup[] = [];
-    if (index > 0 && index * CHUNK_LENGTH < this.courseLength) {
+    // Nothing left to collect once the run-in to the gate begins (gate by
+    // the chunk's downrange edge, matching obstacles).
+    if (index > 0 && !this.finishApron(-index * CHUNK_LENGTH - CHUNK_LENGTH)) {
       const zMid = -index * CHUNK_LENGTH - CHUNK_LENGTH / 2;
       const type = this.sectionType(this.sectionIndexAt(zMid));
       const chance = type === 'bowl' ? 0.9 : type === 'narrows' ? 0.35 : 0.7;
