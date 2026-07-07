@@ -197,6 +197,10 @@ describe('boost economy', () => {
     for (let index = 3; index < 600; index++) {
       const jump = t.jumpForChunk(index);
       if (!jump || (jump.hip !== 0) !== hip) continue;
+      // Plunge venues gate SOFTLY by design (the breakaway grade floats
+      // even an unpopped flight through the human arc — speed is free
+      // downhill there), so the gate laws are pinned on hard-gating ground.
+      if (t.sectionType(t.sectionIndexAt(jump.zLip)) === 'plunge') continue;
       if (!t.bonusesForChunk(index).some((b) => b.mult === mult)) continue;
       if (rideKicker(speed, 1, index, charge).includes(mult)) return index;
     }

@@ -71,8 +71,10 @@ export const LIBRARY: readonly Palette[] = [
   palette('ice blue', 0x5b7fa8, 0xcfe6ff, 0x2e4258, 1.05, 0xdff1ff, 1.6, 620, 0.35),
 ];
 
-// The course's own zone timeline: four distinct palettes drawn from the
-// library by seeded shuffle. Deterministic per seed.
+// The course's zone timeline: the mega course tours the WHOLE library —
+// all eight palettes in a seeded order (8km crosses ~13 zones, so every
+// world appears before the cycle comes back around). Deterministic per
+// seed.
 export function courseZones(seed: number): Palette[] {
   const rng = mulberry32(Math.floor(hash2(seed, 4177, 23) * 2 ** 31));
   const deck = [...LIBRARY];
@@ -80,7 +82,7 @@ export function courseZones(seed: number): Palette[] {
     const j = Math.floor(rng() * (i + 1));
     [deck[i], deck[j]] = [deck[j]!, deck[i]!];
   }
-  return deck.slice(0, 4);
+  return deck;
 }
 
 // The course's weather: snowfall intensity (0 clear / 0.5 flurries / 1

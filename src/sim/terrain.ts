@@ -23,13 +23,20 @@ export const GRADE = 0.35; // average drop per meter of z
 export const SECTION_LENGTH = 400;
 const SECTION_BLEND = 0.15; // fraction of the section that fades into the next
 
-// A COURSE is a run you can finish: eight sections with an arc — a gentle
-// cruise opening (section 0, as ever), a mixed middle, and a forced PLUNGE
-// finale into the checkered gate at the line. Past the line the mountain
-// becomes a clean celebratory outrun: cruise terrain, nothing to hit,
-// nothing left to collect. Tests that need every section type to exist can
-// construct Terrain with courseLength Infinity (an endless mountain).
-export const COURSE_LENGTH = SECTION_LENGTH * 8;
+// THE COURSE is a run you can finish — and there is exactly ONE: the MEGA
+// COURSE, every idea the mountain has packed into a single 8km run (20
+// sections, 2.5x the old per-course length). It has an arc — a gentle
+// cruise opening (section 0, as ever), a mixed middle that deals EVERY
+// section type exactly twice (see sectionType), and a forced PLUNGE finale
+// into the checkered gate at the line. Past the line the mountain becomes
+// a clean celebratory outrun: cruise terrain, nothing to hit, nothing left
+// to collect. Tests that need arbitrary depth can construct Terrain with
+// courseLength Infinity (an endless mountain).
+export const COURSE_LENGTH = SECTION_LENGTH * 20;
+
+// The one course announces itself by name — over the start gate, on the
+// HUD clock line, and at the ceremony.
+export const COURSE_NAME = 'The Grand Tour';
 
 export type SectionType =
   'cruise' | 'narrows' | 'bowl' | 'plunge' | 'steps' | 'sweeper' | 'canyon' | 'glacier' | 'powder';
@@ -235,230 +242,20 @@ const SECTION_ORDER: readonly SectionType[] = [
   'powder',
 ];
 
-// COURSE ARCHETYPES: what kind of course this seed is. Seeds used to differ
-// only in WHERE things were — every course drew the same section deck with
-// the same weights, so statistically every course was the average course.
-// An archetype reweights the deck and scales the feature densities, so
-// courses are characters you can name and share ("course 12 is an
-// Airfield"). Weights are never zero: every section type stays possible
-// everywhere (and the section-hunting tests stay finite), it's the MIX that
-// changes. Scalars multiply the section specs at their use sites.
-export interface Archetype {
-  name: string;
-  blurb: string; // one-line character for the course selector
-  weights: Record<SectionType, number>; // section deck for the mixed middle
-  kickers: number; // kicker-chance multiplier
-  bigAir: number; // 0..1 skew of kicker sizes toward the big end
-  obstacles: number; // obstacle-chance multiplier
-  coins: number; // coin-line odds multiplier
-}
-
-const ARCHETYPES: readonly Archetype[] = [
-  {
-    // The balanced mountain this game grew up on — still in the rotation.
-    name: 'The Classic',
-    blurb: 'The balanced mountain — a little of everything.',
-    weights: {
-      cruise: 1,
-      narrows: 1,
-      bowl: 1,
-      plunge: 1,
-      steps: 1,
-      sweeper: 1,
-      canyon: 1,
-      glacier: 1,
-      powder: 1,
-    },
-    kickers: 1,
-    bigAir: 0,
-    obstacles: 1,
-    coins: 1,
-  },
-  {
-    // A kicker circus: wide playgrounds, terraces, XLs everywhere.
-    name: 'The Airfield',
-    blurb: 'A kicker circus — wide playgrounds and XLs everywhere.',
-    weights: {
-      cruise: 1.4,
-      narrows: 0.25,
-      bowl: 3,
-      plunge: 0.3,
-      steps: 2,
-      sweeper: 0.8,
-      canyon: 0.3,
-      glacier: 0.5,
-      powder: 1,
-    },
-    kickers: 1.5,
-    bigAir: 0.8,
-    obstacles: 0.7,
-    coins: 1,
-  },
-  {
-    // Tight and fast: pinched slaloms into grade breaks, sector money.
-    name: 'The Chute',
-    blurb: 'Tight and fast — pinched slaloms into grade breaks.',
-    weights: {
-      cruise: 1,
-      narrows: 3,
-      bowl: 0.25,
-      plunge: 2.4,
-      steps: 0.25,
-      sweeper: 1,
-      canyon: 2,
-      glacier: 1,
-      powder: 0.25,
-    },
-    kickers: 0.6,
-    bigAir: 0,
-    obstacles: 0.5,
-    coins: 0.8,
-  },
-  {
-    // Carving country: superelevated S after S — the bank is the line.
-    name: 'The Wall',
-    blurb: 'Carving country — superelevated S after S.',
-    weights: {
-      cruise: 0.8,
-      narrows: 1.2,
-      bowl: 0.4,
-      plunge: 0.7,
-      steps: 0.3,
-      sweeper: 3.5,
-      canyon: 2.2,
-      glacier: 0.6,
-      powder: 0.3,
-    },
-    kickers: 0.8,
-    bigAir: 0,
-    obstacles: 0.8,
-    coins: 1.1,
-  },
-  {
-    // The playground: wide bowls, obstacle slaloms, coins everywhere.
-    name: 'The Garden',
-    blurb: 'The playground — wide bowls, obstacle slaloms, coins.',
-    weights: {
-      cruise: 1.4,
-      narrows: 0.4,
-      bowl: 3,
-      plunge: 0.25,
-      steps: 0.5,
-      sweeper: 1,
-      canyon: 0.3,
-      glacier: 0.4,
-      powder: 1.4,
-    },
-    kickers: 1,
-    bigAir: 0.25,
-    obstacles: 1.6,
-    coins: 1.8,
-  },
-  {
-    // Rhythm country: terrace after terrace, every edge a launch.
-    name: 'The Staircase',
-    blurb: 'Rhythm country — terrace after terrace, every edge a launch.',
-    weights: {
-      cruise: 0.9,
-      narrows: 0.4,
-      bowl: 1,
-      plunge: 0.5,
-      steps: 3,
-      sweeper: 0.7,
-      canyon: 0.5,
-      glacier: 0.6,
-      powder: 0.6,
-    },
-    kickers: 0.9,
-    bigAir: 0.4,
-    obstacles: 0.8,
-    coins: 1,
-  },
-  {
-    // The gorge: banked pipe after banked pipe, wall-to-wall carving.
-    name: 'The Pipeline',
-    blurb: 'The gorge — banked pipe after pipe, wall-to-wall carving.',
-    weights: {
-      cruise: 0.8,
-      narrows: 1,
-      bowl: 0.3,
-      plunge: 0.8,
-      steps: 0.3,
-      sweeper: 1.2,
-      canyon: 3.5,
-      glacier: 0.5,
-      powder: 0.3,
-    },
-    kickers: 0.7,
-    bigAir: 0,
-    obstacles: 0.6,
-    coins: 1.2,
-  },
-  {
-    // Blue ice: everything fast, nothing bites, crystal gardens to thread.
-    name: 'The Glacier',
-    blurb: 'Blue ice — everything fast, nothing bites.',
-    weights: {
-      cruise: 0.8,
-      narrows: 0.8,
-      bowl: 0.4,
-      plunge: 1.6,
-      steps: 0.4,
-      sweeper: 0.8,
-      canyon: 0.6,
-      glacier: 3.2,
-      powder: 0.25,
-    },
-    kickers: 0.9,
-    bigAir: 0.3,
-    obstacles: 1.1,
-    coins: 0.9,
-  },
-  {
-    // Backcountry: deep drifts, one groomed ribbon, coins off the line.
-    name: 'The Backcountry',
-    blurb: 'Deep drifts, one groomed ribbon — coins off the line.',
-    weights: {
-      cruise: 1.2,
-      narrows: 0.3,
-      bowl: 1,
-      plunge: 0.4,
-      steps: 0.5,
-      sweeper: 0.7,
-      canyon: 0.3,
-      glacier: 0.4,
-      powder: 3.2,
-    },
-    kickers: 0.9,
-    bigAir: 0.3,
-    obstacles: 0.6,
-    coins: 1.5,
-  },
-];
-
-// A seed's character is a pure function of the seed (same hash the terrain
-// uses), so a course number always names the same archetype.
-export function archetypeForSeed(seed: number): Archetype {
-  return ARCHETYPES[Math.floor(hash2(seed, 9001, 17) * ARCHETYPES.length)]!;
-}
-
-// The course selector's menu: each named archetype bound to its CANONICAL
-// seed — the lowest seed that yields it — so the nine named courses are
-// stable. Ordered by that seed (so the picker's 1-9 shortcuts run in a fixed,
-// natural order); the seed is an internal generation detail, never shown as a
-// course number.
-export function courseCatalog(): { name: string; blurb: string; seed: number }[] {
-  const firstSeed = new Map<string, number>();
-  for (let seed = 1; firstSeed.size < ARCHETYPES.length && seed < 1000; seed++) {
-    const name = archetypeForSeed(seed).name;
-    if (!firstSeed.has(name)) firstSeed.set(name, seed);
-  }
-  return ARCHETYPES.map((a) => ({
-    name: a.name,
-    blurb: a.blurb,
-    seed: firstSeed.get(a.name)!,
-  })).sort((a, b) => a.seed - b.seed);
-}
+// THE MEGA DEAL: the course's mixed middle (sections 1..18) is TWO full
+// decks of all nine section types, each deck a seeded shuffle — one run
+// tours every idea the mountain has, exactly twice, and no idea can crowd
+// out another. (This replaced the nine ARCHETYPE courses, which reweighted
+// one shared deck per seed: nine menu entries, not nine ideas. All the
+// ideas now live in the one course.) A shuffled deck of nine distinct
+// types is internally repeat-free by construction; the joints are patched
+// by local swaps — the head can't echo its predecessor (section 0's
+// cruise, or the previous block's tail), the mid-block seam can't repeat
+// across decks, and the slot before the finale can't be a plunge (the
+// finale is earned, not doubled). The endless test mountain just keeps
+// dealing double-deck blocks forever, so every type stays reachable at
+// any depth.
+const DECK_BLOCK = SECTION_ORDER.length * 2; // sections per dealt block
 
 // Superelevation: floor cross-slope per unit of centerline curvature, capped
 // so the bank helps the carve without becoming a wall of its own.
@@ -644,52 +441,58 @@ export function jumpDrift(jump: Jump, q: number): number {
   return jump.hip * HIP_DRIFT * clamp01(1 - q / (jump.rampLength + HIP_LANE));
 }
 
+export interface Setpiece {
+  kind: 'waterfall' | 'cascades';
+  z: number; // where the (first) edge breaks
+  span: number; // meters from the first edge to the last face's foot
+  falls: readonly [number, number, number][]; // [zTop, drop, face] each
+}
+
 export class Terrain {
   private chunkObstacles = new Map<number, Obstacle[]>();
   private chunkPickups = new Map<number, Pickup[]>();
   private chunkBonuses = new Map<number, TrickBonus[]>();
   private chunkJumps = new Map<number, Jump | null>();
   private chunkSinceFeat = new Map<number, number>();
-  private sectionTypes = new Map<number, SectionType>();
+  private blockDeals = new Map<number, SectionType[]>();
   private sectionDrops = new Map<number, number>();
 
-  // What kind of course this seed is (see ARCHETYPES).
-  readonly archetype: Archetype;
-  // THE SETPIECE: every course carries one seeded landmark mid-run — a
-  // WATERFALL (one 10m dive over a 16m face) or the CASCADES (three 5m
-  // falls in 30m rhythm). Pure added downhill on the spine, so the walls,
-  // banking, star arcs, and the drainage guarantee inherit it for free —
-  // a fall face only ever steepens the floor. Courses become "the one
-  // with the waterfall": a landmark, not a distribution.
-  readonly setpiece: {
-    kind: 'waterfall' | 'cascades';
-    z: number; // where the (first) edge breaks
-    span: number; // meters from the first edge to the last face's foot
-    falls: readonly [number, number, number][]; // [zTop, drop, face] each
-  };
+  // THE SETPIECES: the mega course carries BOTH landmarks — the WATERFALL
+  // (one 10m dive over a 16m face) and the CASCADES (three 5m falls in 30m
+  // rhythm) — one seeded into each half of the run, in seeded order. Pure
+  // added downhill on the spine, so the walls, banking, star arcs, and the
+  // drainage guarantee inherit them for free — a fall face only ever
+  // steepens the floor. Landmarks, not a distribution.
+  readonly setpieces: readonly Setpiece[];
 
   constructor(
     readonly seed: number,
     readonly courseLength = COURSE_LENGTH
   ) {
-    this.archetype = archetypeForSeed(seed);
-    // Endless test mountains still get exactly one, on the course-1 span.
+    // Endless test mountains still get exactly one pair, on the course span.
     const span = Number.isFinite(courseLength) ? courseLength : COURSE_LENGTH;
-    const z = -(0.4 + 0.3 * hash2(seed, 8887, 1)) * span;
-    const kind = hash2(seed, 8887, 2) < 0.55 ? 'waterfall' : 'cascades';
-    this.setpiece =
-      kind === 'waterfall'
-        ? { kind, z, span: 16, falls: [[z, 10, 16]] }
-        : {
-            kind,
-            z,
-            span: 70,
-            falls: [
-              [z, 5, 10],
-              [z - 30, 5, 10],
-              [z - 60, 5, 10],
-            ],
-          };
+    const zEarly = -(0.25 + 0.15 * hash2(seed, 8887, 1)) * span;
+    const zLate = -(0.55 + 0.15 * hash2(seed, 8887, 3)) * span;
+    const waterfall = (z: number): Setpiece => ({
+      kind: 'waterfall',
+      z,
+      span: 16,
+      falls: [[z, 10, 16]],
+    });
+    const cascades = (z: number): Setpiece => ({
+      kind: 'cascades',
+      z,
+      span: 70,
+      falls: [
+        [z, 5, 10],
+        [z - 30, 5, 10],
+        [z - 60, 5, 10],
+      ],
+    });
+    this.setpieces =
+      hash2(seed, 8887, 2) < 0.5
+        ? [waterfall(zEarly), cascades(zLate)]
+        : [cascades(zEarly), waterfall(zLate)];
   }
 
   // The last section of the course; the finish line sits at its far edge.
@@ -729,34 +532,55 @@ export class Terrain {
     return Math.floor(-z / SECTION_LENGTH);
   }
 
-  // The personality of section s, drawn from the archetype's weighted deck.
-  // Deterministic, never repeats its predecessor (a Narrows into a Narrows
-  // would just be one long Narrows). The course has an arc: section 0 is
-  // always cruise, the final section is always the plunge finale, and
-  // everything past the line is outrun cruise.
+  // The personality of section s: the MEGA DEAL. Section 0 is always
+  // cruise, the final section is always the plunge finale, everything past
+  // the line is outrun cruise — and the middle is dealt in double-deck
+  // blocks (two seeded shuffles of all nine types back to back), so the
+  // default 20-section course's middle (1..18) is exactly one block: every
+  // section type, exactly twice, never repeating its predecessor (a
+  // Narrows into a Narrows would just be one long Narrows).
   sectionType(s: number): SectionType {
     if (s <= 0) return 'cruise';
     if (s > this.lastSection()) return 'cruise'; // the outrun
     if (s === this.lastSection()) return 'plunge'; // the finale
-    const cached = this.sectionTypes.get(s);
+    const block = Math.floor((s - 1) / DECK_BLOCK);
+    return this.blockDeal(block)[(s - 1) % DECK_BLOCK]!;
+  }
+
+  // One dealt block: two shuffled decks of the nine types, joints patched
+  // by local swaps. A shuffled deck has no internal repeats (nine distinct
+  // cards), so only three seams need care: the head against the previous
+  // block's tail (or section 0's cruise), the mid-block seam between the
+  // decks, and — when this block's tail sits just above the finale — a
+  // plunge there (the finale must be earned, not doubled). Each swap trades
+  // with a same-deck neighbor, which is distinct by construction, so a
+  // patch can never create a new repeat.
+  private blockDeal(block: number): SectionType[] {
+    const cached = this.blockDeals.get(block);
     if (cached) return cached;
-    const prev = this.sectionType(s - 1);
-    // Never the predecessor again; never a plunge straight into the finale.
-    const deck = SECTION_ORDER.filter(
-      (t) => t !== prev && !(t === 'plunge' && s === this.lastSection() - 1)
-    );
-    const total = deck.reduce((sum, t) => sum + this.archetype.weights[t], 0);
-    let u = hash2(this.seed, s, 6011) * total;
-    let type = deck[deck.length - 1]!;
-    for (const t of deck) {
-      u -= this.archetype.weights[t];
-      if (u < 0) {
-        type = t;
-        break;
-      }
+    const deal = [...this.shuffledDeck(2 * block), ...this.shuffledDeck(2 * block + 1)];
+    const n = SECTION_ORDER.length;
+    const prev = block === 0 ? 'cruise' : this.blockDeal(block - 1)[DECK_BLOCK - 1]!;
+    if (deal[0] === prev) [deal[0], deal[1]] = [deal[1]!, deal[0]!];
+    if (deal[n] === deal[n - 1]) [deal[n], deal[n + 1]] = [deal[n + 1]!, deal[n]!];
+    if (
+      block * DECK_BLOCK + DECK_BLOCK === this.lastSection() - 1 &&
+      deal[DECK_BLOCK - 1] === 'plunge'
+    ) {
+      [deal[DECK_BLOCK - 2], deal[DECK_BLOCK - 1]] = [deal[DECK_BLOCK - 1]!, deal[DECK_BLOCK - 2]!];
     }
-    this.sectionTypes.set(s, type);
-    return type;
+    this.blockDeals.set(block, deal);
+    return deal;
+  }
+
+  private shuffledDeck(salt: number): SectionType[] {
+    const rng = mulberry32(Math.floor(hash2(this.seed, 7307, salt) * 2 ** 31));
+    const deck = [...SECTION_ORDER];
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [deck[i], deck[j]] = [deck[j]!, deck[i]!];
+    }
+    return deck;
   }
 
   private spec(s: number): SectionSpec {
@@ -874,7 +698,7 @@ export class Terrain {
   }
 
   // The smooth spine of the course: mean grade plus section drops (plunges,
-  // terraces) plus the course's signature setpiece, without the roller
+  // terraces) plus the course's signature setpieces, without the roller
   // noise. Star placement measures flight heights in this frame — a popped
   // arc is the same height RELATIVE TO THE SLOPE on a gentle cruise and a
   // steep plunge alike.
@@ -882,25 +706,23 @@ export class Terrain {
     return GRADE * z - this.sectionDrop(z) - this.setpieceDrop(z);
   }
 
-  // THE SETPIECE: every course carries one seeded landmark mid-run — a
-  // WATERFALL (one 10m dive over a 16m face) or the CASCADES (three 5m
-  // falls in 30m rhythm). Pure added downhill on the spine, so the walls,
-  // the banking, the star arcs, and the drainage guarantee all inherit it
-  // for free — a fall face only ever steepens the floor. Courses become
-  // "the one with the waterfall": a landmark, not a distribution.
+  // The setpieces' added downhill (see the setpieces field): every fall
+  // face is pure extra drop on the spine, so a fall can only ever steepen
+  // the floor.
   private setpieceDrop(z: number): number {
     let drop = 0;
-    for (const [top, d, face] of this.setpiece.falls) {
-      drop += d * smoothstep(clamp01((top - z) / face));
+    for (const sp of this.setpieces) {
+      for (const [top, d, face] of sp.falls) {
+        drop += d * smoothstep(clamp01((top - z) / face));
+      }
     }
     return drop;
   }
 
-  // Is this z on (or hard against) the setpiece? Its faces are the feature:
+  // Is this z on (or hard against) a setpiece? Its faces are the feature:
   // no kickers or obstacles compete with the falls.
   private onSetpiece(z: number): boolean {
-    const sp = this.setpiece;
-    return z < sp.z + 30 && z > sp.z - sp.span - 50;
+    return this.setpieces.some((sp) => z < sp.z + 30 && z > sp.z - sp.span - 50);
   }
 
   // Height of the track's spine plus big rollers. Under leg-reach contact
@@ -925,7 +747,7 @@ export class Terrain {
     if (this.pastFinish(zLip)) return false; // the outrun asks nothing of you
     if (this.onSetpiece(zLip)) return false; // the falls ARE the feature here
     const chance = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].kickerChance;
-    return hash2(this.seed, index, 31337) < chance * this.archetype.kickers;
+    return hash2(this.seed, index, 31337) < chance;
   }
 
   // Does this chunk actively bend? A real turn is a feature you steer through,
@@ -999,11 +821,7 @@ export class Terrain {
     const opening = zLip > -SECTION_LENGTH;
     const kinds =
       opening || section.kickerKinds.length === 0 ? ['M' as const] : section.kickerKinds;
-    // bigAir skews the size draw toward the end of the list (sections order
-    // their kinds small to large): an Airfield deals XLs where a Classic
-    // deals Ms, from the same underlying roll.
-    const sizeRoll = Math.pow(hash2(this.seed, index, 4451), 1 / (1 + this.archetype.bigAir));
-    const kind = kinds[Math.floor(sizeRoll * kinds.length)]!;
+    const kind = kinds[Math.floor(hash2(this.seed, index, 4451) * kinds.length)]!;
     const { rampLength, lipHeight } = JUMP_GEOMETRY[kind];
     const halfWidth = 3.0 + hash2(this.seed, index, 31338) * 1.5;
     const maxOffset = Math.max(0, halfChannel - halfWidth - JUMP_EDGE - 0.5);
@@ -1248,10 +1066,7 @@ export class Terrain {
       const spec = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zTop - CHUNK_LENGTH / 2))];
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 7919) * 2 ** 31));
       const jump = this.jumpForChunk(index);
-      const count =
-        hash2(this.seed, index, 857) < spec.obstacleChance * this.archetype.obstacles
-          ? spec.obstacleCount
-          : 0;
+      const count = hash2(this.seed, index, 857) < spec.obstacleChance ? spec.obstacleCount : 0;
       for (let t = 0; t < count; t++) {
         const z = zTop - rng() * CHUNK_LENGTH;
         const d = (rng() * 2 - 1) * (this.channelHalfWidth(z) - 2.5);
@@ -1305,8 +1120,7 @@ export class Terrain {
     if (index > 0 && index * CHUNK_LENGTH < this.courseLength) {
       const zMid = -index * CHUNK_LENGTH - CHUNK_LENGTH / 2;
       const type = this.sectionType(this.sectionIndexAt(zMid));
-      const base = type === 'bowl' ? 0.9 : type === 'narrows' ? 0.35 : 0.7;
-      const chance = Math.min(1, base * this.archetype.coins);
+      const chance = type === 'bowl' ? 0.9 : type === 'narrows' ? 0.35 : 0.7;
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 104729) * 2 ** 31));
       if (rng() < chance) {
         const zCluster = -index * CHUNK_LENGTH - 8 - rng() * (CHUNK_LENGTH - 16);
