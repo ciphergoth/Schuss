@@ -127,7 +127,10 @@ Backcountry — that reweight the section deck (never to zero: the MIX
 changes, nothing is banned) and scale kicker chance, kicker-size skew
 (bigAir), obstacle and coin densities. The name is announced over the
 start gate, on the HUD clock line, at the ceremony, and on its card in the
-course picker (blurb + canonical seed). Every course also carries ONE SETPIECE
+course picker (name + blurb + a 1-9 pick key). The name is the only identity
+shown — no "COURSE N" number, since the canonical seeds aren't a clean 1-9
+(they run 1,2,3,4,5,6,7,10,12) and would clash with the picker's 1-9 keys.
+Every course also carries ONE SETPIECE
 (terrain.setpiece, seeded mid-run 40-70% in): a WATERFALL (10m dive over
 a 16m face) or the CASCADES (three 5m falls, 30m rhythm) — pure added
 downhill on the spine, so walls/banking/star arcs/drainage inherit it

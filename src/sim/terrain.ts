@@ -444,14 +444,20 @@ export function archetypeForSeed(seed: number): Archetype {
 
 // The course selector's menu: each named archetype bound to its CANONICAL
 // seed — the lowest seed that yields it — so the nine named courses are
-// stable and shareable ("The Chute is course 1"). Listed in archetype order.
+// stable. Ordered by that seed (so the picker's 1-9 shortcuts run in a fixed,
+// natural order); the seed is an internal generation detail, never shown as a
+// course number.
 export function courseCatalog(): { name: string; blurb: string; seed: number }[] {
   const firstSeed = new Map<string, number>();
   for (let seed = 1; firstSeed.size < ARCHETYPES.length && seed < 1000; seed++) {
     const name = archetypeForSeed(seed).name;
     if (!firstSeed.has(name)) firstSeed.set(name, seed);
   }
-  return ARCHETYPES.map((a) => ({ name: a.name, blurb: a.blurb, seed: firstSeed.get(a.name)! }));
+  return ARCHETYPES.map((a) => ({
+    name: a.name,
+    blurb: a.blurb,
+    seed: firstSeed.get(a.name)!,
+  })).sort((a, b) => a.seed - b.seed);
 }
 
 // Superelevation: floor cross-slope per unit of centerline curvature, capped

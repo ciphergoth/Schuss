@@ -491,7 +491,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   const clock = sim.finishedAt ?? sim.time;
   const clockMin = Math.floor(clock / 60);
   timeText.textContent = `${clockMin}:${(clock - clockMin * 60).toFixed(2).padStart(5, '0')}`;
-  courseNum.textContent = `COURSE ${currentSeed} · ${sim.terrain.archetype.name.toUpperCase()}`;
+  courseNum.textContent = sim.terrain.archetype.name.toUpperCase();
   // Segmented course progress under the score: a vertical stack that fills
   // completed segments fully, the current one partway, top-to-bottom.
   const scaled = Math.min(1, distanceSkied(sim) / sim.terrain.courseLength) * segFills.length;
@@ -508,7 +508,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     const secs = (t - mins * 60).toFixed(1).padStart(4, '0');
     finishStats.textContent = `SCORE ${sim.score.toLocaleString('en')} · TIME ${mins}:${secs}`;
     // Name the course just run.
-    finishCourse.textContent = `COURSE ${currentSeed} — ${sim.terrain.archetype.name.toUpperCase()}`;
+    finishCourse.textContent = sim.terrain.archetype.name.toUpperCase();
     finishBest.textContent =
       sim.score > bestAtCourseStart && input.acted()
         ? 'NEW COURSE BEST!'
@@ -595,8 +595,8 @@ function frame(): void {
         countdownShown = n;
         showCount(String(n), false);
         audio.playCountdown(false);
-        // The course announces itself over the gate: number and character.
-        courseCall.textContent = `COURSE ${currentSeed} — ${sim.terrain.archetype.name.toUpperCase()}`;
+        // The course announces itself by name over the gate.
+        courseCall.textContent = sim.terrain.archetype.name.toUpperCase();
         courseCall.classList.add('visible');
       }
       accumulator = 0; // no sim time passes at the gate
