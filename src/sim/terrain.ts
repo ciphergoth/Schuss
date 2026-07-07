@@ -171,12 +171,19 @@ const BANK_MAX_SLOPE = 0.26;
 // whose along-slope flattened at bank fades was a genuine skier trap.
 const BANK_ARM = 12;
 
-// The sweeper's deliberate S-curve: the wandering noise is too lazy to bend
-// hard enough to bank, so sweeper sections add real sine turns — two full
-// S's per section, eased in and out at the boundaries.
+// Deliberate S-curves: the wandering noise is too lazy to bend hard enough to
+// bank, so some sections add real sine turns, eased in and out at the
+// boundaries (zero, with zero slope, at each). Sweepers flow — long, banked
+// S's you carve. Narrows SNAP — a tighter, sharper slalom is the whole point
+// of the pinched corridor; the shorter wavelength reads as a real turn, and
+// the ±20m banking stencil filters its sharpest so the bank still fits the
+// drainage budget. The bends ARE the narrows' feature (so it gets no forced
+// kickers — see jumpForChunk).
 const SWEEP_AMP = 30;
 const SWEEP_WAVELENGTH = 200;
 const SWEEP_EASE = 70;
+const NARROWS_AMP = 15;
+const NARROWS_WAVELENGTH = 115;
 
 export interface Obstacle {
   x: number;
@@ -437,16 +444,25 @@ export class Terrain {
     return drop;
   }
 
-  // Sweeper sections carve deliberate S-turns on top of the noise wander;
-  // zero (with zero slope) at both section boundaries by construction.
+  // Deliberate S-turns laid on top of the noise wander; zero (with zero slope)
+  // at both section boundaries by construction. Sweepers flow, narrows snap —
+  // same machinery, different amplitude and wavelength.
   private sweeperSwing(z: number): number {
     const s = this.sectionIndexAt(z);
-    if (s < 1 || this.sectionType(s) !== 'sweeper') return 0;
+    if (s < 1) return 0;
+    const type = this.sectionType(s);
+    const [amp, wavelength] =
+      type === 'sweeper'
+        ? [SWEEP_AMP, SWEEP_WAVELENGTH]
+        : type === 'narrows'
+          ? [NARROWS_AMP, NARROWS_WAVELENGTH]
+          : [0, 1];
+    if (amp === 0) return 0;
     const local = -z - s * SECTION_LENGTH;
     const ease =
       smoothstep(clamp01(local / SWEEP_EASE)) *
       smoothstep(clamp01((SECTION_LENGTH - local) / SWEEP_EASE));
-    return ease * SWEEP_AMP * Math.sin((local / SWEEP_WAVELENGTH) * Math.PI * 2);
+    return ease * amp * Math.sin((local / wavelength) * Math.PI * 2);
   }
 
   // Where the middle of the track is at this z.
@@ -565,15 +581,18 @@ export class Terrain {
     const natural = this.rollsJump(index) && clearBehind;
     // The max-gap guarantee: when nothing has happened for MAX_FEATURE_GAP
     // chunks — no kicker, no bend, no staircase — plant a kicker to fill the
-    // dead stretch. Never on a bend (already a feature), in the outrun, on a
-    // staircase, or against another kicker.
+    // dead stretch. Sections whose personality already fills the space carry
+    // themselves and never get a forced kicker: a staircase (terraced), a
+    // sweeper's carve, a narrows slalom — their own features hold the floor.
+    const type = this.sectionType(this.sectionIndexAt(zLip));
+    const selfFeatured = SECTION_SPECS[type].terraced || type === 'sweeper' || type === 'narrows';
     const forced =
       !natural &&
       clearBehind &&
       index >= 3 &&
       !this.pastFinish(zLip) &&
       !this.bendsAt(index) &&
-      !SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].terraced &&
+      !selfFeatured &&
       this.chunksSinceFeature(index - 1) + 1 >= MAX_FEATURE_GAP;
     if (!natural && !forced) {
       this.chunkJumps.set(index, null);
