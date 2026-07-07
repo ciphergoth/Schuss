@@ -362,12 +362,6 @@ export class ChunkRenderer {
       );
       banner.position.set(cX, floorY + 8.4, zf);
       group.add(banner);
-      const halo = new THREE.Mesh(
-        new THREE.TorusGeometry(span + 1, 1.3, 8, 40, Math.PI),
-        this.gateGlows[2]!
-      );
-      halo.position.set(cX, floorY + 0.3, zf);
-      group.add(halo);
     }
 
     // Section-boundary gates: a glowing neon arc spans the channel where one
