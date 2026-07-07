@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CHUNK_LENGTH,
   COURSE_LENGTH,
+  FINISH_APRON,
   GRADE,
   SECTION_LENGTH,
   SectionType,
@@ -219,6 +220,31 @@ describe('terrain', () => {
       // Outrun snow is clean celebratory racing snow.
       const zOut = -COURSE_LENGTH - 100;
       expect(t.stickinessAt(t.centerX(zOut) + 3, zOut)).toBe(0);
+    }
+  });
+
+  it('a clean apron runs the last stretch into the gate: land before, not through', () => {
+    const apronStart = COURSE_LENGTH - FINISH_APRON;
+    for (const seed of [1, 2, 3, 5, 8]) {
+      const t = new Terrain(seed);
+      const finishChunk = COURSE_LENGTH / CHUNK_LENGTH;
+      // Walk every chunk that could reach into the apron (and a few past the
+      // line) and assert nothing worth doing lives in the run-in to the flag.
+      for (let i = finishChunk - 4; i <= finishChunk + 2; i++) {
+        const jump = t.jumpForChunk(i);
+        if (jump) {
+          // A lip may sit just outside the apron, but never inside it: even
+          // its flight has to land you on the ground before the gate.
+          expect(t.finishApron(jump.zLip)).toBe(false);
+        }
+        for (const o of t.obstaclesForChunk(i)) expect(t.finishApron(o.z)).toBe(false);
+        for (const p of t.pickupsForChunk(i)) expect(t.finishApron(p.z)).toBe(false);
+        for (const b of t.bonusesForChunk(i)) expect(t.finishApron(b.z)).toBe(false);
+      }
+      // Snow inside the apron is clean racing snow, right up to the line.
+      for (let z = -apronStart; z >= -COURSE_LENGTH; z -= 10) {
+        expect(t.stickinessAt(t.centerX(z), z)).toBe(0);
+      }
     }
   });
 

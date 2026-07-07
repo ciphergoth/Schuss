@@ -54,6 +54,49 @@ function stripedPole(
   return geo;
 }
 
+// A true checkerboard panel: a plane subdivided into cols x rows cells,
+// each face flooded one of two colors so the grid reads as a checkered
+// flag. An optional wave ripples it along its width so a strung banner or a
+// flown flag flutters instead of hanging as a flat board. Per-FACE coloring
+// (centroid decides the cell) keeps the squares crisp — a per-vertex rule
+// would smear every cell edge, since grid vertices are shared between cells.
+function checkerPanel(
+  width: number,
+  height: number,
+  cols: number,
+  rows: number,
+  a: THREE.Color,
+  b: THREE.Color,
+  wave = 0
+): THREE.BufferGeometry {
+  let geo: THREE.BufferGeometry = new THREE.PlaneGeometry(width, height, cols, rows);
+  if (wave !== 0) {
+    const p = geo.getAttribute('position');
+    for (let i = 0; i < p.count; i++) {
+      p.setZ(i, Math.sin(p.getX(i) * 0.7 + p.getY(i) * 0.25) * wave);
+    }
+    geo.computeVertexNormals();
+  }
+  geo = geo.toNonIndexed();
+  const pos = geo.getAttribute('position');
+  const colors = new Float32Array(pos.count * 3);
+  const cw = width / cols;
+  const ch = height / rows;
+  for (let f = 0; f < pos.count; f += 3) {
+    const cx = (pos.getX(f) + pos.getX(f + 1) + pos.getX(f + 2)) / 3 + width / 2;
+    const cy = (pos.getY(f) + pos.getY(f + 1) + pos.getY(f + 2)) / 3 + height / 2;
+    const cell = (Math.floor(cx / cw) + Math.floor(cy / ch)) % 2;
+    const c = cell === 0 ? a : b;
+    for (let k = 0; k < 3; k++) {
+      colors[(f + k) * 3] = c.r;
+      colors[(f + k) * 3 + 1] = c.g;
+      colors[(f + k) * 3 + 2] = c.b;
+    }
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geo;
+}
+
 export class ChunkRenderer {
   private chunks = new Map<number, THREE.Group>();
   private pickupMeshes = new Map<string, THREE.Object3D>();
@@ -64,6 +107,13 @@ export class ChunkRenderer {
   });
   private underside = new THREE.MeshBasicMaterial({ color: 0x131b45 });
   private striped = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 });
+  // Checkered-flag cloth: vertex-colored and DOUBLE-SIDED so the flag reads
+  // as fabric from both the approach and the outrun once you cross it.
+  private checkerCloth = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.7,
+    side: THREE.DoubleSide,
+  });
   private crystal = new THREE.MeshStandardMaterial({
     color: 0xaee2ff,
     emissive: 0x1a3c55,
@@ -120,6 +170,7 @@ export class ChunkRenderer {
   private balloons = BALLOON_COLORS.map(
     (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7 })
   );
+  private flagMast = new THREE.MeshStandardMaterial({ color: 0xcfd6e0, roughness: 0.5 });
   private beacon = new THREE.MeshBasicMaterial({ color: 0xffd34d });
   private basket = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.9 });
 
@@ -253,8 +304,10 @@ export class ChunkRenderer {
       }
     }
 
-    // The FINISH gate: checkered pillars and bars across the whole channel
-    // where the course ends, visible from far up the final plunge.
+    // The FINISH gate: a CHECKERED-FLAG finish line — black-and-white
+    // pillars and bars across the whole channel, a big checkered banner
+    // strung between the pillars waving over the line, and a race flag flown
+    // from each pillar top. Visible from far up the final plunge.
     if (index * CHUNK_LENGTH === this.terrain.courseLength) {
       const zf = -this.terrain.courseLength;
       const cX = this.terrain.centerX(zf);
@@ -262,12 +315,25 @@ export class ChunkRenderer {
       const span = this.terrain.channelHalfWidth(zf) + 2;
       const black = new THREE.Color(0x15151c);
       const pillarGeo = stripedPole(0.5, 13, black, this.white);
+      const pillarTop = floorY + 13;
       for (const side of [-1, 1]) {
         const x = cX + side * span;
         const pillar = new THREE.Mesh(pillarGeo, this.striped);
         pillar.position.set(x, this.terrain.height(x, zf) + 6.5, zf);
         pillar.castShadow = true;
         group.add(pillar);
+        // A checkered race flag flown from a short mast at the pillar top,
+        // fluttering out over the channel.
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3, 6), this.flagMast);
+        mast.position.set(x, pillarTop + 1.5, zf);
+        group.add(mast);
+        const flag = new THREE.Mesh(
+          checkerPanel(2.6, 1.6, 4, 3, black, this.white, 0.35),
+          this.checkerCloth
+        );
+        // Fly it inward over the track from the top of the mast.
+        flag.position.set(x - side * 1.4, pillarTop + 2.4, zf);
+        group.add(flag);
       }
       for (const barY of [10.4, 11.6]) {
         const bar = new THREE.Mesh(
@@ -277,6 +343,25 @@ export class ChunkRenderer {
         bar.position.set(cX, floorY + barY, zf);
         group.add(bar);
       }
+      // The hero: a broad checkered banner strung across the whole channel
+      // just below the bars, waving over the line so THE FLAG is the last
+      // thing you pass under.
+      const bannerH = 2.6;
+      const cell = 1.1;
+      const banner = new THREE.Mesh(
+        checkerPanel(
+          span * 2,
+          bannerH,
+          Math.max(6, Math.round((span * 2) / cell)),
+          Math.max(2, Math.round(bannerH / cell)),
+          black,
+          this.white,
+          0.5
+        ),
+        this.checkerCloth
+      );
+      banner.position.set(cX, floorY + 8.4, zf);
+      group.add(banner);
       const halo = new THREE.Mesh(
         new THREE.TorusGeometry(span + 1, 1.3, 8, 40, Math.PI),
         this.gateGlows[2]!
