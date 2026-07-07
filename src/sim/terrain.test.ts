@@ -442,6 +442,39 @@ describe('terrain', () => {
     expect(loadouts.size).toBeGreaterThan(2);
   });
 
+  it('archetypes tilt the section deck without banning anything', () => {
+    // Find seeds carrying two different archetypes and compare their mixes
+    // on the endless mountain: a Chute deals narrows/plunge far more often
+    // than an Airfield, but every type stays possible everywhere.
+    const bySeed = new Map<string, Terrain>();
+    for (let seed = 1; bySeed.size < 3 && seed < 60; seed++) {
+      const t = new Terrain(seed, Infinity);
+      if (!bySeed.has(t.archetype.name)) bySeed.set(t.archetype.name, t);
+    }
+    expect(bySeed.size).toBeGreaterThanOrEqual(3); // seeds actually vary
+    for (const t of bySeed.values()) {
+      const counts: Record<string, number> = {};
+      for (let s = 1; s <= 400; s++) {
+        const type = t.sectionType(s);
+        counts[type] = (counts[type] ?? 0) + 1;
+        expect(type).not.toBe(t.sectionType(s - 1)); // never repeats
+      }
+      // Nothing is banned: over 400 sections every type shows up.
+      for (const type of ['cruise', 'narrows', 'bowl', 'plunge', 'steps', 'sweeper']) {
+        expect(counts[type] ?? 0).toBeGreaterThan(0);
+      }
+      // And the mix leans where the weights lean.
+      const w = t.archetype.weights;
+      const most = Object.entries(w).sort((a, b) => b[1] - a[1])[0]![0];
+      const least = Object.entries(w).sort((a, b) => a[1] - b[1])[0]![0];
+      if (w[most as keyof typeof w] > w[least as keyof typeof w] * 2) {
+        expect(counts[most] ?? 0).toBeGreaterThan(counts[least] ?? 0);
+      }
+    }
+    // Determinism: the archetype is a pure function of the seed.
+    expect(new Terrain(9).archetype.name).toBe(new Terrain(9).archetype.name);
+  });
+
   it('star contracts draw seeded demands from their tier pools', () => {
     const gold = ['spinL', 'spinR', 'front', 'back', 'spin2'];
     const magenta = ['mix', 'parallel', 'flip2'];

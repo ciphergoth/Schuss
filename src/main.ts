@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
-import { ContractDemand, SECTION_LENGTH } from './sim/terrain';
+import { ContractDemand, SECTION_LENGTH, Terrain } from './sim/terrain';
 import { SkierInput } from './sim/skier';
 import { setupInput } from './input';
 import { FAR_HOLD_S, THUMB_ZONE, tiltZone } from './tilt';
@@ -69,9 +69,11 @@ const pauseScreen = document.getElementById('pause')!;
 const confirmScreen = document.getElementById('confirm')!;
 const finishScreen = document.getElementById('finish')!;
 const finishStats = document.getElementById('finishstats')!;
+const finishCourse = document.getElementById('finishcourse')!;
 const finishBest = document.getElementById('finishbest')!;
 const trickText = document.getElementById('trick')!;
 const countdownEl = document.getElementById('countdown')!;
+const courseCall = document.getElementById('coursecall')!;
 
 // A short-lived banner: live spin readout while airborne, result on landing.
 let trickBannerUntil = 0;
@@ -490,7 +492,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   const clock = sim.finishedAt ?? sim.time;
   const clockMin = Math.floor(clock / 60);
   timeText.textContent = `${clockMin}:${(clock - clockMin * 60).toFixed(2).padStart(5, '0')}`;
-  courseNum.textContent = `COURSE ${currentSeed}`;
+  courseNum.textContent = `COURSE ${currentSeed} · ${sim.terrain.archetype.name.toUpperCase()}`;
   // Segmented course progress under the score: a vertical stack that fills
   // completed segments fully, the current one partway, top-to-bottom.
   const scaled = Math.min(1, distanceSkied(sim) / sim.terrain.courseLength) * segFills.length;
@@ -505,6 +507,10 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     const mins = Math.floor(t / 60);
     const secs = (t - mins * 60).toFixed(1).padStart(4, '0');
     finishStats.textContent = `SCORE ${sim.score.toLocaleString('en')} · TIME ${mins}:${secs}`;
+    // Name the course just run, and tease the next roll of the deck.
+    finishCourse.textContent =
+      `COURSE ${currentSeed} — ${sim.terrain.archetype.name.toUpperCase()} · ` +
+      `NEXT: ${new Terrain(currentSeed + 1).archetype.name.toUpperCase()}`;
     finishBest.textContent =
       sim.score > bestAtCourseStart && input.acted()
         ? 'NEW COURSE BEST!'
@@ -591,6 +597,9 @@ function frame(): void {
         countdownShown = n;
         showCount(String(n), false);
         audio.playCountdown(false);
+        // The course announces itself over the gate: number and character.
+        courseCall.textContent = `COURSE ${currentSeed} — ${sim.terrain.archetype.name.toUpperCase()}`;
+        courseCall.classList.add('visible');
       }
       accumulator = 0; // no sim time passes at the gate
       renderFrame(delta, []);
@@ -601,7 +610,10 @@ function frame(): void {
     countingDown = false;
     showCount('GO!', true);
     audio.playCountdown(true);
-    setTimeout(() => countdownEl.classList.remove('visible'), 700);
+    setTimeout(() => {
+      countdownEl.classList.remove('visible');
+      courseCall.classList.remove('visible');
+    }, 700);
   }
   // The tilt envelope: warn through the edge zone, pause when far-out
   // holds for FAR_HOLD_S (a flick through doesn't count).

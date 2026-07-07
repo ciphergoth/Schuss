@@ -136,12 +136,17 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
   // Rollers run quiet: at each S-turn's bank flip the transition already
   // spends most of the grade at the floor edges, and the drainage
   // guarantee must survive the flip. A sweeper is about the carve anyway.
+  // extraDrop pays for the superelevation transient: while the bank rises
+  // under the outer lane (the ease-in/out derivative peak, ~0.05 of grade
+  // at the 12m arm), the floor there flattened below the drainage budget —
+  // archetype reshuffles surfaced sub-friction pockets ~40m into sweepers.
+  // A steeper sweeper keeps every lane draining AND feeds the carve.
   sweeper: {
     half: 13,
     swing: 4,
     curveAmp: 20,
     rollerScale: 0.5,
-    extraDrop: 0,
+    extraDrop: 30,
     terraced: false,
     kickerChance: 0.3,
     kickerKinds: ['S', 'M', 'L'],
@@ -159,6 +164,80 @@ const SECTION_ORDER: readonly SectionType[] = [
   'plunge',
   'steps',
   'sweeper',
+];
+
+// COURSE ARCHETYPES: what kind of course this seed is. Seeds used to differ
+// only in WHERE things were — every course drew the same section deck with
+// the same weights, so statistically every course was the average course.
+// An archetype reweights the deck and scales the feature densities, so
+// courses are characters you can name and share ("course 12 is an
+// Airfield"). Weights are never zero: every section type stays possible
+// everywhere (and the section-hunting tests stay finite), it's the MIX that
+// changes. Scalars multiply the section specs at their use sites.
+export interface Archetype {
+  name: string;
+  weights: Record<SectionType, number>; // section deck for the mixed middle
+  kickers: number; // kicker-chance multiplier
+  bigAir: number; // 0..1 skew of kicker sizes toward the big end
+  obstacles: number; // obstacle-chance multiplier
+  coins: number; // coin-line odds multiplier
+}
+
+const ARCHETYPES: readonly Archetype[] = [
+  {
+    // The balanced mountain this game grew up on — still in the rotation.
+    name: 'The Classic',
+    weights: { cruise: 1, narrows: 1, bowl: 1, plunge: 1, steps: 1, sweeper: 1 },
+    kickers: 1,
+    bigAir: 0,
+    obstacles: 1,
+    coins: 1,
+  },
+  {
+    // A kicker circus: wide playgrounds, terraces, XLs everywhere.
+    name: 'The Airfield',
+    weights: { cruise: 1.4, narrows: 0.25, bowl: 3, plunge: 0.3, steps: 2, sweeper: 0.8 },
+    kickers: 1.5,
+    bigAir: 0.8,
+    obstacles: 0.7,
+    coins: 1,
+  },
+  {
+    // Tight and fast: pinched slaloms into grade breaks, sector money.
+    name: 'The Chute',
+    weights: { cruise: 1, narrows: 3, bowl: 0.25, plunge: 2.4, steps: 0.25, sweeper: 1 },
+    kickers: 0.6,
+    bigAir: 0,
+    obstacles: 0.5,
+    coins: 0.8,
+  },
+  {
+    // Carving country: superelevated S after S — the bank is the line.
+    name: 'The Wall',
+    weights: { cruise: 0.8, narrows: 1.2, bowl: 0.4, plunge: 0.7, steps: 0.3, sweeper: 3.5 },
+    kickers: 0.8,
+    bigAir: 0,
+    obstacles: 0.8,
+    coins: 1.1,
+  },
+  {
+    // The playground: wide bowls, obstacle slaloms, coins everywhere.
+    name: 'The Garden',
+    weights: { cruise: 1.4, narrows: 0.4, bowl: 3, plunge: 0.25, steps: 0.5, sweeper: 1 },
+    kickers: 1,
+    bigAir: 0.25,
+    obstacles: 1.6,
+    coins: 1.8,
+  },
+  {
+    // Rhythm country: terrace after terrace, every edge a launch.
+    name: 'The Staircase',
+    weights: { cruise: 0.9, narrows: 0.4, bowl: 1, plunge: 0.5, steps: 3, sweeper: 0.7 },
+    kickers: 0.9,
+    bigAir: 0.4,
+    obstacles: 0.8,
+    coins: 1,
+  },
 ];
 
 // Superelevation: floor cross-slope per unit of centerline curvature, capped
@@ -181,7 +260,10 @@ const BANK_ARM = 12;
 // kickers — see jumpForChunk).
 const SWEEP_AMP = 30;
 const SWEEP_WAVELENGTH = 200;
-const SWEEP_EASE = 70;
+// Ease long enough that the bank's rise under the outer lane (arm x
+// d(crossSlope)/dz at the smoothstep's steepest point) stays well inside
+// the drainage budget alongside the sweeper's extraDrop.
+const SWEEP_EASE = 90;
 const NARROWS_AMP = 15;
 const NARROWS_WAVELENGTH = 115;
 
@@ -346,10 +428,15 @@ export class Terrain {
   private sectionTypes = new Map<number, SectionType>();
   private sectionDrops = new Map<number, number>();
 
+  // What kind of course this seed is (see ARCHETYPES).
+  readonly archetype: Archetype;
+
   constructor(
     readonly seed: number,
     readonly courseLength = COURSE_LENGTH
-  ) {}
+  ) {
+    this.archetype = ARCHETYPES[Math.floor(hash2(seed, 9001, 17) * ARCHETYPES.length)]!;
+  }
 
   // The last section of the course; the finish line sits at its far edge.
   private lastSection(): number {
@@ -388,10 +475,11 @@ export class Terrain {
     return Math.floor(-z / SECTION_LENGTH);
   }
 
-  // The personality of section s. Deterministic, never repeats its
-  // predecessor (a Narrows into a Narrows would just be one long Narrows).
-  // The course has an arc: section 0 is always cruise, the final section is
-  // always the plunge finale, and everything past the line is outrun cruise.
+  // The personality of section s, drawn from the archetype's weighted deck.
+  // Deterministic, never repeats its predecessor (a Narrows into a Narrows
+  // would just be one long Narrows). The course has an arc: section 0 is
+  // always cruise, the final section is always the plunge finale, and
+  // everything past the line is outrun cruise.
   sectionType(s: number): SectionType {
     if (s <= 0) return 'cruise';
     if (s > this.lastSection()) return 'cruise'; // the outrun
@@ -399,14 +487,18 @@ export class Terrain {
     const cached = this.sectionTypes.get(s);
     if (cached) return cached;
     const prev = this.sectionType(s - 1);
-    const roll = Math.floor(hash2(this.seed, s, 6011) * SECTION_ORDER.length);
-    let type = SECTION_ORDER[roll % SECTION_ORDER.length]!;
-    if (type === prev) type = SECTION_ORDER[(roll + 1) % SECTION_ORDER.length]!;
-    // Never a plunge straight into the plunge finale.
-    if (s === this.lastSection() - 1 && type === 'plunge') {
-      type = SECTION_ORDER[(roll + 1) % SECTION_ORDER.length]!;
-      if (type === 'plunge' || type === prev) {
-        type = SECTION_ORDER[(roll + 2) % SECTION_ORDER.length]!;
+    // Never the predecessor again; never a plunge straight into the finale.
+    const deck = SECTION_ORDER.filter(
+      (t) => t !== prev && !(t === 'plunge' && s === this.lastSection() - 1)
+    );
+    const total = deck.reduce((sum, t) => sum + this.archetype.weights[t], 0);
+    let u = hash2(this.seed, s, 6011) * total;
+    let type = deck[deck.length - 1]!;
+    for (const t of deck) {
+      u -= this.archetype.weights[t];
+      if (u < 0) {
+        type = t;
+        break;
       }
     }
     this.sectionTypes.set(s, type);
@@ -554,7 +646,7 @@ export class Terrain {
     const zLip = -index * CHUNK_LENGTH - 24;
     if (this.pastFinish(zLip)) return false; // the outrun asks nothing of you
     const chance = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].kickerChance;
-    return hash2(this.seed, index, 31337) < chance;
+    return hash2(this.seed, index, 31337) < chance * this.archetype.kickers;
   }
 
   // Does this chunk actively bend? A real turn is a feature you steer through,
@@ -623,7 +715,11 @@ export class Terrain {
     const opening = zLip > -SECTION_LENGTH;
     const kinds =
       opening || section.kickerKinds.length === 0 ? ['M' as const] : section.kickerKinds;
-    const kind = kinds[Math.floor(hash2(this.seed, index, 4451) * kinds.length)]!;
+    // bigAir skews the size draw toward the end of the list (sections order
+    // their kinds small to large): an Airfield deals XLs where a Classic
+    // deals Ms, from the same underlying roll.
+    const sizeRoll = Math.pow(hash2(this.seed, index, 4451), 1 / (1 + this.archetype.bigAir));
+    const kind = kinds[Math.floor(sizeRoll * kinds.length)]!;
     const { rampLength, lipHeight } = JUMP_GEOMETRY[kind];
     const halfWidth = 3.0 + hash2(this.seed, index, 31338) * 1.5;
     const maxOffset = Math.max(0, halfChannel - halfWidth - JUMP_EDGE - 0.5);
@@ -855,7 +951,10 @@ export class Terrain {
       const spec = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zTop - CHUNK_LENGTH / 2))];
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 7919) * 2 ** 31));
       const jump = this.jumpForChunk(index);
-      const count = hash2(this.seed, index, 857) < spec.obstacleChance ? spec.obstacleCount : 0;
+      const count =
+        hash2(this.seed, index, 857) < spec.obstacleChance * this.archetype.obstacles
+          ? spec.obstacleCount
+          : 0;
       for (let t = 0; t < count; t++) {
         const z = zTop - rng() * CHUNK_LENGTH;
         const d = (rng() * 2 - 1) * (this.channelHalfWidth(z) - 2.5);
@@ -906,7 +1005,8 @@ export class Terrain {
     if (index > 0 && index * CHUNK_LENGTH < this.courseLength) {
       const zMid = -index * CHUNK_LENGTH - CHUNK_LENGTH / 2;
       const type = this.sectionType(this.sectionIndexAt(zMid));
-      const chance = type === 'bowl' ? 0.9 : type === 'narrows' ? 0.35 : 0.7;
+      const base = type === 'bowl' ? 0.9 : type === 'narrows' ? 0.35 : 0.7;
+      const chance = Math.min(1, base * this.archetype.coins);
       const rng = mulberry32(Math.floor(hash2(this.seed, index, 104729) * 2 ** 31));
       if (rng() < chance) {
         const zCluster = -index * CHUNK_LENGTH - 8 - rng() * (CHUNK_LENGTH - 16);
