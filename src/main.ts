@@ -375,12 +375,15 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       // The showpieces get fireworks in the sky AND in the mix.
       if (e.mult >= 3) audio.playFireworks(e.mult, e.mult >= 5);
       else if (combo) audio.playFireworks(3, false);
-      const parts = [];
-      if (e.spins >= 1) parts.push(`${e.spins * 360}°`);
-      if (e.flips >= 1) {
-        const name = e.flipBack ? 'BACKFLIP' : 'FRONTFLIP';
-        parts.push(e.flips > 1 ? `${e.flips}x ${name}` : name);
-      }
+      // Spell out the whole sequence in order, so a spin one way then the
+      // other reads as the two tricks it was, not a squashed total. Spins
+      // carry a rotation arrow so the two directions are distinct.
+      const parts = e.segments.map((s) => {
+        if (s.kind === 'spinL') return `${s.turns * 360}°↺`;
+        if (s.kind === 'spinR') return `${s.turns * 360}°↻`;
+        const name = s.kind === 'back' ? 'BACKFLIP' : 'FRONTFLIP';
+        return s.turns > 1 ? `${s.turns}× ${name}` : name;
+      });
       const big = e.spins >= 2 || e.flips >= 2;
       // Repeating your last trick demotes the praise: the judges are bored.
       const word = e.repeat

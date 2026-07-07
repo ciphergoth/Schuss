@@ -507,6 +507,11 @@ describe('boost economy', () => {
     expect(sim.skier.tumbling).toBe(0);
     expect(trick && trick.type === 'trick' && trick.spins).toBe(2);
     expect(trick && trick.type === 'trick' && trick.variety).toBe(true);
+    // The two directions land as two ordered segments (spun +/right first).
+    expect(trick && trick.type === 'trick' && trick.segments).toEqual([
+      { kind: 'spinR', turns: 1 },
+      { kind: 'spinL', turns: 1 },
+    ]);
     // Two spins (1000) x variety 1.35 = 1350 — the signed accumulator used to
     // cancel these to a flat zero.
     expect(sim.score).toBe(1350);

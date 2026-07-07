@@ -50,7 +50,7 @@ describe('effects', () => {
         type: 'trick',
         spins: 1,
         flips: 0,
-        flipBack: false,
+        segments: [{ kind: 'spinR', turns: 1 }],
         parallel: false,
         variety: false,
         mult: 5,

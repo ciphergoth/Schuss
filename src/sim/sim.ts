@@ -26,7 +26,9 @@ export type SimEvent =
       type: 'trick';
       spins: number; // total spin turns (both directions)
       flips: number; // total flip turns (front + back)
-      flipBack: boolean; // the dominant flip direction, for the banner name
+      // The scored tricks in the order they were done, for the banner to spell
+      // out (so L360-then-R360 reads as two tricks, not a squashed 720).
+      segments: { kind: 'spinL' | 'spinR' | 'front' | 'back'; turns: number }[];
       parallel: boolean; // spin+flip at once (sub-additive combo)
       variety: boolean; // >=2 different tricks in sequence (the complexity bonus)
       mult: number;
@@ -249,11 +251,30 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
         sim.lastTrick = signature;
         points = Math.round(points * sim.trickMult);
         sim.score += points;
+        // Decode the scored sequence, in order, for the banner. Only segments
+        // on a clean axis count (a bailed axis scored 0).
+        const segments: { kind: 'spinL' | 'spinR' | 'front' | 'back'; turns: number }[] = [];
+        for (const m of seq.matchAll(/([LRFB])(\d+)/g)) {
+          const letter = m[1];
+          if ((letter === 'L' || letter === 'R') && !spinClean) continue;
+          if ((letter === 'F' || letter === 'B') && !flipClean) continue;
+          segments.push({
+            kind:
+              letter === 'L'
+                ? 'spinL'
+                : letter === 'R'
+                  ? 'spinR'
+                  : letter === 'F'
+                    ? 'front'
+                    : 'back',
+            turns: Number(m[2]),
+          });
+        }
         events.push({
           type: 'trick',
           spins: spinTurns,
           flips: frontTurns + backTurns,
-          flipBack: backTurns >= frontTurns,
+          segments,
           parallel,
           variety,
           mult: sim.trickMult,
