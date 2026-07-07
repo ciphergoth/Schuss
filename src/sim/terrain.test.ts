@@ -242,6 +242,10 @@ describe('terrain', () => {
     for (let i = 3; i < 400 && !found; i++) {
       const jump = t.jumpForChunk(i);
       if (!jump || jump.stepDown === 0) continue;
+      // Measure on calm floor: a plunge already breaks the grade away, so its
+      // scoop reads shallow against a floor that's itself dropping (the plunge
+      // supplies the float for free), and banking tilts the lateral profile.
+      if (t.sectionType(Math.floor(-jump.zLip / SECTION_LENGTH)) === 'plunge') continue;
       const curv =
         (t.centerX(jump.zLip - 4) - 2 * t.centerX(jump.zLip) + t.centerX(jump.zLip + 4)) / 16;
       if (Math.abs(curv) > 0.01) continue; // keep banking out of the measurement

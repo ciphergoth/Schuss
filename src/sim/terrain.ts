@@ -236,6 +236,19 @@ export interface Jump {
 
 const JUMP_EDGE = 1.8; // soft shoulder from full height to flat floor
 const SCOOP_EDGE = 5; // step-down landings get wide, gentle shoulders
+// The max-gap guarantee: never ski more than this many chunks (~160m, ~8s at
+// cruise pace) with NOTHING happening — no kicker, no bend to ride, no
+// staircase. When the natural per-chunk rolls leave a longer dead stretch, a
+// kicker is planted to fill it. A moving corridor is never boring; a straight
+// empty one is, so this is the floor under every section, narrows included.
+const MAX_FEATURE_GAP = 4;
+// |centerline curvature| (1/m) that reads as a bend you actually carve — a
+// feature in its own right, so an active turn resets the gap the way a kicker
+// does (per design: a bend counts). Set in the clean gap between the sweeper's
+// deliberate S-turns (~0.054) and every other section's lazy noise wander
+// (≤0.008): only a real carve exempts a stretch from the jump guarantee, so
+// gentle drift elsewhere still gets kickers rather than passing for a feature.
+const BEND_CURV = 0.02;
 // The carved landing floor always descends at least this steeply — with
 // the mogul texture's worst counter-slope (~0.04) subtracted it still
 // clears twice snow friction, so a skier who lands dead in the carve
@@ -304,6 +317,7 @@ export class Terrain {
   private chunkPickups = new Map<number, Pickup[]>();
   private chunkBonuses = new Map<number, TrickBonus[]>();
   private chunkJumps = new Map<number, Jump | null>();
+  private chunkSinceFeat = new Map<number, number>();
   private sectionTypes = new Map<number, SectionType>();
   private sectionDrops = new Map<number, number>();
 
@@ -509,17 +523,62 @@ export class Terrain {
     return hash2(this.seed, index, 31337) < chance;
   }
 
+  // Does this chunk actively bend? A real turn is a feature you steer through,
+  // so it resets the no-feature gap the same as a kicker (design: bends count).
+  private bendsAt(index: number): boolean {
+    const z = -index * CHUNK_LENGTH - CHUNK_LENGTH / 2;
+    const h = 12;
+    const curv = (this.centerX(z - h) - 2 * this.centerX(z) + this.centerX(z + h)) / (h * h);
+    return Math.abs(curv) > BEND_CURV;
+  }
+
+  // What the max-gap guarantee counts as "something happening": a kicker
+  // launches you, a bend turns you, a staircase (terraced section) is all
+  // launchable edges. Any of these keeps a stretch from going dead.
+  private featureAt(index: number): boolean {
+    if (this.jumpForChunk(index) !== null) return true;
+    if (this.bendsAt(index)) return true;
+    const zLip = -index * CHUNK_LENGTH - 24;
+    return SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].terraced;
+  }
+
+  // Chunks since the last feature, walking backward. Memoized; the recursion
+  // is strictly decreasing and bottoms out at the gate.
+  private chunksSinceFeature(index: number): number {
+    if (index < 3) return MAX_FEATURE_GAP; // seed the guarantee at the start
+    const cached = this.chunkSinceFeat.get(index);
+    if (cached !== undefined) return cached;
+    const v = this.featureAt(index) ? 0 : this.chunksSinceFeature(index - 1) + 1;
+    this.chunkSinceFeat.set(index, v);
+    return v;
+  }
+
   jumpForChunk(index: number): Jump | null {
     const cached = this.chunkJumps.get(index);
     if (cached !== undefined) return cached;
+    const zLip = -index * CHUNK_LENGTH - 24;
     // No consecutive jump chunks: a fast flight covers up to ~40m, so
     // back-to-back kickers could be overflown entirely — the plan never
-    // schedules a feature you can accidentally skip.
-    if (!this.rollsJump(index) || this.rollsJump(index - 1)) {
+    // schedules a feature you can accidentally skip. Checked against the
+    // PLACED neighbour, so a forced kicker blocks adjacency too.
+    const clearBehind = index < 1 || this.jumpForChunk(index - 1) === null;
+    const natural = this.rollsJump(index) && clearBehind;
+    // The max-gap guarantee: when nothing has happened for MAX_FEATURE_GAP
+    // chunks — no kicker, no bend, no staircase — plant a kicker to fill the
+    // dead stretch. Never on a bend (already a feature), in the outrun, on a
+    // staircase, or against another kicker.
+    const forced =
+      !natural &&
+      clearBehind &&
+      index >= 3 &&
+      !this.pastFinish(zLip) &&
+      !this.bendsAt(index) &&
+      !SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].terraced &&
+      this.chunksSinceFeature(index - 1) + 1 >= MAX_FEATURE_GAP;
+    if (!natural && !forced) {
       this.chunkJumps.set(index, null);
       return null;
     }
-    const zLip = -index * CHUNK_LENGTH - 24;
     const section = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))];
     const halfChannel = this.channelHalfWidth(zLip);
     // The opening section deals only the classic flat M: the first kicker a
