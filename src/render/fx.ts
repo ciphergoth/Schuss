@@ -577,7 +577,8 @@ export class Effects {
     }
 
     if (grounded && s.speed > 4) this.trail.push(s.x, s.y, s.z, s.heading);
-    this.trail.rebuild(sim.boosting ? 1 : 0, sim.time, sim.trickMult);
+    // An armed contract dyes the trail in its star's color until it settles.
+    this.trail.rebuild(sim.boosting ? 1 : 0, sim.time, sim.contract?.mult ?? 1);
     this.particles.update(dt);
     this.sparks.update(dt);
     this.pyro.update(dt);

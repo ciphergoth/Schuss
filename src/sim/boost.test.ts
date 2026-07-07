@@ -76,7 +76,7 @@ describe('boost economy', () => {
     expect(sim.score).toBe(50 * sim.collected.size); // coins pay pocket change
   });
 
-  it('a bonus star multiplies the next trick POINTS; fuel stays flat', () => {
+  it('a star grab deals its contract at touchdown; the grab flight pays base', () => {
     const sim = createSim(1);
     // A kicker whose landing zone is obstacle-free: the flight coasts ~25m.
     let index = 3;
@@ -105,11 +105,15 @@ describe('boost economy', () => {
     }
     while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
     expect(events.some((e) => e.type === 'bonus' && e.mult === 5)).toBe(true);
+    // The trick done WHILE grabbing pays plain base: the star's value is
+    // deferred — its contract is revealed at touchdown, for the NEXT trick.
     const trick = events.find((e) => e.type === 'trick');
-    expect(trick && trick.type === 'trick' && trick.mult).toBe(5);
-    expect(sim.score).toBe(2500); // 500 for the 360, x5 — the jackpot ledger
-    expect(sim.boost).toBeCloseTo(0.15, 5); // fuel is NOT multiplied
-    expect(sim.trickMult).toBe(1); // spent by the trick it multiplied
+    expect(trick && trick.type === 'trick' && trick.mult).toBe(1);
+    expect(sim.score).toBe(500);
+    expect(sim.boost).toBeCloseTo(0.15, 5); // fuel is never multiplied
+    expect(events.some((e) => e.type === 'contract' && e.mult === 5)).toBe(true);
+    expect(sim.contract).toEqual({ mult: 5, demand: star.demand });
+    expect(sim.pendingContract).toBeNull();
   });
 
   it('the x5 star hangs further out than the x3, both well off the snow', () => {
@@ -300,7 +304,7 @@ describe('boost economy', () => {
 
   it('a half-spin bail lands safe but pays nothing (no round-up to 360)', () => {
     const sim = createSim(1);
-    sim.trickMult = 3;
+    sim.contract = { mult: 3, demand: 'spinR' };
     launch(sim);
     // Rotate to ~190 degrees — under commit, but Math.round would have
     // called it a full turn and paid it before the facing gate.
@@ -313,7 +317,8 @@ describe('boost economy', () => {
     expect(events.some((e) => e.type === 'trick')).toBe(false);
     expect(sim.score).toBe(0);
     expect(sim.boost).toBe(0);
-    expect(sim.trickMult).toBe(3); // nothing settled; the star keeps waiting
+    // A bail is not an attempt: the contract keeps waiting.
+    expect(sim.contract).toEqual({ mult: 3, demand: 'spinR' });
   });
 
   it('a small spin under the commit threshold always lands clean', () => {
@@ -394,43 +399,98 @@ describe('boost economy', () => {
     expect(back.points).toBe(1100);
   });
 
-  it('an armed star survives trickless landings and waits for the trick', () => {
+  it('an armed contract survives trickless landings; delivering the demand pays it', () => {
     const sim = createSim(1);
-    sim.trickMult = 5;
+    sim.contract = { mult: 5, demand: 'spinR' };
     launch(sim);
     while (sim.skier.airTime > 0) stepSim(sim, COAST); // land, no trick
     expect(sim.skier.tumbling).toBe(0);
-    expect(sim.trickMult).toBe(5); // no attempt, no spend
-    // The next flight's 360 collects the full x5.
+    expect(sim.contract).not.toBeNull(); // no attempt, no settle
+    // The next flight's right-hand 360 IS the demand: the x5 pays.
     launch(sim);
+    const events: SimEvent[] = [];
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
+    }
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick && trick.type === 'trick' && trick.contract).toBe('paid');
+    expect(sim.score).toBe(2500);
+    expect(sim.contract).toBeNull();
+  });
+
+  it('a trick that misses the demand pays base and the contract dies', () => {
+    const sim = createSim(1);
+    sim.contract = { mult: 5, demand: 'back' }; // asks for a backflip...
+    launch(sim);
+    const events: SimEvent[] = [];
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 })); // ...gets a spin
+    }
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick && trick.type === 'trick' && trick.contract).toBe('missed');
+    expect(trick && trick.type === 'trick' && trick.mult).toBe(1);
+    expect(sim.score).toBe(500); // the trick gets its due; the star pays nothing
+    expect(sim.contract).toBeNull(); // the attempt settled it
+  });
+
+  it('a magenta composition demand pays the jackpot only for the composition', () => {
+    const sim = createSim(1);
+    sim.contract = { mult: 5, demand: 'mix' };
+    // Spin a 360, then backflip, in one tall flight: serial variety.
+    launch(sim, 26, 4);
     while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
       stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 });
     }
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.flip) < 2 * Math.PI - 0.12) {
+      stepSim(sim, { steer: 0, stance: 0, trickFlip: 1 });
+    }
     while (sim.skier.airTime > 0) stepSim(sim, COAST);
-    expect(sim.score).toBe(2500);
-    expect(sim.trickMult).toBe(1);
+    // (500 + 1100) x 1.35 variety = 2160, x5 contract = 10800.
+    expect(sim.score).toBe(10800);
+    expect(sim.contract).toBeNull();
   });
 
-  it('a blown trick spends the star; a plain crash keeps it', () => {
+  it('a blown trick settles the contract; a plain crash keeps it', () => {
     const blown = createSim(1);
-    blown.trickMult = 3;
+    blown.contract = { mult: 3, demand: 'spinR' };
     launch(blown);
     while (blown.skier.airTime > 0 && Math.abs(blown.skier.spin) < 4.2) {
       stepSim(blown, { steer: 0, stance: 0, trickSpin: 1 });
     }
     while (blown.skier.airTime > 0) stepSim(blown, COAST);
     expect(blown.skier.tumbling).toBeGreaterThan(0);
-    expect(blown.trickMult).toBe(1); // the attempt happened; the star is gone
-    // An obstacle hit is not a trick attempt: the star rides out the tumble.
+    expect(blown.contract).toBeNull(); // the attempt happened; the deal is off
+    // An obstacle hit is not a trick attempt: the contract rides out the tumble.
     const crashed = createSim(1);
     let oi = 5;
     while (crashed.terrain.obstaclesForChunk(oi).length === 0) oi++;
     const obstacle = crashed.terrain.obstaclesForChunk(oi)[0]!;
     teleport(crashed, obstacle.x, obstacle.z + 3, 10);
-    crashed.trickMult = 3;
+    crashed.contract = { mult: 3, demand: 'spinR' };
     const events = runCollecting(crashed, 0.5);
     expect(events.some((e) => e.type === 'tumble' && !e.trick)).toBe(true);
-    expect(crashed.trickMult).toBe(3);
+    expect(crashed.contract).toEqual({ mult: 3, demand: 'spinR' });
+  });
+
+  it('a pending contract arms at touchdown even when the landing goes wrong', () => {
+    const sim = createSim(1);
+    // Carrying an armed contract AND grabbing a new star mid-flight, then
+    // blowing the trick: the blown attempt kills the armed one, but the
+    // grabbed star's contract still arms — the arc ride was the feat.
+    sim.contract = { mult: 3, demand: 'front' };
+    sim.pendingContract = { mult: 5, demand: 'mix' };
+    launch(sim);
+    while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 4.2) {
+      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }); // blown: lands sideways
+    }
+    const events: SimEvent[] = [];
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    expect(sim.skier.tumbling).toBeGreaterThan(0);
+    expect(events.some((e) => e.type === 'contract' && e.mult === 5)).toBe(true);
+    expect(sim.contract).toEqual({ mult: 5, demand: 'mix' });
+    expect(sim.pendingContract).toBeNull();
   });
 
   it('repeating your last trick docks the pay; variety restores it', () => {

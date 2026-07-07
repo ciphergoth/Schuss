@@ -201,14 +201,32 @@ export interface Pickup {
 }
 
 // SSX-style trick bonuses: stars on the arc a lip-popped jump flies. x3 takes
-// a decent pop; x5 demands the pop AND real speed. Grabbing one arms a points
-// multiplier that waits for the next trick attempt.
+// a decent pop; x5 demands the pop AND real speed. Grabbing one deals a
+// CONTRACT, revealed at touchdown: the multiplier pays on the NEXT trick,
+// and only if that trick delivers the star's named demand — so the
+// multiplied base is never trivial, and the jackpot is always attached to
+// a real showpiece. Gold asks for one named thing; magenta asks for
+// composition, pricing its bigger multiplier in difficulty.
+export type ContractDemand =
+  | 'spinL' // a clean left-spin segment
+  | 'spinR'
+  | 'front'
+  | 'back'
+  | 'spin2' // 720+ of spin
+  | 'flip2' // two or more flip rotations
+  | 'mix' // serial variety: two+ DIFFERENT tricks in one flight
+  | 'parallel'; // spin AND flip at once
+
+const GOLD_DEMANDS: ContractDemand[] = ['spinL', 'spinR', 'front', 'back', 'spin2'];
+const MAGENTA_DEMANDS: ContractDemand[] = ['mix', 'parallel', 'flip2'];
+
 export interface TrickBonus {
   id: string;
   x: number;
   z: number;
   y: number;
   mult: 3 | 5;
+  demand: ContractDemand;
 }
 
 // Kickers now come in personalities: three sizes, plus an optional step-down
@@ -928,7 +946,7 @@ export class Terrain {
         // Hips pay the x3 for riding the sling; their x5 is withheld until the
         // popped-off-the-curve flight is measured well enough to place it
         // honestly (the flat x5 reference arc is meters off a hip's reality).
-        bonuses.push({ id: `b${index}:3`, mult: 3, ...this.starOnArc(jump, 3) });
+        bonuses.push(this.star(index, jump, 3));
       } else if (jump.kind === 'L' || jump.kind === 'XL') {
         // Big lips deal a VARIED star loadout, so a star means something:
         // usually both, but some gold-only, some magenta-only (a pro gate),
@@ -936,12 +954,12 @@ export class Terrain {
         // points, not a gate.
         const roll = hash2(this.seed, index, 5171);
         if (roll >= 0.15 && roll < 0.5) {
-          bonuses.push({ id: `b${index}:3`, mult: 3, ...this.starOnArc(jump, 3) });
+          bonuses.push(this.star(index, jump, 3));
         } else if (roll >= 0.5) {
-          bonuses.push({ id: `b${index}:3`, mult: 3, ...this.starOnArc(jump, 3) });
-          bonuses.push({ id: `b${index}:5`, mult: 5, ...this.starOnArc(jump, 5) });
+          bonuses.push(this.star(index, jump, 3));
+          bonuses.push(this.star(index, jump, 5));
         } else if (roll >= 0.05) {
-          bonuses.push({ id: `b${index}:5`, mult: 5, ...this.starOnArc(jump, 5) });
+          bonuses.push(this.star(index, jump, 5));
         }
         // roll < 0.05: no star — a pure-air jump.
       } else {
@@ -951,12 +969,21 @@ export class Terrain {
         // They carry the gold x3 (which the human arc threads) most of the
         // time; a few are pure-air jumps taken for the trick points alone.
         if (hash2(this.seed, index, 5171) >= 0.1) {
-          bonuses.push({ id: `b${index}:3`, mult: 3, ...this.starOnArc(jump, 3) });
+          bonuses.push(this.star(index, jump, 3));
         }
       }
     }
     this.chunkBonuses.set(index, bonuses);
     return bonuses;
+  }
+
+  // A star and its contract. The demand is drawn from the tier's pool on an
+  // independent hash (salted by mult so a chunk's gold and magenta differ),
+  // so adding demands didn't reshuffle any existing course.
+  private star(index: number, jump: Jump, mult: 3 | 5): TrickBonus {
+    const pool = mult === 3 ? GOLD_DEMANDS : MAGENTA_DEMANDS;
+    const demand = pool[Math.floor(hash2(this.seed, index, 6011 + mult) * pool.length)]!;
+    return { id: `b${index}:${mult}`, mult, demand, ...this.starOnArc(jump, mult) };
   }
 
   // Integrate the reference flight off this kicker's lip and return the

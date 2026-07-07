@@ -18,10 +18,21 @@ on both ends) is the mechanical loop: it fills only from deliberate rewards
 speeds) — and burning it is the speed. The SCORE (top right, big digits,
 uncapped; localStorage BEST beneath) is the ledger of glory: tricks pay
 points (500 spin / 800 frontflip / 1100 backflip per rotation), BONUS STARS
-multiply the next trick's POINTS (never fuel; armed until a trick attempt
-settles — spent by the landed trick it multiplied or by a blown-trick
-tumble, kept through plain landings and crashes; a HUD ×N glows in the
-star's color while armed), and at every SECTION BOUNDARY (400m) a SECTOR popup grades average pace on a savage curve
+deal CONTRACTS: grabbing one (even on a trickless arc ride) is the feat,
+and at TOUCHDOWN the deal is revealed — the ×3/×5 pays on the NEXT trick,
+only if it delivers the star's seeded demand (gold names one thing:
+spin-left/right, front, back, 720 spin; magenta demands composition: mix,
+parallel, double flip — the bigger multiplier priced in difficulty), so
+the jackpot is always attached to a real showpiece and a lazy 360 through
+a star pays nothing extra (the old always-multiply star made
+star + trivial trick outearn every starless masterpiece). Never fuel. The
+trick done WHILE grabbing pays base; the armed contract settles on the
+next attempt — paid by the matching trick, killed by a mismatch (banner
+notes ★ MISSED, trick still pays base) or a blown-trick tumble, kept
+through plain landings, bails, and crashes; a newer grab replaces it; a
+HUD "×N DEMAND" line glows in the star's color while armed (sim.contract;
+demandMet in sim.ts is the judge, demand pools + seeding live in
+terrain.ts). At every SECTION BOUNDARY (400m) a SECTOR popup grades average pace on a savage curve
 (25·(avg−12)^2.2 — a full-boost sector outearns several tricks; SECTOR_LENGTH
 = SECTION_LENGTH, so the graded line, the section change, and the glowing arc
 all coincide), so fuel

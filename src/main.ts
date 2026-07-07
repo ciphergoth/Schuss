@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
-import { SECTION_LENGTH } from './sim/terrain';
+import { ContractDemand, SECTION_LENGTH } from './sim/terrain';
 import { SkierInput } from './sim/skier';
 import { setupInput } from './input';
 import { FAR_HOLD_S, THUMB_ZONE, tiltZone } from './tilt';
@@ -25,6 +25,19 @@ declare global {
     };
   }
 }
+
+// What each contract demand asks for, in banner language. Spins carry the
+// same rotation arrows the trick banner uses, so left and right read apart.
+const DEMAND_LABEL: Record<ContractDemand, string> = {
+  spinL: 'SPIN ↺',
+  spinR: 'SPIN ↻',
+  front: 'FRONTFLIP',
+  back: 'BACKFLIP',
+  spin2: '720 SPIN',
+  flip2: 'DOUBLE FLIP',
+  mix: 'MIX TRICKS',
+  parallel: 'SPIN + FLIP AT ONCE',
+};
 
 // ?seed=N picks the starting course; finishing advances to seed+1, so
 // course numbers are shareable ("try course 7").
@@ -385,6 +398,14 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     else if (e.type === 'bonus') {
       audio.playBonus(e.mult);
       showTrick(`×${e.mult}!`, e.mult >= 5 ? '#ff3ddc' : '#ffd34d', 0.9);
+    } else if (e.type === 'contract') {
+      // The grabbed star's deal, revealed at touchdown: what the next trick
+      // must be for the multiplier to pay.
+      showTrick(
+        `NEXT TRICK: ${DEMAND_LABEL[e.demand]} — ×${e.mult}`,
+        e.mult >= 5 ? '#ff3ddc' : '#ffd34d',
+        1.6
+      );
     } else if (e.type === 'trick') {
       // Praise ladder: VARIETY (>=2 different tricks in sequence, the big
       // scorer) is INCREDIBLE, a PARALLEL combo (spin & flip at once) is a
@@ -415,10 +436,13 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
               ? 'OUTSTANDING!'
               : 'NICE!';
       const mult = e.mult > 1 ? ` ×${e.mult}` : '';
+      // A missed contract dies quietly in gray — the trick still gets its
+      // due, the star just didn't pay.
+      const missed = e.contract === 'missed' ? ' · ★ MISSED' : '';
       const color =
         e.mult >= 5 ? '#ff3ddc' : e.mult >= 3 ? '#ffd34d' : e.repeat ? '#b9c4d6' : '#7dff8a';
       showTrick(
-        `${parts.join(' + ')}${mult} — ${word} +${e.points.toLocaleString('en')}`,
+        `${parts.join(' + ')}${mult} — ${word} +${e.points.toLocaleString('en')}${missed}`,
         color,
         1.4
       );
@@ -495,11 +519,12 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     localStorage.setItem(bestKey(), String(best));
   }
   bestText.textContent = best > 0 ? `BEST ${best.toLocaleString('en')}` : '';
-  // The armed star glows under the score in its own color until touchdown.
-  multText.classList.toggle('visible', sim.trickMult > 1);
-  if (sim.trickMult > 1) {
-    multText.textContent = `×${sim.trickMult}`;
-    multText.style.color = sim.trickMult >= 5 ? '#ff3ddc' : '#ffd34d';
+  // The armed contract glows under the score in its star's color until it
+  // settles: the multiplier AND what the next trick has to be to earn it.
+  multText.classList.toggle('visible', sim.contract !== null);
+  if (sim.contract) {
+    multText.textContent = `×${sim.contract.mult} ${DEMAND_LABEL[sim.contract.demand]}`;
+    multText.style.color = sim.contract.mult >= 5 ? '#ff3ddc' : '#ffd34d';
   }
   boostFill.style.height = `${sim.boost * 100}%`;
   boostFill.style.background = sim.boosting

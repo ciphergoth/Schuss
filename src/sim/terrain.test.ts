@@ -442,6 +442,25 @@ describe('terrain', () => {
     expect(loadouts.size).toBeGreaterThan(2);
   });
 
+  it('star contracts draw seeded demands from their tier pools', () => {
+    const gold = ['spinL', 'spinR', 'front', 'back', 'spin2'];
+    const magenta = ['mix', 'parallel', 'flip2'];
+    const a = new Terrain(7);
+    const b = new Terrain(7);
+    const seen = new Set<string>();
+    for (let index = 1; index < 120; index++) {
+      for (const star of a.bonusesForChunk(index)) {
+        // Gold asks for one named thing; magenta asks for composition —
+        // the bigger multiplier is priced in difficulty.
+        expect(star.mult === 3 ? gold : magenta).toContain(star.demand);
+        seen.add(star.demand);
+      }
+      expect(a.bonusesForChunk(index)).toEqual(b.bonusesForChunk(index)); // pure
+    }
+    // The demands vary across the mountain — contracts are not one note.
+    expect(seen.size).toBeGreaterThan(3);
+  });
+
   it('gradient matches height differences', () => {
     const t = new Terrain(11);
     const [gx, gz] = t.gradient(5, -73);

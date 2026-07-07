@@ -40,8 +40,8 @@ describe('effects', () => {
   it('orbit sparkles are a score afterglow, not an armed-star status light', () => {
     const fx = new Effects(new THREE.Scene());
     const sim = createSim(1);
-    // An armed star alone spawns nothing — quiet screen while nothing happens.
-    sim.trickMult = 5;
+    // An armed contract alone spawns nothing — quiet screen while nothing happens.
+    sim.contract = { mult: 5, demand: 'mix' };
     fx.update(sim, { steer: 0, stance: 0 }, 1 / 60, []);
     expect(fx.sparks.liveCount()).toBe(0);
     // A landed trick earns the orbit for a couple of seconds.

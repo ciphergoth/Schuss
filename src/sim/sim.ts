@@ -1,4 +1,4 @@
-import { SECTION_LENGTH, Terrain } from './terrain';
+import { ContractDemand, SECTION_LENGTH, Terrain } from './terrain';
 import {
   FLIP_COMMIT,
   FLIP_TOLERANCE,
@@ -16,12 +16,21 @@ import {
 // given seed plus a given input sequence always produces the same run.
 export const SIM_DT = 1 / 120;
 
+// A star's deal: the multiplier pays on the next trick, if it delivers the
+// demand. Grabbing the star (even on a trickless arc ride) is what earns it;
+// touchdown is when it's revealed.
+export interface Contract {
+  mult: 3 | 5;
+  demand: ContractDemand;
+}
+
 // Things worth celebrating (or commiserating), for the fx and audio layers.
 export type SimEvent =
   | { type: 'nearMiss'; x: number; z: number }
   | { type: 'landing'; airTime: number }
   | { type: 'pickup'; x: number; z: number }
   | { type: 'bonus'; x: number; z: number; mult: number } // trick-bonus star grabbed
+  | { type: 'contract'; mult: number; demand: ContractDemand } // revealed at touchdown
   | {
       type: 'trick';
       spins: number; // total spin turns (both directions)
@@ -31,9 +40,10 @@ export type SimEvent =
       segments: { kind: 'spinL' | 'spinR' | 'front' | 'back'; turns: number }[];
       parallel: boolean; // spin+flip at once (sub-additive combo)
       variety: boolean; // >=2 different tricks in sequence (the complexity bonus)
-      mult: number;
+      mult: number; // the contract's multiplier if this trick paid it, else 1
       points: number;
       repeat: boolean; // exact same segment sequence as the last: docked pay
+      contract?: 'paid' | 'missed'; // how this attempt settled an armed contract
     }
   | { type: 'sector'; speed: number; points: number } // 250m pace grade
   | { type: 'finish'; time: number; score: number } // crossed the line
@@ -48,7 +58,13 @@ export interface Sim {
   charge: number; // jump charge, 0..1 of the bar; the sim owns it (sim-time,
   // deterministic). 0..CHARGE_HUMAN fills freely; the superhuman half only
   // fills while there is fuel burning. Released as vy = 5.4 * sqrt(charge).
-  trickMult: number; // armed by a bonus star; multiplies the next trick's POINTS
+  // The star economy is a contract chain: a grabbed star's contract is
+  // PENDING until touchdown (it never multiplies the flight it was grabbed
+  // on), then ARMED for the next trick attempt — which pays the multiplier
+  // only by delivering the demand. Settling either way clears it; plain
+  // landings and crashes keep it waiting; a newer grab replaces it.
+  contract: Contract | null; // armed: judges the next trick attempt
+  pendingContract: Contract | null; // grabbed mid-flight, revealed at touchdown
   lastTrick: string | null; // signature of the last landed trick (repeat check)
   finishedAt: number | null; // sim time the line was crossed; score locks there
   score: number; // the ledger of glory: trick points + sector pace, uncapped
@@ -60,10 +76,12 @@ export interface Sim {
 
 // The economy has two ledgers doing different jobs. The BOOST TANK is the
 // mechanical loop: coins and tricks fill it (flat, capped), burning it is
-// speed. The SCORE is the uncapped ledger of glory: tricks pay big points
-// (multiplied by bonus stars — that's where the x5 jackpot lives), and every
-// 250m sector grades your pace SAVAGELY, so fuel burned into a fast sector
-// converts to points. Tricks -> fuel -> speed -> points: one economy.
+// speed. The SCORE is the uncapped ledger of glory: tricks pay big points,
+// bonus stars deal CONTRACTS (the x3/x5 pays on the NEXT trick, only if it
+// delivers the star's named demand — the jackpot is always attached to a
+// real showpiece, never a lazy 360), and every sector grades your pace
+// SAVAGELY, so fuel burned into a fast sector converts to points.
+// Tricks -> fuel -> speed -> points: one economy.
 const BOOST_COIN = 0.035;
 const POINTS_COIN = 50;
 const POINTS_PER_SPIN = 500;
@@ -104,6 +122,40 @@ export function parallelCombine(a: number, b: number): number {
   if (a === 0 || b === 0) return a + b;
   return Math.max(a, b) + PARALLEL_SECOND * Math.min(a, b);
 }
+
+// Does a settled flight deliver a contract's demand? Judged on the same
+// clean-axis facts the payout uses — a bailed axis satisfies nothing.
+export function demandMet(
+  demand: ContractDemand,
+  flight: {
+    seq: string; // banked segment tokens, e.g. "R1B2" (letter + whole turns)
+    spinClean: boolean;
+    flipClean: boolean;
+    spinTurns: number;
+    flipTurns: number;
+    variety: boolean;
+    parallel: boolean;
+  }
+): boolean {
+  switch (demand) {
+    case 'spinL':
+      return flight.spinClean && /L[1-9]/.test(flight.seq);
+    case 'spinR':
+      return flight.spinClean && /R[1-9]/.test(flight.seq);
+    case 'front':
+      return flight.flipClean && /F[1-9]/.test(flight.seq);
+    case 'back':
+      return flight.flipClean && /B[1-9]/.test(flight.seq);
+    case 'spin2':
+      return flight.spinTurns >= 2;
+    case 'flip2':
+      return flight.flipTurns >= 2;
+    case 'mix':
+      return flight.variety;
+    case 'parallel':
+      return flight.parallel;
+  }
+}
 const BOOST_DRAIN = 0.15; // per second while burning
 // The jump bar: 6 seconds of hold to a full superhuman charge, with the
 // strongest HUMAN jump at the halfway marker (3s). Energy is linear in hold
@@ -131,7 +183,8 @@ export function createSim(seed: number): Sim {
     boost: 0,
     boosting: false,
     charge: 0,
-    trickMult: 1,
+    contract: null,
+    pendingContract: null,
     lastTrick: null,
     finishedAt: null,
     score: 0,
@@ -180,7 +233,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   if (s.tumbling > 0 && !wasTumbling) {
     // Rotation still on the clock at the moment of tumbling = a blown trick.
     const trick = Math.abs(s.spin) > TRICK_COMMIT || Math.abs(s.flip) > FLIP_COMMIT;
-    if (trick) sim.trickMult = 1; // a blown attempt still spends the star
+    if (trick) sim.contract = null; // a blown attempt still settles the contract
     events.push({ type: 'tumble', trick });
   }
 
@@ -242,14 +295,38 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
         }
         // Fuel is flat and capped — the mechanical loop, never docked.
         earnBoost(sim, Math.min(BOOST_TRICK_CAP, fuel));
-        // Points are uncapped and star-multiplied. Repeating the EXACT same
-        // flight (segment sequence + parallel-ness) as last time docks the
-        // base pay before the star multiplies it.
+        // Points are uncapped. Repeating the EXACT same flight (segment
+        // sequence + parallel-ness) as last time docks the base pay before
+        // any contract multiplies it.
         const signature = seq + (parallel ? '|P' : '');
         const repeat = sim.lastTrick === signature;
         if (repeat) points *= REPEAT_FACTOR;
         sim.lastTrick = signature;
-        points = Math.round(points * sim.trickMult);
+        // The armed contract settles on this attempt either way: deliver
+        // the demand and the multiplier pays; anything else and it's gone.
+        let mult = 1;
+        let contractResult: 'paid' | 'missed' | undefined;
+        if (sim.contract) {
+          const flipTurns = frontTurns + backTurns;
+          if (
+            demandMet(sim.contract.demand, {
+              seq,
+              spinClean,
+              flipClean,
+              spinTurns,
+              flipTurns,
+              variety,
+              parallel,
+            })
+          ) {
+            mult = sim.contract.mult;
+            contractResult = 'paid';
+          } else {
+            contractResult = 'missed';
+          }
+          sim.contract = null;
+        }
+        points = Math.round(points * mult);
         sim.score += points;
         // Decode the scored sequence, in order, for the banner. Only segments
         // on a clean axis count (a bailed axis scored 0).
@@ -277,13 +354,11 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
           segments,
           parallel,
           variety,
-          mult: sim.trickMult,
+          mult,
           points,
           repeat,
+          contract: contractResult,
         });
-        // The star is spent by the attempt it multiplied. It survives plain
-        // landings and crashes, staying armed until a trick settles.
-        sim.trickMult = 1;
       }
     }
     s.spin = 0;
@@ -295,6 +370,16 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     s.backTurns = 0;
     s.sequence = '';
     s.parallel = false;
+
+    // Touchdown reveals the grabbed star's contract — for the NEXT trick.
+    // It arms after this flight's attempt settled (a trick done while
+    // grabbing pays base), and even a crashed landing deals it: the arc
+    // ride was the feat.
+    if (sim.pendingContract) {
+      sim.contract = sim.pendingContract;
+      sim.pendingContract = null;
+      events.push({ type: 'contract', mult: sim.contract.mult, demand: sim.contract.demand });
+    }
   }
 
   const grounded = s.airTime === 0 && s.tumbling === 0;
@@ -324,7 +409,10 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
       }
     }
 
-    // Bonus stars high over the kickers: grabbing one arms the multiplier.
+    // Bonus stars high over the kickers: grabbing one deals its contract.
+    // Mid-flight it stays pending until touchdown; a star met on the snow
+    // (landing-aware placement can hang them low) arms on the spot. A newer
+    // grab replaces whatever was held — you flew through it on purpose.
     for (const star of sim.terrain.bonusesNear(s.z)) {
       if (sim.collected.has(star.id)) continue;
       const dx = star.x - s.x;
@@ -332,7 +420,13 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
       const dy = star.y - (s.y + 1.0);
       if (dx * dx + dz * dz < BONUS_RADIUS * BONUS_RADIUS && Math.abs(dy) < BONUS_RADIUS) {
         sim.collected.add(star.id);
-        sim.trickMult = Math.max(sim.trickMult, star.mult);
+        const contract: Contract = { mult: star.mult, demand: star.demand };
+        if (s.airTime > 0) {
+          sim.pendingContract = contract;
+        } else {
+          sim.contract = contract;
+          events.push({ type: 'contract', mult: contract.mult, demand: contract.demand });
+        }
         events.push({ type: 'bonus', x: star.x, z: star.z, mult: star.mult });
       }
     }
