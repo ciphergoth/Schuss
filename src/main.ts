@@ -145,12 +145,13 @@ function showCount(text: string, go: boolean): void {
   countdownEl.style.animation = 'cd-pop 0.55s ease-out';
 }
 
-// The mute button mirrors the M key — the only way to mute on a phone, which
-// has no keyboard. The label tracks state; refresh it whenever the pause
-// screen opens so an M-key toggle mid-run is reflected next time it's shown.
-const muteLabel = document.getElementById('mutelabel')!;
-function updateMuteLabel(): void {
-  muteLabel.textContent = audio.muted ? 'Unmute' : 'Mute';
+// The sound switch mirrors the M key — the only way to mute on a phone, which
+// has no keyboard. It's a proper on/off toggle: checked = sound ON (not
+// muted). Refresh it whenever the pause screen opens so an M-key toggle
+// mid-run is reflected next time it's shown.
+const muteBtn = document.getElementById('mutebtn')!;
+function updateMuteToggle(): void {
+  muteBtn.setAttribute('aria-checked', audio.muted ? 'false' : 'true');
 }
 
 function setPaused(next: boolean): void {
@@ -168,7 +169,7 @@ function setPaused(next: boolean): void {
   paused = next;
   if (paused) {
     audio.setTiltWarning(0);
-    updateMuteLabel();
+    updateMuteToggle();
   }
   pauseScreen.classList.toggle('visible', paused && !selecting);
   audio.setPaused(paused);
@@ -253,6 +254,13 @@ window.addEventListener('keydown', (e) => {
 });
 
 const audio = new GameAudio();
+
+// The M key mutes via GameAudio's own listener (registered in its constructor,
+// so it runs after the handler above and has already flipped state by now).
+// When the pause screen is open, reflect that on the sound switch live.
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyM' && paused) updateMuteToggle();
+});
 
 // The game opens paused: the key guide doubles as the title screen, and the
 // run doesn't start rolling until the player is actually looking.
@@ -370,9 +378,9 @@ document.getElementById('choosecourse')!.addEventListener('click', () => {
   tryFullscreen(); // the ceremony doesn't re-pause, so ask here directly
   openSelector();
 });
-document.getElementById('mutebtn')!.addEventListener('click', () => {
+muteBtn.addEventListener('click', () => {
   audio.toggleMute();
-  updateMuteLabel();
+  updateMuteToggle();
 });
 
 // In tilt mode the thumbs own the screen edges, so the whole middle band
