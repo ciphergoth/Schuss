@@ -443,6 +443,25 @@
       #tilterror.show {
         display: block;
       }
+      /* Header row: title on the left, the sound switch on the right. */
+      .pausehead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 14px;
+      }
+      .pausehead h1 {
+        margin: 0;
+      }
+      /* Action buttons, now at the top of the panel (above the guide). A plain
+         block wrapper — the exact context the button row has always rendered
+         in — so the .tapbtn pills look identical to before, just relocated.
+         (A flex wrapper here blockifies the buttons' inline-flex to flex,
+         which renders inconsistently on some mobile browsers.) */
+      .actions {
+        margin-bottom: 6px;
+      }
       button.tapbtn {
         font-family: 'Bungee', system-ui, sans-serif;
         font-size: 17px;
@@ -456,6 +475,58 @@
         display: inline-flex;
         align-items: center;
         gap: 9px;
+      }
+      /* The sound toggle is a switch, not a button: a persistent on/off
+         setting reads as a track + knob, plainly a different affordance from
+         the action buttons. Checked (knob right, lit track) = sound ON. */
+      button.switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        background: transparent;
+        border: none;
+        padding: 4px 0;
+        color: rgba(255, 255, 255, 0.85);
+        font-family: 'Bungee', system-ui, sans-serif;
+        font-size: 14px;
+        cursor: pointer;
+        pointer-events: auto;
+        white-space: nowrap;
+      }
+      .switch-text {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .switch-track {
+        position: relative;
+        width: 46px;
+        height: 26px;
+        flex: none;
+        border-radius: 13px;
+        background: rgba(120, 130, 170, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        transition: background 0.15s;
+      }
+      .switch-knob {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #cfd6ff;
+        transition:
+          transform 0.15s ease,
+          background 0.15s;
+      }
+      button.switch[aria-checked='true'] .switch-track {
+        background: rgba(70, 90, 200, 0.85);
+        border-color: rgba(255, 255, 255, 0.4);
+      }
+      button.switch[aria-checked='true'] .switch-knob {
+        transform: translateX(20px);
+        background: #fff;
       }
       /* The keyboard shortcut lives ON the button as a gold keycap — shown on
          desktop, hidden on touch (there is no keyboard there). */
@@ -553,7 +624,24 @@
     <div id="coursecall"></div>
     <div id="pause">
       <div class="panel">
-        <h1 id="pausetitle">Schuss!</h1>
+        <!-- Header: title on the left, the sound switch on the right. The
+             action buttons sit right below, above the guide, so they're
+             reachable without scrolling the (long, scrollable) guide on a
+             phone. Mute is deliberately NOT among them — it's a persistent
+             on/off setting, a different sort of control, so it's a switch. -->
+        <div class="pausehead">
+          <h1 id="pausetitle">Schuss!</h1>
+          <button class="switch" id="mutebtn" role="switch" aria-checked="true">
+            <span class="switch-text">Sound<kbd class="keyonly">M</kbd></span>
+            <span class="switch-track"><span class="switch-knob"></span></span>
+          </button>
+        </div>
+        <div class="actions">
+          <button class="tapbtn" id="resumebtn"><kbd class="keyonly">Esc</kbd>Ski on</button>
+          <button class="tapbtn" id="newcoursebtn">
+            <kbd class="keyonly">S</kbd>Start new course
+          </button>
+        </div>
         <!-- Touch guide: what the screen means, then the two actions. The
              keyboard table below is hidden on touch devices. -->
         <div class="touchonly">
@@ -669,15 +757,6 @@
         </table>
         <div class="hint keyonly">ride the walls, land the tricks, thread the stars</div>
         <div class="hint touchonly">Ride the walls, land the tricks, thread the stars</div>
-        <div>
-          <button class="tapbtn" id="resumebtn"><kbd class="keyonly">Esc</kbd>Ski on</button>
-          <button class="tapbtn" id="newcoursebtn">
-            <kbd class="keyonly">S</kbd>Start new course
-          </button>
-          <button class="tapbtn" id="mutebtn">
-            <kbd class="keyonly">M</kbd><span id="mutelabel">Mute</span>
-          </button>
-        </div>
       </div>
     </div>
     <div id="selector">
