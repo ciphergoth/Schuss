@@ -180,8 +180,9 @@ window.addEventListener('keydown', (e) => {
     else if (e.code === 'KeyN' || e.code === 'Escape') closeConfirm(false);
     return;
   }
-  // On the ceremony panel, Space rolls the next course.
-  if (e.code === 'Space' && finishScreen.classList.contains('visible')) {
+  // On the ceremony panel, N rolls the next course — a dedicated key, so
+  // fumbling the boost button (Space) as you cross the line can't skip ahead.
+  if (e.code === 'KeyN' && finishScreen.classList.contains('visible')) {
     startCourse(currentSeed + 1);
     return;
   }

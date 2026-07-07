@@ -519,10 +519,6 @@
               <td>Score locks at the checkered gate</td>
             </tr>
           </table>
-          <div>
-            <button class="tapbtn" id="resumebtn">Drop in</button>
-            <button class="tapbtn" id="restartbtn">Restart</button>
-          </div>
           <div id="tilterror">
             Couldn&rsquo;t reach the tilt controls &mdash; the motion sensor isn&rsquo;t streaming.
             Tap Drop in to try again; if it keeps failing, reload the page. (On iOS, enable Motion
@@ -565,7 +561,7 @@
           </tr>
           <tr>
             <td>The finish, 3.2 km</td>
-            <td>Score locks at the checkered gate &mdash; Space rolls the next course</td>
+            <td>Score locks at the checkered gate &mdash; N rolls the next course</td>
           </tr>
           <tr>
             <td>R</td>
@@ -580,6 +576,10 @@
           Esc or ? resumes &middot; ride the walls, graze the obstacles, thread the gold
         </div>
         <div class="hint touchonly">Ride the walls, graze the obstacles, thread the gold</div>
+        <div>
+          <button class="tapbtn" id="resumebtn">Drop in</button>
+          <button class="tapbtn" id="restartbtn">Restart</button>
+        </div>
       </div>
     </div>
     <div id="confirm">
@@ -589,8 +589,8 @@
           <b>Y</b> &mdash; restart &nbsp;&middot;&nbsp; <b>N</b> &mdash; keep skiing
         </div>
         <div>
-          <button class="tapbtn touchonly" id="confirmy">Restart</button>
-          <button class="tapbtn touchonly" id="confirmn">Keep skiing</button>
+          <button class="tapbtn" id="confirmy">Restart</button>
+          <button class="tapbtn" id="confirmn">Keep skiing</button>
         </div>
       </div>
     </div>
@@ -600,10 +600,10 @@
         <div id="finishstats"></div>
         <div id="finishbest"></div>
         <div class="keys">
-          <b>Space</b> &mdash; next course &nbsp;&middot;&nbsp; <b>R</b> &mdash; retry
+          <b>N</b> &mdash; next course &nbsp;&middot;&nbsp; <b>R</b> &mdash; retry
         </div>
         <div>
-          <button class="tapbtn touchonly" id="nextcourse">Next course</button>
+          <button class="tapbtn" id="nextcourse">Next course</button>
         </div>
       </div>
     </div>

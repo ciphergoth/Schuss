@@ -3,7 +3,7 @@
 A 3D browser-based skiing game in the spirit of PS2-era SSX Tricky:
 procedurally generated walled COURSES — banked ice channels floating in a
 dusk sky above a city — with obstacles, jumps, and pickup lines. A course
-is 3.2km ending at a checkered finish gate; Space on the ceremony panel
+is 3.2km ending at a checkered finish gate; N on the ceremony panel
 rolls the next course (seed+1, so course numbers are shareable; ?seed=N
 picks the start). Static site, no server.
 
@@ -127,7 +127,8 @@ the line is clean cruise — no kickers, obstacles, coins, or crud patches
 Infinity). Crossing the line locks the score (SimEvent 'finish'; the
 outrun pays nothing), fires the grandest barrage + a victory fanfare, and
 raises the ceremony panel ~1.8s later: score, time, per-course BEST
-(localStorage key skigame-best-<seed>), Space = next course, R = retry.
+(localStorage key skigame-best-<seed>), N = next course (a dedicated key so
+fumbling Space/boost at the line can't skip ahead), R = retry.
 The
 section framework is where moving hazards will plug in.
 The render layer
@@ -260,8 +261,11 @@ friction braking).
   BOTH axes at once (found on-device). Tilt-only runs still set BEST:
   trusted orientation events >3 degrees off neutral mark the run as
   played (a phone flat on a table streams events but never deviates).
-  Panels grow tap buttons on touch devices (body.touch + .touchonly);
-  feel constants live at the top of tilt.ts for on-device tuning.
+  The tap buttons (Drop in / Restart / Keep skiing / Next course) now show
+  on DESKTOP too, not just touch — clickable UI alongside the keyboard
+  shortcuts; only the touch-specific guide (zone map, tilt legend, tilterror)
+  stays .touchonly. feel constants live at the top of tilt.ts for on-device
+  tuning.
 - WASD: trick keys ONLY (in real air: A/D spin, W frontflip, S backflip —
   push forward to flip forward, pull back to flip back).
   There is no keyboard steering — the mouse is required.
