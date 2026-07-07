@@ -1,12 +1,14 @@
 # Schuss!
 
-A 3D browser-based skiing game in the spirit of PS2-era SSX Tricky:
-procedurally generated walled COURSES — banked ice channels floating in a
-dusk sky above a city — with obstacles, jumps, and pickup lines. A course
-is 3.2km ending at a checkered finish gate; a COURSE PICKER (nine named
-archetypes, each bound to its canonical seed — courseCatalog in terrain.ts)
-chooses what to ski (?seed=N still forces an arbitrary start). Static site,
-no server.
+A 3D browser-based skiing game in the spirit of PS2-era SSX Tricky: a
+procedurally generated walled COURSE — a banked ice channel floating in a
+dusk sky above a city — with obstacles, jumps, and pickup lines. There is
+ONE course: the MEGA COURSE, "The Grand Tour" (COURSE_NAME in terrain.ts),
+8km ending at a checkered finish gate — every idea the mountain has packed
+into a single run. (It replaced nine named archetype courses that
+reweighted one shared section deck per seed: nine menu entries, not nine
+ideas.) ?seed=N still forces an arbitrary reshuffle of the deal. Static
+site, no server.
 
 Design rules: punishment is light — obstacle hits cost a brief 0.7s tumble
 and a little speed (you keep 60%), a wobble to recover from and never the
@@ -79,10 +81,11 @@ Racing alone never fills the tank —
 but past the first sector line it does score. Burning
 is hard acceleration with flames, rainbow trail, FOV slam, rumble. The
 spectacle scales with play: the course crosses a new color world every
-600m — and WHICH worlds is the course's own: each seed draws a four-zone
-sequence from an eight-palette library (the classic dusk / neon night /
-rose dawn / emerald plus golden hour / blizzard white / violet storm /
-ice blue; palette.courseZones) and its own WEATHER (courseWeather:
+600m — and it tours the WHOLE eight-palette library in a seeded order
+(the classic dusk / neon night / rose dawn / emerald plus golden hour /
+blizzard white / violet storm / ice blue; palette.courseZones — 8km
+crosses ~13 zones, so every world appears before the cycle wraps) and
+carries its own WEATHER (courseWeather:
 seeded snowfall — clear/flurries/heavy, a deterministic flake box riding
 with the skier — and drifting fog banks that swell on a seeded rhythm in
 z), under a waving aurora that blazes in the night zone; a
@@ -120,22 +123,23 @@ friction AND turn authority in skier.ts — speed nearly free, turns
 arrive late; stickiness is drag-only and can't express faster-than-snow)
 / powder (deep drifts, one groomed ribbon: crudThreshold 0 buries all
 but the clean golden-path corridor; powder is drag, never a trap).
-WHICH sections a course deals is its ARCHETYPE (terrain.ts ARCHETYPES,
-hash of seed): nine named characters — The Classic (the old uniform
-deck), Airfield, Chute, Wall, Garden, Staircase, Pipeline, Glacier,
-Backcountry — that reweight the section deck (never to zero: the MIX
-changes, nothing is banned) and scale kicker chance, kicker-size skew
-(bigAir), obstacle and coin densities. The name is announced over the
-start gate, on the HUD clock line, at the ceremony, and on its card in the
-course picker (name + blurb + a 1-9 pick key). The name is the only identity
-shown — no "COURSE N" number, since the canonical seeds aren't a clean 1-9
-(they run 1,2,3,4,5,6,7,10,12) and would clash with the picker's 1-9 keys.
-Every course also carries ONE SETPIECE
-(terrain.setpiece, seeded mid-run 40-70% in): a WATERFALL (10m dive over
-a 16m face) or the CASCADES (three 5m falls, 30m rhythm) — pure added
-downhill on the spine, so walls/banking/star arcs/drainage inherit it
-for free; its falls are the feature (no kickers or obstacles compete,
-and the max-gap counter treats it as featured). Hips and step-down
+WHICH sections the course deals is the MEGA DEAL (terrain.ts sectionType /
+blockDeal): the mixed middle (sections 1..18) is TWO full decks of all
+nine types, each deck a seeded shuffle — every section personality appears
+EXACTLY TWICE per run, so no idea can crowd out another. A shuffled deck
+of nine distinct cards has no internal repeats by construction; the three
+joints (head against section 0's cruise, the mid-block seam, the slot
+before the finale — never a plunge there) are patched by local same-deck
+swaps, which can't create new repeats. The endless test mountain
+(courseLength Infinity) keeps dealing double-deck blocks forever. The
+course name is announced over the start gate, on the HUD clock line, and
+at the ceremony. The course carries BOTH SETPIECES (terrain.setpieces):
+the WATERFALL (10m dive over a 16m face) and the CASCADES (three 5m
+falls, 30m rhythm), one seeded into each half of the run (25-40% and
+55-70% in, seeded order) — pure added downhill on the spine, so
+walls/banking/star arcs/drainage inherit them for free; the falls are the
+feature (no kickers or obstacles compete, and the max-gap counter treats
+them as featured). Hips and step-down
 scoops never roll on banked-ess ground (sweeper/canyon) — a tilted pad
 or carved scoop there is two banks fighting.
 Sections never repeat back-to-back, blend over their
@@ -166,22 +170,24 @@ stays stopped — rollers, moguls, bank flips (curvature on a ±20m
 stencil, 12m BANK_ARM), carved step-down landings (CARVE_SLOPE), and
 hip tilt releases all fit inside the grade's slope budget; only kicker
 ramp faces are exempt (a lip that launches is necessarily near-flat to
-a crawler — documented ⚠️ in PHYSICS.md). COURSES have an arc (COURSE_LENGTH = 8 sections): section 0 cruise, a
-mixed middle, and a forced plunge FINALE into the gate; the outrun past
-the line is clean cruise — no kickers, obstacles, coins, or crud patches
-(Terrain takes a courseLength param; tests probe an endless mountain with
-Infinity). Crossing the line locks the score (SimEvent 'finish'; the
-outrun pays nothing), fires the grandest barrage + a victory fanfare, and
-raises the ceremony panel ~1.8s later: score, time, per-course BEST
-(localStorage key skigame-best-<seed>), and one action — S / Choose course —
-that opens the course picker (re-pick the same course to retry; there is no
-seed+1 "next" and no separate retry button).
-The
-section framework is where moving hazards will plug in.
-The render layer
-draws the course as a ribbon clipped just past the bounce barrier, so the
-walls stay low and the world beyond shows: neon edge poles, a city skyline
-with beacon-topped towers, hot-air balloons, clouds below.
+a crawler — documented ⚠️ in PHYSICS.md). THE COURSE has an arc (COURSE_LENGTH = 20 sections, 8km — 2.5x the
+old per-course length, within the "no more than 2-3x" budget): section 0
+cruise, the double-deck middle, and a forced plunge FINALE into the gate;
+the outrun past the line is clean cruise — no kickers, obstacles, coins,
+or crud patches (Terrain takes a courseLength param; tests probe an
+endless mountain with Infinity). Crossing the line locks the score
+(SimEvent 'finish'; the outrun pays nothing), fires the grandest barrage
+
+- a victory fanfare, and raises the ceremony panel ~1.8s later: score,
+  time, BEST (localStorage key skigame-best-<seed>), and one action — S /
+  Ski again — that restarts from the gate (with one course there is no
+  picker and no separate retry button; the restart IS the menu).
+  The
+  section framework is where moving hazards will plug in.
+  The render layer
+  draws the course as a ribbon clipped just past the bounce barrier, so the
+  walls stay low and the world beyond shows: neon edge poles, a city skyline
+  with beacon-topped towers, hot-air balloons, clouds below.
 
 ## Tech stack
 
@@ -234,8 +240,8 @@ out of `src/sim/`.
 Debugging: `window.__game` exposes live sim state plus `poll()` (current
 input), `renderFrame(dt)` (force a render while rAF is paused, e.g. hidden
 tab), and `step(seconds)` (advance sim + render while paused). After mutating
-state for verification, leave the game clean (reload, or pause → S → pick a
-course) before handing it back. The
+state for verification, leave the game clean (reload, or pause → S to
+restart) before handing it back. The
 localStorage BEST only persists for runs with real (isTrusted) user input —
 idle self-play and synthetic debug events can never set it. `?debug` adds an
 on-device input readout (timer-driven, so it survives a wedged rAF loop):
@@ -305,9 +311,9 @@ friction braking).
   chips: the touch PAUSE SCREEN is the guide — a tricolor zone map
   (tricks/pause/boost in true proportion) plus a legend of the HUD,
   scrolling like a normal widget (the panel overrides the global
-  touch-action: none with pan-y), with explicit SKI ON and START NEW COURSE
-  buttons (the latter opens the course picker — a grid of named cards, itself
-  a scrolling panel). Panel touches stopPropagation — they are UI, never game
+  touch-action: none with pan-y), with explicit SKI ON and START OVER
+  buttons (the latter restarts from the gate). Panel touches
+  stopPropagation — they are UI, never game
   input. Past ~35 degrees off neutral a
   detuned warning dyad rises (engine.setTiltWarning); past ~60 degrees
   sustained 0.4s the game also pauses — putting the phone down IS a pause
@@ -316,8 +322,8 @@ friction braking).
   BOTH axes at once (found on-device). Tilt-only runs still set BEST:
   trusted orientation events >3 degrees off neutral mark the run as
   played (a phone flat on a table streams events but never deviates).
-  The tap buttons (Ski on / Start new course / the picker's course cards /
-  Choose course) now show on DESKTOP too, not just touch — clickable UI
+  The tap buttons (Ski on / Start over / Ski again) show on DESKTOP too,
+  not just touch — clickable UI
   alongside the keyboard shortcuts; only the touch-specific guide (zone map,
   tilt legend, tilterror) stays .touchonly. feel constants live at the top of
   tilt.ts for on-device tuning.
@@ -340,14 +346,13 @@ friction braking).
   the charged pop.
 - Esc or ? pauses (freezes the sim, suspends audio) and shows the key guide;
   the game starts paused, so the guide doubles as the title screen. Two
-  actions off the pause: Esc / SKI ON resumes, and S / START NEW COURSE opens
-  the COURSE PICKER — a grid of the nine named courses (number keys 1-9 or a
-  card tap pick one; Esc / SKI ON backs out to the current run). The picker
-  IS the confirm: picking a course starts it fresh, re-picking the current one
-  replays it, so there's no separate Y/N restart screen and no R key. Every
+  actions off the pause: Esc / SKI ON resumes, and S / START OVER restarts
+  the course from the gate (with one course that IS the whole menu — no
+  picker, no separate Y/N restart screen, no R key; the ceremony's S / SKI
+  AGAIN is the same restart). Every
   route back into a run funnels through dropIntoRun (main.ts), which on touch
   re-verifies live tilt.
-- Every fresh run (first drop-in, a freshly picked course — NOT a mid-run
+- Every fresh run (first drop-in, a restart — NOT a mid-run
   resume) opens with a 3-2-1-GO race countdown: the sim is held at the gate
   and the clock (sim.time) doesn't start until GO, so the timed run begins
   on GO. Purely a main-loop/render concern — the deterministic sim is

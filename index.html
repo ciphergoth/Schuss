@@ -251,8 +251,8 @@
         }
       }
       /* Stacking order of the full-screen overlays: the finish ceremony sits
-         below the pause guide and the course picker, so pausing during the
-         ceremony always brings the pause screen frontmost. */
+         below the pause guide, so pausing during the ceremony always brings
+         the pause screen frontmost. */
       #pause {
         position: fixed;
         inset: 0;
@@ -266,21 +266,7 @@
       #pause.visible {
         display: flex;
       }
-      #selector {
-        position: fixed;
-        inset: 0;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        background: rgba(10, 14, 40, 0.55);
-        user-select: none;
-        z-index: 30;
-      }
-      #selector.visible {
-        display: flex;
-      }
-      #pause .panel,
-      #selector .panel {
+      #pause .panel {
         background: rgba(18, 24, 64, 0.92);
         border-radius: 14px;
         padding: 26px 34px;
@@ -288,72 +274,10 @@
         text-shadow: 0 1px 3px rgba(0, 0, 40, 0.6);
         min-width: 320px;
       }
-      #selector .panel {
-        text-align: center;
-      }
-      #pause h1,
-      #selector h1 {
+      #pause h1 {
         margin: 0 0 14px;
         font-family: 'Bungee', system-ui, sans-serif;
         font-size: 26px;
-      }
-      /* The course picker: a responsive grid of named cards. */
-      #courselist {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-        gap: 12px;
-        margin-bottom: 18px;
-        max-width: 660px;
-      }
-      .course {
-        position: relative;
-        text-align: left;
-        background: rgba(30, 38, 92, 0.9);
-        border: 2px solid transparent;
-        border-radius: 10px;
-        padding: 12px 14px;
-        color: white;
-        cursor: pointer;
-        font: inherit;
-        transition:
-          background 0.12s,
-          border-color 0.12s,
-          transform 0.12s;
-      }
-      .course:hover,
-      .course:focus-visible {
-        background: rgba(46, 58, 128, 0.95);
-        border-color: #ffd34d;
-        transform: translateY(-2px);
-        outline: none;
-      }
-      .course.current {
-        border-color: #7dd3ff;
-      }
-      .course .cname {
-        display: block;
-        font-family: 'Bungee', system-ui, sans-serif;
-        font-size: 15px;
-        color: #ffd34d;
-        margin-bottom: 5px;
-      }
-      .course .cblurb {
-        display: block;
-        font-size: 13px;
-        line-height: 1.4;
-        opacity: 0.85;
-      }
-      .course kbd {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        font-family: system-ui, sans-serif;
-        font-size: 12px;
-        font-weight: 700;
-        background: #ffd34d;
-        color: #1a1030;
-        border-radius: 5px;
-        padding: 1px 6px;
       }
       #finish {
         position: fixed;
@@ -551,8 +475,7 @@
          touch-action is none globally (the game owns the screen), but the
          effective action is computed up to the nearest scroll container,
          so pan-y here is enough. */
-      #pause .panel,
-      #selector .panel {
+      #pause .panel {
         max-height: 84vh;
         overflow-y: auto;
         touch-action: pan-y;
@@ -638,9 +561,7 @@
         </div>
         <div class="actions">
           <button class="tapbtn" id="resumebtn"><kbd class="keyonly">Esc</kbd>Ski on</button>
-          <button class="tapbtn" id="newcoursebtn">
-            <kbd class="keyonly">S</kbd>Start new course
-          </button>
+          <button class="tapbtn" id="restartbtn"><kbd class="keyonly">S</kbd>Start over</button>
         </div>
         <!-- Touch guide: what the screen means, then the two actions. The
              keyboard table below is hidden on touch devices. -->
@@ -689,11 +610,11 @@
               </td>
             </tr>
             <tr>
-              <td>Every 250 m</td>
+              <td>Every 400 m</td>
               <td>Sector pace grade &mdash; fast sectors pay savage points</td>
             </tr>
             <tr>
-              <td>The finish, 3.2 km</td>
+              <td>The finish, 8 km</td>
               <td>Score locks at the checkered gate</td>
             </tr>
           </table>
@@ -735,11 +656,11 @@
             </td>
           </tr>
           <tr>
-            <td>Every 250 m</td>
+            <td>Every 400 m</td>
             <td>Your sector pace is graded &mdash; fast sectors pay savage points</td>
           </tr>
           <tr>
-            <td>The finish, 3.2 km</td>
+            <td>The finish, 8 km</td>
             <td>Score locks at the checkered gate</td>
           </tr>
           <tr>
@@ -748,7 +669,7 @@
           </tr>
           <tr>
             <td>S</td>
-            <td>Start a new course &mdash; opens the picker</td>
+            <td>Start over from the gate</td>
           </tr>
           <tr>
             <td>M</td>
@@ -759,15 +680,6 @@
         <div class="hint touchonly">Ride the walls, land the tricks, thread the stars</div>
       </div>
     </div>
-    <div id="selector">
-      <div class="panel">
-        <h1>Pick a course</h1>
-        <div id="courselist"></div>
-        <div>
-          <button class="tapbtn" id="selectorback"><kbd class="keyonly">Esc</kbd>Ski on</button>
-        </div>
-      </div>
-    </div>
     <div id="finish">
       <div class="panel">
         <h1>FINISH!</h1>
@@ -775,9 +687,7 @@
         <div id="finishstats"></div>
         <div id="finishbest"></div>
         <div>
-          <button class="tapbtn" id="choosecourse">
-            <kbd class="keyonly">S</kbd>Choose course
-          </button>
+          <button class="tapbtn" id="skiagain"><kbd class="keyonly">S</kbd>Ski again</button>
         </div>
       </div>
     </div>

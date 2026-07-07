@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
-import { ContractDemand, SECTION_LENGTH, courseCatalog } from './sim/terrain';
+import { COURSE_NAME, ContractDemand, SECTION_LENGTH } from './sim/terrain';
 import { SkierInput } from './sim/skier';
 import { setupInput } from './input';
 import { FAR_HOLD_S, THUMB_ZONE, tiltZone } from './tilt';
@@ -39,8 +39,8 @@ const DEMAND_LABEL: Record<ContractDemand, string> = {
   parallel: 'SPIN + FLIP AT ONCE',
 };
 
-// The active course's generation seed — normally chosen by the course picker
-// (courseCatalog); ?seed=N still forces an arbitrary start.
+// The mega course's generation seed: there is ONE course, and this is its
+// canonical layout; ?seed=N still forces an arbitrary reshuffle of the deal.
 let currentSeed = Number(new URLSearchParams(location.search).get('seed') ?? '1');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -67,8 +67,6 @@ const chargeBar = document.getElementById('chargebar')!;
 const chargeFill = document.getElementById('chargefill') as HTMLElement;
 const overlay = document.getElementById('overlay')!;
 const pauseScreen = document.getElementById('pause')!;
-const selectorScreen = document.getElementById('selector')!;
-const courseList = document.getElementById('courselist')!;
 const finishScreen = document.getElementById('finish')!;
 const finishStats = document.getElementById('finishstats')!;
 const finishCourse = document.getElementById('finishcourse')!;
@@ -124,7 +122,6 @@ const input = setupInput();
 // Esc or ? pauses: the sim freezes, the cursor is yours, and the pause screen
 // doubles as the key guide.
 let paused = false;
-let selecting = false; // the course picker is open — a flavor of paused
 
 // Race start: when a run begins fresh (first drop-in, restart, next course),
 // the sim is held at the gate for a 3-2-1-GO countdown; the clock (sim.time)
@@ -162,8 +159,8 @@ function setPaused(next: boolean): void {
     // Unpausing calibrates tilt: however the phone is held right now becomes
     // neutral. Re-unpause any time to recalibrate.
     input.calibrateTilt();
-    // Every touch route back into the run funnels through here — plain resume,
-    // the picker's Ski on, a fresh course — so re-enter fullscreen from all.
+    // Every touch route back into the run funnels through here — plain resume
+    // and a fresh restart alike — so re-enter fullscreen from all.
     tryFullscreen();
   }
   paused = next;
@@ -171,54 +168,13 @@ function setPaused(next: boolean): void {
     audio.setTiltWarning(0);
     updateMuteToggle();
   }
-  pauseScreen.classList.toggle('visible', paused && !selecting);
+  pauseScreen.classList.toggle('visible', paused);
   audio.setPaused(paused);
 }
 
-// The course picker: the nine named courses, built fresh each open so the
-// CURRENT-course highlight is right. Opening always pauses (freeze the world
-// behind the menu). It's the "start a new course" gate from both the pause
-// guide and the finish ceremony, and it IS the old restart confirm — re-pick
-// the current course to replay it.
-const catalog = courseCatalog();
-function buildSelector(): void {
-  courseList.replaceChildren();
-  catalog.forEach((c, i) => {
-    const card = document.createElement('button');
-    card.className = 'course' + (c.seed === currentSeed ? ' current' : '');
-    card.innerHTML =
-      `<kbd class="keyonly">${i + 1}</kbd>` +
-      `<span class="cname"></span><span class="cblurb"></span>`;
-    card.querySelector('.cname')!.textContent = c.name;
-    card.querySelector('.cblurb')!.textContent = c.blurb;
-    card.addEventListener('click', () => pickCourse(c.seed));
-    courseList.appendChild(card);
-  });
-}
-function openSelector(): void {
-  if (selecting) return;
-  selecting = true;
-  buildSelector();
-  if (!paused) setPaused(true);
-  pauseScreen.classList.remove('visible');
-  selectorScreen.classList.add('visible');
-}
-function closeSelector(): void {
-  // "Ski on": dismiss the picker, back to the current run.
-  selecting = false;
-  selectorScreen.classList.remove('visible');
-  dropIntoRun();
-}
-function pickCourse(seed: number): void {
-  selecting = false;
-  selectorScreen.classList.remove('visible');
-  startCourse(seed);
-  dropIntoRun();
-}
-
-// Start a named course fresh (or the same one again, to replay).
-function startCourse(seed: number): void {
-  currentSeed = seed;
+// Start the course fresh from the gate. With one mega course this IS the
+// whole menu — the old nine-course picker went with the nine courses.
+function startCourse(): void {
   best = Number(localStorage.getItem(bestKey()) ?? '0');
   bestAtCourseStart = best;
   sim = createSim(currentSeed);
@@ -233,21 +189,18 @@ function startCourse(seed: number): void {
   countdownArmed = true; // every fresh course starts with a 3-2-1-GO
 }
 
+function restartCourse(): void {
+  startCourse();
+  dropIntoRun();
+}
+
 window.addEventListener('keydown', (e) => {
-  // In the picker: number keys pick a course, Esc skis on.
-  if (selecting) {
-    if (e.code === 'Escape') closeSelector();
-    else if (/^Digit[1-9]$/.test(e.code)) {
-      const i = Number(e.code.slice(5)) - 1;
-      if (i < catalog.length) pickCourse(catalog[i]!.seed);
-    }
-    return;
-  }
-  // S opens the picker — but only from the pause guide or the finish ceremony,
-  // the only places it's a menu key. In a live run S is a backflip (input.ts),
-  // never reached here because that path is only open while frozen or finished.
+  // S restarts from the gate — but only from the pause guide or the finish
+  // ceremony, the only places it's a menu key. In a live run S is a backflip
+  // (input.ts), never reached here because that path is only open while
+  // frozen or finished.
   if (e.code === 'KeyS' && (paused || finishScreen.classList.contains('visible'))) {
-    openSelector();
+    restartCourse();
     return;
   }
   if (e.code === 'Escape' || e.key === '?') setPaused(!paused);
@@ -314,10 +267,10 @@ function tryFullscreen(): void {
 
 // Panel touches are UI — scrolling the guide, pressing its buttons —
 // never game input: without this, tilt mode would grab them as trick-pad
-// or charge touches, or (for a centered button like Next course) as the
+// or charge touches, or (for a centered button like Ski again) as the
 // middle-band pause, so tapping the ceremony's buttons just paused the run.
 // Every full-screen panel gets the same guard.
-for (const panel of [pauseScreen, selectorScreen, finishScreen]) {
+for (const panel of [pauseScreen, finishScreen]) {
   panel.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse') e.stopPropagation();
   });
@@ -333,7 +286,7 @@ for (const panel of [pauseScreen, selectorScreen, finishScreen]) {
 // — and it only fires on a real tap, never a mid-scroll swipe on the
 // panel. If tilt can't be granted we surface the error and stay on the
 // guide — there is no fallback to fall into.
-// The single door into a run — used by Ski on AND a freshly picked course.
+// The single door into a run — used by Ski on AND a fresh restart.
 // On touch a run REQUIRES live tilt: if it isn't on, run the enable-and-
 // wait-for-a-reading flow, and if that fails, stay on the guide with the
 // error. NEVER unpause a touch run with tilt off — that is the "slides
@@ -366,17 +319,13 @@ document.getElementById('resumebtn')!.addEventListener('click', () => {
   tryFullscreen();
   dropIntoRun();
 });
-document.getElementById('newcoursebtn')!.addEventListener('click', () => {
+document.getElementById('restartbtn')!.addEventListener('click', () => {
   tryFullscreen();
-  openSelector();
+  restartCourse();
 });
-document.getElementById('selectorback')!.addEventListener('click', () => {
-  tryFullscreen();
-  closeSelector();
-});
-document.getElementById('choosecourse')!.addEventListener('click', () => {
+document.getElementById('skiagain')!.addEventListener('click', () => {
   tryFullscreen(); // the ceremony doesn't re-pause, so ask here directly
-  openSelector();
+  restartCourse();
 });
 muteBtn.addEventListener('click', () => {
   audio.toggleMute();
@@ -384,7 +333,7 @@ muteBtn.addEventListener('click', () => {
 });
 
 // In tilt mode the thumbs own the screen edges, so the whole middle band
-// is the pause button. (Picker open ⇒ paused, so that guard covers it too.)
+// is the pause button.
 window.addEventListener('pointerdown', (e) => {
   if (!tiltOn || paused || e.pointerType === 'mouse') return;
   const frac = e.clientX / window.innerWidth;
@@ -530,7 +479,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   const clock = sim.finishedAt ?? sim.time;
   const clockMin = Math.floor(clock / 60);
   timeText.textContent = `${clockMin}:${(clock - clockMin * 60).toFixed(2).padStart(5, '0')}`;
-  courseNum.textContent = sim.terrain.archetype.name.toUpperCase();
+  courseNum.textContent = COURSE_NAME.toUpperCase();
   // Segmented course progress under the score: a vertical stack that fills
   // completed segments fully, the current one partway, top-to-bottom.
   const scaled = Math.min(1, distanceSkied(sim) / sim.terrain.courseLength) * segFills.length;
@@ -538,16 +487,15 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     fill.style.height = `${Math.max(0, Math.min(1, scaled - i)) * 100}%`;
   });
 
-  // The ceremony: once the finish barrage has landed, raise the panel (but
-  // not while the picker is up over it).
-  const showFinish = finishPanelAt !== null && sim.time >= finishPanelAt && !selecting;
+  // The ceremony: once the finish barrage has landed, raise the panel.
+  const showFinish = finishPanelAt !== null && sim.time >= finishPanelAt;
   if (showFinish && !finishScreen.classList.contains('visible')) {
     const t = sim.finishedAt ?? 0;
     const mins = Math.floor(t / 60);
     const secs = (t - mins * 60).toFixed(1).padStart(4, '0');
     finishStats.textContent = `SCORE ${sim.score.toLocaleString('en')} · TIME ${mins}:${secs}`;
     // Name the course just run.
-    finishCourse.textContent = sim.terrain.archetype.name.toUpperCase();
+    finishCourse.textContent = COURSE_NAME.toUpperCase();
     finishBest.textContent =
       sim.score > bestAtCourseStart && input.acted()
         ? 'NEW COURSE BEST!'
@@ -635,7 +583,7 @@ function frame(): void {
         showCount(String(n), false);
         audio.playCountdown(false);
         // The course announces itself by name over the gate.
-        courseCall.textContent = sim.terrain.archetype.name.toUpperCase();
+        courseCall.textContent = COURSE_NAME.toUpperCase();
         courseCall.classList.add('visible');
       }
       accumulator = 0; // no sim time passes at the gate

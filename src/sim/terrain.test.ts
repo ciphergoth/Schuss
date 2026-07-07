@@ -442,47 +442,45 @@ describe('terrain', () => {
     expect(loadouts.size).toBeGreaterThan(2);
   });
 
-  it('archetypes tilt the section deck without banning anything', () => {
-    // Find seeds carrying two different archetypes and compare their mixes
-    // on the endless mountain: a Chute deals narrows/plunge far more often
-    // than an Airfield, but every type stays possible everywhere.
-    const bySeed = new Map<string, Terrain>();
-    for (let seed = 1; bySeed.size < 3 && seed < 60; seed++) {
-      const t = new Terrain(seed, Infinity);
-      if (!bySeed.has(t.archetype.name)) bySeed.set(t.archetype.name, t);
-    }
-    expect(bySeed.size).toBeGreaterThanOrEqual(3); // seeds actually vary
-    for (const t of bySeed.values()) {
+  it('the mega deal: the middle tours every section type exactly twice', () => {
+    const everyType: SectionType[] = [
+      'cruise',
+      'narrows',
+      'bowl',
+      'plunge',
+      'steps',
+      'sweeper',
+      'canyon',
+      'glacier',
+      'powder',
+    ];
+    for (const seed of [1, 2, 5, 12]) {
+      const t = new Terrain(seed);
+      const last = COURSE_LENGTH / SECTION_LENGTH - 1;
       const counts: Record<string, number> = {};
-      for (let s = 1; s <= 400; s++) {
+      for (let s = 1; s < last; s++) {
         const type = t.sectionType(s);
         counts[type] = (counts[type] ?? 0) + 1;
-        expect(type).not.toBe(t.sectionType(s - 1)); // never repeats
+        expect(type).not.toBe(t.sectionType(s - 1)); // never twice in a row
       }
-      // Nothing is banned: over 400 sections every type shows up.
-      for (const type of [
-        'cruise',
-        'narrows',
-        'bowl',
-        'plunge',
-        'steps',
-        'sweeper',
-        'canyon',
-        'glacier',
-        'powder',
-      ]) {
-        expect(counts[type] ?? 0).toBeGreaterThan(0);
-      }
-      // And the mix leans where the weights lean.
-      const w = t.archetype.weights;
-      const most = Object.entries(w).sort((a, b) => b[1] - a[1])[0]![0];
-      const least = Object.entries(w).sort((a, b) => a[1] - b[1])[0]![0];
-      if (w[most as keyof typeof w] > w[least as keyof typeof w] * 2) {
-        expect(counts[most] ?? 0).toBeGreaterThan(counts[least] ?? 0);
-      }
+      // Two full decks: every idea the mountain has, exactly twice.
+      for (const type of everyType) expect(counts[type]).toBe(2);
+      expect(t.sectionType(last - 1)).not.toBe('plunge'); // finale earned, not doubled
+      expect(t.sectionType(last)).not.toBe(t.sectionType(last - 1));
     }
-    // Determinism: the archetype is a pure function of the seed.
-    expect(new Terrain(9).archetype.name).toBe(new Terrain(9).archetype.name);
+    // The deal is deterministic per seed, and seeds actually reshuffle it.
+    const deal = (seed: number): string => {
+      const t = new Terrain(seed);
+      return Array.from({ length: 18 }, (_, i) => t.sectionType(i + 1)).join('>');
+    };
+    expect(deal(7)).toBe(deal(7));
+    expect(deal(1)).not.toBe(deal(2));
+    // The endless test mountain keeps dealing whole double-decks: any 18-deep
+    // block still contains everything, seams included, no repeats anywhere.
+    const endless = new Terrain(3, Infinity);
+    const deep = new Set<SectionType>();
+    for (let s = 37; s < 55; s++) deep.add(endless.sectionType(s));
+    expect(deep.size).toBe(everyType.length);
   });
 
   it('a canyon weaves and banks: the esses are the section', () => {
@@ -549,31 +547,39 @@ describe('terrain', () => {
     expect(field / fieldN).toBeGreaterThan(0.6); // the field is drag
   });
 
-  it('every course carries one setpiece: falls that only steepen the floor', () => {
-    const kinds = new Set<string>();
+  it('the course carries BOTH setpieces: falls that only steepen the floor', () => {
+    const firstKinds = new Set<string>();
     for (let seed = 1; seed <= 10; seed++) {
       const t = new Terrain(seed);
-      const sp = t.setpiece;
-      kinds.add(sp.kind);
-      expect(sp.z).toBeLessThan(-0.35 * 3200); // mid-course landmark...
-      expect(sp.z).toBeGreaterThan(-0.75 * 3200); // ...never the finale
-      // The spine drops the full setpiece height across the span...
-      const above = t.spineY(sp.z + 5);
-      const below = t.spineY(sp.z - sp.span - 5);
-      const grade = 0.35 * (sp.span + 10);
-      expect(above - below).toBeGreaterThan(grade + 9); // falls on top of grade
-      // ...and every meter of it goes DOWNHILL: a fall face can only
-      // steepen the floor, so drainage inherits it for free.
-      for (let z = sp.z + 10; z > sp.z - sp.span - 10; z -= 0.5) {
-        expect(t.spineY(z)).toBeGreaterThanOrEqual(t.spineY(z - 0.5));
-      }
-      // The falls are the feature: no kickers or obstacles compete.
-      for (let i = Math.floor(-(sp.z + 30) / 40); i * 40 < -(sp.z - sp.span - 40); i++) {
-        const jump = t.jumpForChunk(i);
-        if (jump) expect(jump.zLip < sp.z + 30 && jump.zLip > sp.z - sp.span - 50).toBe(false);
+      // The waterfall AND the cascades, one seeded into each half of the run.
+      expect(t.setpieces.map((sp) => sp.kind).sort()).toEqual(['cascades', 'waterfall']);
+      firstKinds.add(t.setpieces[0]!.kind);
+      const [early, late] = t.setpieces;
+      expect(early!.z).toBeLessThanOrEqual(-0.25 * COURSE_LENGTH); // first landmark...
+      expect(early!.z).toBeGreaterThanOrEqual(-0.4 * COURSE_LENGTH);
+      expect(late!.z).toBeLessThanOrEqual(-0.55 * COURSE_LENGTH); // ...second landmark...
+      expect(late!.z).toBeGreaterThanOrEqual(-0.7 * COURSE_LENGTH); // ...never the finale
+      for (const sp of t.setpieces) {
+        // The spine drops the full setpiece height across the span...
+        const above = t.spineY(sp.z + 5);
+        const below = t.spineY(sp.z - sp.span - 5);
+        const grade = 0.35 * (sp.span + 10);
+        expect(above - below).toBeGreaterThan(grade + 9); // falls on top of grade
+        // ...and every meter of it goes DOWNHILL: a fall face can only
+        // steepen the floor, so drainage inherits it for free.
+        for (let z = sp.z + 10; z > sp.z - sp.span - 10; z -= 0.5) {
+          expect(t.spineY(z)).toBeGreaterThanOrEqual(t.spineY(z - 0.5));
+        }
+        // The falls are the feature: no kickers or obstacles compete.
+        for (let i = Math.floor(-(sp.z + 30) / 40); i * 40 < -(sp.z - sp.span - 40); i++) {
+          const jump = t.jumpForChunk(i);
+          if (jump) expect(jump.zLip < sp.z + 30 && jump.zLip > sp.z - sp.span - 50).toBe(false);
+        }
       }
     }
-    expect(kinds).toEqual(new Set(['waterfall', 'cascades'])); // both exist
+    // The seeded order varies: sometimes the waterfall leads, sometimes the
+    // cascades do.
+    expect(firstKinds).toEqual(new Set(['waterfall', 'cascades']));
   });
 
   it('star contracts draw seeded demands from their tier pools', () => {

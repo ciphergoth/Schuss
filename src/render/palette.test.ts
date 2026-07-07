@@ -40,10 +40,11 @@ describe('palette zones', () => {
     expect(zoneMix(500).t).toBe(0);
   });
 
-  it('each course draws its own zone sequence, deterministically', () => {
+  it('each seed orders the whole palette library, deterministically', () => {
     const a = courseZones(5);
     expect(a.map((p) => p.name)).toEqual(courseZones(5).map((p) => p.name)); // pure
-    expect(new Set(a.map((p) => p.name)).size).toBe(4); // four DISTINCT worlds
+    // The mega course tours EVERY world in the library, in a seeded order.
+    expect(new Set(a.map((p) => p.name)).size).toBe(LIBRARY.length);
     for (const p of a) expect(LIBRARY.map((q) => q.name)).toContain(p.name);
     // Sequences actually vary across seeds.
     const timelines = new Set<string>();
