@@ -78,8 +78,13 @@ Racing alone never fills the tank —
 but past the first sector line it does score. Burning
 is hard acceleration with flames, rainbow trail, FOV slam, rumble. The
 spectacle scales with play: the course crosses a new color world every
-600m (dusk → neon night → rose dawn → emerald; palette.ts cross-fades
-sky/fog/lights) under a waving aurora that blazes in the night zone; a
+600m — and WHICH worlds is the course's own: each seed draws a four-zone
+sequence from an eight-palette library (the classic dusk / neon night /
+rose dawn / emerald plus golden hour / blizzard white / violet storm /
+ice blue; palette.courseZones) and its own WEATHER (courseWeather:
+seeded snowfall — clear/flurries/heavy, a deterministic flake box riding
+with the skier — and drifting fog banks that swell on a seeded rhythm in
+z), under a waving aurora that blazes in the night zone; a
 glowing neon arc spans the track at every SECTION BOUNDARY (400m, where one
 section personality gives way to the next); paid sectors
 and star-multiplied tricks launch firework volleys over the course (grander
@@ -102,11 +107,34 @@ loop.
 
 Terrain is a pure height function with SECTION personalities: every 400m
 the course becomes one of cruise / narrows (7m half-width squeeze, empty
-and fast) / bowl (27m playground: obstacle slaloms, rich coins, kickers of
-every size) / plunge (the grade breaks away mid-section, big L kickers
-only) / steps (a staircase of launchable terraces) / sweeper (deliberate
-sine S-turns with the floor superelevated into the bend — carving the bank
-is the racing line). Sections never repeat back-to-back, blend over their
+and fast, its own snapping slalom) / bowl (27m playground: obstacle
+slaloms, rich coins, kickers of every size) / plunge (the grade breaks
+away mid-section, big L kickers only) / steps (a staircase of launchable
+terraces) / sweeper (deliberate sine S-turns with the floor superelevated
+into the bend — carving the bank is the racing line; extraDrop 30 pays
+the bank-transient drainage bill) / canyon (a 10m-half gorge whose esses
+bank at the cap — wall to wall is the only line; sweeper's extraDrop for
+the same reason) / glacier (blue ice on the GRIP channel: grip scales
+friction AND turn authority in skier.ts — speed nearly free, turns
+arrive late; stickiness is drag-only and can't express faster-than-snow)
+/ powder (deep drifts, one groomed ribbon: crudThreshold 0 buries all
+but the clean golden-path corridor; powder is drag, never a trap).
+WHICH sections a course deals is its ARCHETYPE (terrain.ts ARCHETYPES,
+hash of seed): nine named characters — The Classic (the old uniform
+deck), Airfield, Chute, Wall, Garden, Staircase, Pipeline, Glacier,
+Backcountry — that reweight the section deck (never to zero: the MIX
+changes, nothing is banned) and scale kicker chance, kicker-size skew
+(bigAir), obstacle and coin densities. The name is announced over the
+start gate, on the HUD clock line, and at the ceremony (which teases the
+next seed's character). Every course also carries ONE SETPIECE
+(terrain.setpiece, seeded mid-run 40-70% in): a WATERFALL (10m dive over
+a 16m face) or the CASCADES (three 5m falls, 30m rhythm) — pure added
+downhill on the spine, so walls/banking/star arcs/drainage inherit it
+for free; its falls are the feature (no kickers or obstacles compete,
+and the max-gap counter treats it as featured). Hips and step-down
+scoops never roll on banked-ess ground (sweeper/canyon) — a tilted pad
+or carved scoop there is two banks fighting.
+Sections never repeat back-to-back, blend over their
 last 60m, and section 0 is always cruise (gentle openings, predictable
 physics tests). Banking is curvature-driven everywhere, so any bend tilts
 its floor a little — and the physics honors it: gravity's cross-heading

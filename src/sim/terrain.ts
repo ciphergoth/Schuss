@@ -621,12 +621,41 @@ export class Terrain {
 
   // What kind of course this seed is (see ARCHETYPES).
   readonly archetype: Archetype;
+  // THE SETPIECE: every course carries one seeded landmark mid-run — a
+  // WATERFALL (one 10m dive over a 16m face) or the CASCADES (three 5m
+  // falls in 30m rhythm). Pure added downhill on the spine, so the walls,
+  // banking, star arcs, and the drainage guarantee inherit it for free —
+  // a fall face only ever steepens the floor. Courses become "the one
+  // with the waterfall": a landmark, not a distribution.
+  readonly setpiece: {
+    kind: 'waterfall' | 'cascades';
+    z: number; // where the (first) edge breaks
+    span: number; // meters from the first edge to the last face's foot
+    falls: readonly [number, number, number][]; // [zTop, drop, face] each
+  };
 
   constructor(
     readonly seed: number,
     readonly courseLength = COURSE_LENGTH
   ) {
     this.archetype = ARCHETYPES[Math.floor(hash2(seed, 9001, 17) * ARCHETYPES.length)]!;
+    // Endless test mountains still get exactly one, on the course-1 span.
+    const span = Number.isFinite(courseLength) ? courseLength : COURSE_LENGTH;
+    const z = -(0.4 + 0.3 * hash2(seed, 8887, 1)) * span;
+    const kind = hash2(seed, 8887, 2) < 0.55 ? 'waterfall' : 'cascades';
+    this.setpiece =
+      kind === 'waterfall'
+        ? { kind, z, span: 16, falls: [[z, 10, 16]] }
+        : {
+            kind,
+            z,
+            span: 70,
+            falls: [
+              [z, 5, 10],
+              [z - 30, 5, 10],
+              [z - 60, 5, 10],
+            ],
+          };
   }
 
   // The last section of the course; the finish line sits at its far edge.
@@ -811,11 +840,33 @@ export class Terrain {
   }
 
   // The smooth spine of the course: mean grade plus section drops (plunges,
-  // terraces), without the roller noise. Star placement measures flight
-  // heights in this frame — a popped arc is the same height RELATIVE TO THE
-  // SLOPE on a gentle cruise and a steep plunge alike.
+  // terraces) plus the course's signature setpiece, without the roller
+  // noise. Star placement measures flight heights in this frame — a popped
+  // arc is the same height RELATIVE TO THE SLOPE on a gentle cruise and a
+  // steep plunge alike.
   spineY(z: number): number {
-    return GRADE * z - this.sectionDrop(z);
+    return GRADE * z - this.sectionDrop(z) - this.setpieceDrop(z);
+  }
+
+  // THE SETPIECE: every course carries one seeded landmark mid-run — a
+  // WATERFALL (one 10m dive over a 16m face) or the CASCADES (three 5m
+  // falls in 30m rhythm). Pure added downhill on the spine, so the walls,
+  // the banking, the star arcs, and the drainage guarantee all inherit it
+  // for free — a fall face only ever steepens the floor. Courses become
+  // "the one with the waterfall": a landmark, not a distribution.
+  private setpieceDrop(z: number): number {
+    let drop = 0;
+    for (const [top, d, face] of this.setpiece.falls) {
+      drop += d * smoothstep(clamp01((top - z) / face));
+    }
+    return drop;
+  }
+
+  // Is this z on (or hard against) the setpiece? Its faces are the feature:
+  // no kickers or obstacles compete with the falls.
+  private onSetpiece(z: number): boolean {
+    const sp = this.setpiece;
+    return z < sp.z + 30 && z > sp.z - sp.span - 50;
   }
 
   // Height of the track's spine plus big rollers. Under leg-reach contact
@@ -838,6 +889,7 @@ export class Terrain {
     if (index < 3) return false;
     const zLip = -index * CHUNK_LENGTH - 24;
     if (this.pastFinish(zLip)) return false; // the outrun asks nothing of you
+    if (this.onSetpiece(zLip)) return false; // the falls ARE the feature here
     const chance = SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].kickerChance;
     return hash2(this.seed, index, 31337) < chance * this.archetype.kickers;
   }
@@ -853,11 +905,14 @@ export class Terrain {
 
   // What the max-gap guarantee counts as "something happening": a kicker
   // launches you, a bend turns you, a staircase (terraced section) is all
-  // launchable edges. Any of these keeps a stretch from going dead.
+  // launchable edges — and the setpiece's falls most of all. Any of these
+  // keeps a stretch from going dead (and nothing gets FORCED onto the
+  // falls, since a setpiece chunk already counts as featured).
   private featureAt(index: number): boolean {
     if (this.jumpForChunk(index) !== null) return true;
     if (this.bendsAt(index)) return true;
     const zLip = -index * CHUNK_LENGTH - 24;
+    if (this.onSetpiece(zLip)) return true;
     return SECTION_SPECS[this.sectionType(this.sectionIndexAt(zLip))].terraced;
   }
 
@@ -888,12 +943,14 @@ export class Terrain {
     // themselves and never get a forced kicker: a staircase (terraced), a
     // sweeper's carve, a narrows slalom — their own features hold the floor.
     const type = this.sectionType(this.sectionIndexAt(zLip));
-    const selfFeatured = SECTION_SPECS[type].terraced || type === 'sweeper' || type === 'narrows';
+    const selfFeatured =
+      SECTION_SPECS[type].terraced || type === 'sweeper' || type === 'narrows' || type === 'canyon';
     const forced =
       !natural &&
       clearBehind &&
       index >= 3 &&
       !this.pastFinish(zLip) &&
+      !this.onSetpiece(zLip) && // never force a kicker onto the falls
       !this.bendsAt(index) &&
       !selfFeatured &&
       this.chunksSinceFeature(index - 1) + 1 >= MAX_FEATURE_GAP;
@@ -1177,6 +1234,9 @@ export class Terrain {
         ) {
           continue;
         }
+        // Never on the setpiece's falls — flying blind off a waterfall
+        // into a bollard would punish riding the landmark.
+        if (this.onSetpiece(z)) continue;
         obstacles.push({
           x: this.centerX(z) + d,
           z,

@@ -549,6 +549,33 @@ describe('terrain', () => {
     expect(field / fieldN).toBeGreaterThan(0.6); // the field is drag
   });
 
+  it('every course carries one setpiece: falls that only steepen the floor', () => {
+    const kinds = new Set<string>();
+    for (let seed = 1; seed <= 10; seed++) {
+      const t = new Terrain(seed);
+      const sp = t.setpiece;
+      kinds.add(sp.kind);
+      expect(sp.z).toBeLessThan(-0.35 * 3200); // mid-course landmark...
+      expect(sp.z).toBeGreaterThan(-0.75 * 3200); // ...never the finale
+      // The spine drops the full setpiece height across the span...
+      const above = t.spineY(sp.z + 5);
+      const below = t.spineY(sp.z - sp.span - 5);
+      const grade = 0.35 * (sp.span + 10);
+      expect(above - below).toBeGreaterThan(grade + 9); // falls on top of grade
+      // ...and every meter of it goes DOWNHILL: a fall face can only
+      // steepen the floor, so drainage inherits it for free.
+      for (let z = sp.z + 10; z > sp.z - sp.span - 10; z -= 0.5) {
+        expect(t.spineY(z)).toBeGreaterThanOrEqual(t.spineY(z - 0.5));
+      }
+      // The falls are the feature: no kickers or obstacles compete.
+      for (let i = Math.floor(-(sp.z + 30) / 40); i * 40 < -(sp.z - sp.span - 40); i++) {
+        const jump = t.jumpForChunk(i);
+        if (jump) expect(jump.zLip < sp.z + 30 && jump.zLip > sp.z - sp.span - 50).toBe(false);
+      }
+    }
+    expect(kinds).toEqual(new Set(['waterfall', 'cascades'])); // both exist
+  });
+
   it('star contracts draw seeded demands from their tier pools', () => {
     const gold = ['spinL', 'spinR', 'front', 'back', 'spin2'];
     const magenta = ['mix', 'parallel', 'flip2'];
