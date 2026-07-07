@@ -476,6 +476,13 @@ export class Effects {
           big ? 40 : 26,
           color
         );
+      } else if (e.type === 'gate') {
+        // A threaded slalom gate: a quick cyan ring at the gap, brighter
+        // company (a gold puff) once the chain is worth real money.
+        this.sparks.ring(new THREE.Vector3(e.x, s.y + 1.0, e.z), 7, 18, this.cyan);
+        if (e.chain >= 3) {
+          this.sparks.burst(new THREE.Vector3(e.x, s.y + 1.2, e.z), 4, 10, this.gold);
+        }
       } else if (e.type === 'nearMiss') {
         // Near-miss: a puff plucked off the obstacle you grazed.
         this.particles.spawn(

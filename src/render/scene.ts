@@ -6,7 +6,10 @@ export interface SceneSetup {
   scene: THREE.Scene;
   sun: THREE.DirectionalLight;
   // Retint the world for the skier's position and animate the aurora.
-  update: (x: number, y: number, z: number, time: number) => void;
+  // cave (0..1, terrain.caveAt) is the grotto's dimmer: sky and lights fall
+  // toward blue-black, fog closes in, and the snowfall and aurora hold
+  // their breath under the roof.
+  update: (x: number, y: number, z: number, time: number, cave?: number) => void;
   // A new course brings its own zone sequence and weather.
   setCourse: (seed: number) => void;
 }
@@ -119,10 +122,10 @@ class Snowfall {
     scene.add(this.points);
   }
 
-  update(x: number, y: number, z: number, time: number): void {
-    this.points.visible = this.intensity > 0;
-    this.material.opacity = this.intensity * 0.85;
-    if (this.intensity === 0) return;
+  update(x: number, y: number, z: number, time: number, visibility = 1): void {
+    this.points.visible = this.intensity * visibility > 0;
+    this.material.opacity = this.intensity * visibility * 0.85;
+    if (this.intensity * visibility === 0) return;
     const pos = this.geometry.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < SNOW_COUNT; i++) {
       const fall = this.tracks[i * 4 + 2]!;
@@ -183,10 +186,17 @@ export function createScene(): SceneSetup {
     snow.intensity = weather.snow;
   };
 
-  const update = (x: number, y: number, z: number, time: number): void => {
+  // The grotto's own darkness: blue-black, close, lit by its crystals.
+  const caveSky = new THREE.Color(0x05070f);
+
+  const update = (x: number, y: number, z: number, time: number, cave = 0): void => {
     blendPalette(z, blended, zones);
     sky.copy(blended.sky);
-    (scene.fog as THREE.Fog).color.copy(blended.sky);
+    // Under the grotto's roof the world outside goes away: the sky falls to
+    // blue-black, the fog closes, the lights dim to a glow — and stepping
+    // back out through the far portal is the exhale.
+    if (cave > 0) sky.lerp(caveSky, cave * 0.92);
+    (scene.fog as THREE.Fog).color.copy(sky);
     // Fog banks drift across the course: the palette's visibility swells
     // and closes on a slow, seeded rhythm in z — pure function of position,
     // so the same bank always sits on the same stretch.
@@ -195,14 +205,15 @@ export function createScene(): SceneSetup {
       const bank = 0.5 + 0.5 * Math.sin(-z / 210 + fogPhase) * Math.sin(-z / 87 + fogPhase * 1.7);
       far *= 1 - 0.5 * bank * bank;
     }
+    far *= 1 - 0.7 * cave;
     (scene.fog as THREE.Fog).far = far;
     hemi.color.copy(blended.hemiSky);
     hemi.groundColor.copy(blended.hemiGround);
-    hemi.intensity = blended.hemiIntensity;
+    hemi.intensity = blended.hemiIntensity * (1 - 0.55 * cave);
     sun.color.copy(blended.sun);
-    sun.intensity = blended.sunIntensity;
-    aurora.update(x, y, z, time, blended.aurora);
-    snow.update(x, y, z, time);
+    sun.intensity = blended.sunIntensity * (1 - 0.85 * cave);
+    aurora.update(x, y, z, time, blended.aurora * (1 - cave));
+    snow.update(x, y, z, time, 1 - cave);
   };
 
   return { scene, sun, update, setCourse };

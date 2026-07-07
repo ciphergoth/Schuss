@@ -452,6 +452,14 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       } else {
         showTrick(`SECTOR ${Math.round(e.speed)} m/s`, '#9fd4ff', 1.0);
       }
+    } else if (e.type === 'gate') {
+      // The slalom chain: every threaded gate chimes a step higher and the
+      // banner shows the escalation. A miss just goes quiet — the chain
+      // resetting IS the whole punishment.
+      audio.playGate(e.chain);
+      if (e.points > 0) {
+        showTrick(`GATE ×${e.chain} +${e.points.toLocaleString('en')}`, '#5df2ff', 0.8);
+      }
     } else if (e.type === 'tumble' && e.trick) {
       showTrick('SPUN OUT', '#ff6a5a', 1.0);
     }
@@ -462,8 +470,8 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
   sun.target.position.set(skier.x, skier.y, skier.z);
 
   // Cross-fade the sky/fog/light palette for this stretch of course and
-  // keep the aurora waving overhead.
-  sceneSetup.update(skier.x, skier.y, skier.z, sim.time);
+  // keep the aurora waving overhead. The grotto's depth dims all of it.
+  sceneSetup.update(skier.x, skier.y, skier.z, sim.time, sim.terrain.caveAt(skier.z));
 
   audio.update(
     skier,

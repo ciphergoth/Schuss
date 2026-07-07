@@ -1,5 +1,14 @@
 import * as THREE from 'three';
-import { CHUNK_LENGTH, SECTION_LENGTH, Terrain, WALL_WIDTH, jumpDrift } from '../sim/terrain';
+import {
+  CHUNK_LENGTH,
+  GATE_HEIGHT,
+  Hazard,
+  SECTION_LENGTH,
+  Terrain,
+  WALL_WIDTH,
+  hazardX,
+  jumpDrift,
+} from '../sim/terrain';
 import { hash2, mulberry32 } from '../sim/rng';
 
 // The course renders as a ribbon that follows the centerline — beyond its
@@ -15,6 +24,7 @@ const CHUNKS_BEHIND = 2;
 
 const SNOW_FLOOR = new THREE.Color(0xf4f9ff);
 const SNOW_CRUD = new THREE.Color(0x8494cf); // slow crud: dusty periwinkle
+const SNOW_ICE = new THREE.Color(0x9fd8ff); // glacier: the GRIP channel made visible
 
 // Flat five-pointed star, the classic prize shape.
 function starGeometry(radius: number): THREE.ShapeGeometry {
@@ -173,6 +183,55 @@ export class ChunkRenderer {
   private flagMast = new THREE.MeshStandardMaterial({ color: 0xcfd6e0, roughness: 0.5 });
   private beacon = new THREE.MeshBasicMaterial({ color: 0xffd34d });
   private basket = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.9 });
+  // Section-signature props: each personality dresses its own stretch.
+  private pineTrunk = new THREE.MeshStandardMaterial({ color: 0x5b4632, roughness: 0.9 });
+  private pineDark = new THREE.MeshStandardMaterial({
+    color: 0x1e4d3a,
+    roughness: 0.9,
+    flatShading: true,
+  });
+  private pineSnow = new THREE.MeshStandardMaterial({
+    color: 0xeaf4ff,
+    roughness: 1,
+    flatShading: true,
+  });
+  private amber = new THREE.MeshBasicMaterial({ color: 0xffa02e });
+  private pennants = NEON_COLORS.map(
+    (c) => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })
+  );
+  private searchBeam = new THREE.MeshBasicMaterial({
+    color: 0xbfe9ff,
+    transparent: true,
+    opacity: 0.07,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  // The grotto: near-black vaulted ice, lit by its own crystals.
+  private caveRock = new THREE.MeshStandardMaterial({
+    color: 0x2a3468,
+    emissive: 0x0c1440,
+    roughness: 0.85,
+    flatShading: true,
+    side: THREE.DoubleSide,
+  });
+  private caveGlowA = new THREE.MeshBasicMaterial({ color: 0x7df2ff });
+  private caveGlowB = new THREE.MeshBasicMaterial({ color: 0xb96bff });
+  // Patrol drones: dark shell, warning-amber glow ring and underbeam.
+  private droneShell = new THREE.MeshStandardMaterial({
+    color: 0x232a52,
+    roughness: 0.4,
+    flatShading: true,
+  });
+  private droneGlow = new THREE.MeshBasicMaterial({ color: 0xffb02e });
+  private droneBeam = new THREE.MeshBasicMaterial({
+    color: 0xffb02e,
+    transparent: true,
+    opacity: 0.16,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  private droneMeshes = new Map<string, { obj: THREE.Group; hazard: Hazard }>();
 
   constructor(
     private scene: THREE.Scene,
@@ -190,6 +249,7 @@ export class ChunkRenderer {
     }
     this.chunks.clear();
     this.pickupMeshes.clear();
+    this.droneMeshes.clear();
     this.terrain = terrain;
   }
 
@@ -207,6 +267,7 @@ export class ChunkRenderer {
         });
         for (const p of this.terrain.pickupsForChunk(i)) this.pickupMeshes.delete(p.id);
         for (const b of this.terrain.bonusesForChunk(i)) this.pickupMeshes.delete(b.id);
+        for (const h of this.terrain.hazardsForChunk(i)) this.droneMeshes.delete(h.id);
         this.chunks.delete(i);
       }
     }
@@ -216,6 +277,14 @@ export class ChunkRenderer {
       mesh.rotation.y = time * 3;
       const baseY = mesh.userData.baseY as number;
       mesh.position.y = baseY + Math.sin(time * 2.2 + mesh.position.x) * 0.14;
+    }
+    // Patrol drones glide on the sim's own schedule (hazardX of sim time),
+    // so the sweep you watch is the sweep that hits.
+    for (const [, { obj, hazard }] of this.droneMeshes) {
+      const x = hazardX(hazard, time);
+      const y = this.terrain.height(x, hazard.z);
+      obj.position.set(x, y + 1.15 + Math.sin(time * 2.6 + hazard.phase) * 0.12, hazard.z);
+      obj.rotation.y = time * 2.2;
     }
   }
 
@@ -243,8 +312,11 @@ export class ChunkRenderer {
       const x = this.terrain.centerX(z) + d;
       pos.setX(v, x);
       pos.setY(v, this.terrain.height(x, z));
-      // What you see is what slows you: crud tint tracks the sim's friction.
+      // What you see is what slows you: crud tint tracks the sim's friction,
+      // and glacier blue tracks the GRIP channel — where the floor reads icy,
+      // the edges genuinely bite less.
       c.lerpColors(SNOW_FLOOR, SNOW_CRUD, this.terrain.stickinessAt(x, z));
+      c.lerp(SNOW_ICE, 0.75 * (1 - this.terrain.gripAt(z)));
       colors[v * 3] = c.r;
       colors[v * 3 + 1] = c.g;
       colors[v * 3 + 2] = c.b;
@@ -450,6 +522,48 @@ export class ChunkRenderer {
       group.add(beam);
     }
 
+    // Slalom gates in the narrows: paired candy poles with a neon topper,
+    // the gap between them the thing to thread. The sim pays the chain.
+    for (const g of this.terrain.gatesForChunk(index)) {
+      const neon = this.neons[(index + Math.round(g.z)) % this.neons.length]!;
+      const poleGeo = stripedPole(0.14, GATE_HEIGHT, this.red, this.white);
+      for (const side of [-1, 1]) {
+        const x = g.x + side * g.halfGap;
+        const y = this.terrain.height(x, g.z);
+        const pole = new THREE.Mesh(poleGeo, this.striped);
+        pole.position.set(x, y + GATE_HEIGHT / 2, g.z);
+        pole.castShadow = true;
+        group.add(pole);
+        const tip = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 6), neon);
+        tip.position.set(x, y + GATE_HEIGHT + 0.2, g.z);
+        group.add(tip);
+      }
+    }
+
+    // Patrol drones: built here, flown by update() on the sim's schedule.
+    for (const h of this.terrain.hazardsForChunk(index)) {
+      const drone = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.75, 0), this.droneShell);
+      body.scale.y = 0.65;
+      body.castShadow = true;
+      drone.add(body);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.09, 6, 18), this.droneGlow);
+      ring.rotation.x = Math.PI / 2;
+      drone.add(ring);
+      // The underbeam sweeps the snow: the patrol reads from 200m out.
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.55, 2.2, 8, 1, true),
+        this.droneBeam
+      );
+      beam.position.y = -1.1;
+      drone.add(beam);
+      group.add(drone);
+      this.droneMeshes.set(h.id, { obj: drone, hazard: h });
+    }
+
+    this.addSectionProps(group, index, zTop, zMid);
+    this.addGrotto(group, zTop);
+
     // The absurd part: a city close and tall enough to actually see — some
     // towers rise past course level, beacons blinking gold at their tops —
     // plus hot-air balloons drifting beside the track and clouds below.
@@ -503,5 +617,248 @@ export class ChunkRenderer {
 
     this.scene.add(group);
     return group;
+  }
+
+  // SECTION-SIGNATURE PROPS: each personality dresses its own stretch, so a
+  // color-blind glance at the scenery names the section. Everything here is
+  // pure decoration on the banks, edges, or overhead — never on the racing
+  // floor, never a collider — and the finish apron stays ceremonial-clean.
+  private addSectionProps(group: THREE.Group, index: number, zTop: number, zMid: number): void {
+    if (this.terrain.finishApron(zMid) || this.terrain.pastFinish(zMid)) return;
+    const type = this.terrain.sectionType(this.terrain.sectionIndexAt(zMid));
+    const rng = mulberry32(Math.floor(hash2(this.terrain.seed, index, 90001) * 2 ** 31));
+    const place = (
+      mesh: THREE.Object3D,
+      z: number,
+      d: number, // offset from the centerline (signed)
+      lift: number
+    ): void => {
+      const x = this.terrain.centerX(z) + d;
+      mesh.position.set(x, this.terrain.height(x, z) + lift, z);
+      group.add(mesh);
+    };
+
+    if (type === 'powder') {
+      // Snow-laden pines lining the drifts: the deep-snow section reads as
+      // the one stretch of forest on the whole floating course.
+      for (let k = 0; k < 4; k++) {
+        if (rng() < 0.25) continue;
+        const z = zTop - 4 - rng() * (CHUNK_LENGTH - 8);
+        const side = rng() < 0.5 ? -1 : 1;
+        const d = side * (this.terrain.channelHalfWidth(z) + 2.5 + rng() * 5);
+        const s = 0.8 + rng() * 0.7;
+        const tree = new THREE.Group();
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 1.1, 5), this.pineTrunk);
+        trunk.position.y = 0.5;
+        tree.add(trunk);
+        const lower = new THREE.Mesh(new THREE.ConeGeometry(1.5, 2.6, 7), this.pineDark);
+        lower.position.y = 2.1;
+        lower.castShadow = true;
+        tree.add(lower);
+        const upper = new THREE.Mesh(new THREE.ConeGeometry(1.05, 2.0, 7), this.pineSnow);
+        upper.position.y = 3.4;
+        upper.castShadow = true;
+        tree.add(upper);
+        tree.scale.setScalar(s * 1.6);
+        tree.rotation.y = rng() * Math.PI * 2;
+        place(tree, z, d, 0);
+      }
+    } else if (type === 'canyon' || type === 'glacier') {
+      // Crystal country: the canyon grows carved pillars up its gorge walls,
+      // the glacier grows wilder tilted monoliths over the blue ice.
+      const count = type === 'canyon' ? 3 : 2;
+      for (let k = 0; k < count; k++) {
+        if (rng() < 0.2) continue;
+        const z = zTop - 5 - rng() * (CHUNK_LENGTH - 10);
+        const side = k % 2 === 0 ? -1 : 1;
+        const d = side * (this.terrain.channelHalfWidth(z) + 3.5 + rng() * 3.5);
+        const h = 4 + rng() * 6;
+        const pillar =
+          type === 'canyon'
+            ? new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.95, h, 6), this.crystal)
+            : new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 0), this.crystal);
+        if (type === 'glacier') pillar.scale.set(0.8, h / 2.2, 0.8);
+        pillar.rotation.z = side * (0.06 + rng() * 0.14);
+        pillar.rotation.y = rng() * Math.PI * 2;
+        pillar.castShadow = true;
+        place(pillar, z, d, h * (type === 'canyon' ? 0.42 : 0.32));
+        // A glow shard at each foot so the gallery reads at night too.
+        const shard = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(0.22, 0),
+          k % 2 === 0 ? this.caveGlowA : this.caveGlowB
+        );
+        place(shard, z, d - side * 0.9, 0.2);
+      }
+    } else if (type === 'steps') {
+      // Every terrace edge is a launch line — light it like one. The studs
+      // sit on the brink, right where the floor lets go. Terraces run every
+      // 50m from each section head (and 400 is a multiple of 50), so the
+      // brink — the drop fade's midpoint — sits at -z = 50k + 47.
+      const TERRACE = 50;
+      for (let k = Math.floor(-zTop / TERRACE); ; k++) {
+        const zBrink = -(k * TERRACE + 47);
+        if (zBrink <= zTop - CHUNK_LENGTH) break;
+        if (zBrink > zTop) continue;
+        if (this.terrain.sectionType(this.terrain.sectionIndexAt(zBrink)) !== 'steps') continue;
+        const half = this.terrain.channelHalfWidth(zBrink) - 2;
+        const neon = this.neons[k % this.neons.length]!;
+        for (let d = -half; d <= half; d += 3.5) {
+          const stud = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 6), neon);
+          place(stud, zBrink, d, 0.16);
+        }
+      }
+    } else if (type === 'sweeper') {
+      // Gold studs trace the inside of each banked ess: the carve line,
+      // drawn on the snow.
+      for (let local = 2; local < CHUNK_LENGTH; local += 6) {
+        const z = zTop - local;
+        const curv =
+          (this.terrain.centerX(z - 20) -
+            2 * this.terrain.centerX(z) +
+            this.terrain.centerX(z + 20)) /
+          400;
+        if (Math.abs(curv) < 0.012) continue;
+        const d = Math.sign(curv) * (this.terrain.channelHalfWidth(z) + 0.8);
+        const stud = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 6), this.gold);
+        place(stud, z, d, 0.18);
+      }
+    } else if (type === 'narrows') {
+      // A pennant line strung across the corridor: race-village bunting
+      // sagging overhead, one string per chunk.
+      const z = zTop - 8 - rng() * 22;
+      const half = this.terrain.channelHalfWidth(z) + 1.5;
+      const mastGeo = new THREE.CylinderGeometry(0.09, 0.09, 6.2, 5);
+      for (const side of [-1, 1]) {
+        const mast = new THREE.Mesh(mastGeo, this.flagMast);
+        place(mast, z, side * half, 3.1);
+      }
+      const cX = this.terrain.centerX(z);
+      const yTop =
+        Math.max(this.terrain.height(cX - half, z), this.terrain.height(cX + half, z)) + 6.0;
+      const flags = Math.max(5, Math.round(half));
+      const flagGeo = new THREE.ConeGeometry(0.28, 0.85, 3);
+      for (let k = 0; k < flags; k++) {
+        const u = (k + 0.5) / flags; // 0..1 across the span
+        const sag = Math.sin(u * Math.PI) * 1.1;
+        const flag = new THREE.Mesh(flagGeo, this.pennants[k % this.pennants.length]!);
+        flag.rotation.x = Math.PI; // hang point-down
+        flag.position.set(cX - half + u * half * 2, yTop - sag - 0.5, z);
+        group.add(flag);
+      }
+    } else if (type === 'plunge') {
+      // Speed chevrons streak both edges: amber dashes angled downhill,
+      // the drop announcing itself.
+      for (const local of [8, 26]) {
+        const z = zTop - local;
+        for (const side of [-1, 1]) {
+          const d = side * (this.terrain.channelHalfWidth(z) + 1.2);
+          for (let k = 0; k < 2; k++) {
+            const bar = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.22, 0.22), this.amber);
+            bar.rotation.y = side * 0.55 * (k === 0 ? 1 : -1);
+            place(bar, z - k * 1.4, d, 0.3);
+          }
+        }
+      }
+    } else if (type === 'bowl' && rng() < 0.5) {
+      // A floodlight rig over the playground: a tall mast and a soft beam
+      // washing across the bowl.
+      const z = zTop - 8 - rng() * 24;
+      const side = rng() < 0.5 ? -1 : 1;
+      const d = side * (this.terrain.channelHalfWidth(z) + 6);
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 10, 6), this.flagMast);
+      place(mast, z, d, 5);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.55, 6, 6), this.beacon);
+      place(head, z, d, 10.2);
+      const beam = new THREE.Mesh(new THREE.ConeGeometry(6, 26, 10, 1, true), this.searchBeam);
+      beam.rotation.z = side * 1.15; // slant the cone over the track
+      place(beam, z, d - side * 11, 6);
+    }
+  }
+
+  // THE GROTTO: a vaulted ice roof slung wall-to-wall over the channel,
+  // icicles and glow crystals under it, and runway studs carrying the line
+  // through the dark. The heightfield is untouched — the sim's caveAt()
+  // drives the scene-level darkness; this is the architecture it implies.
+  private addGrotto(group: THREE.Group, zTop: number): void {
+    const { z: mouth, span } = this.terrain.grotto;
+    const zLo = Math.max(zTop - CHUNK_LENGTH, mouth - span);
+    const zHi = Math.min(zTop, mouth);
+    if (zLo >= zHi) return;
+    const rng = mulberry32(Math.floor(hash2(this.terrain.seed, Math.round(zTop), 90007) * 2 ** 31));
+
+    // The vault: a track-space grid like the ribbon's, its height blending
+    // from the wall tops at the edges up to an apex over the centerline.
+    // The apex breathes with caveAt, so both portals are lowered brows.
+    const len = zHi - zLo;
+    let roofGeo: THREE.BufferGeometry = new THREE.PlaneGeometry(2, len, 20, 16);
+    roofGeo.rotateX(-Math.PI / 2);
+    roofGeo.translate(0, 0, (zHi + zLo) / 2);
+    roofGeo = roofGeo.toNonIndexed();
+    const pos = roofGeo.getAttribute('position');
+    for (let v = 0; v < pos.count; v++) {
+      const z = pos.getZ(v);
+      const u = pos.getX(v); // -1..1 across the span
+      const halfSpan = this.terrain.channelHalfWidth(z) + RIBBON_WALL_MARGIN;
+      const x = this.terrain.centerX(z) + u * halfSpan;
+      const wallY = this.terrain.height(x, z);
+      const floorY = this.terrain.height(this.terrain.centerX(z), z);
+      const apex = 6 + 9 * this.terrain.caveAt(z);
+      const t = Math.cos((u * Math.PI) / 2); // 1 over the middle, 0 at the walls
+      pos.setX(v, x);
+      pos.setY(v, wallY + Math.max(0, floorY + apex - wallY) * t * t);
+    }
+    roofGeo.computeVertexNormals();
+    const roof = new THREE.Mesh(roofGeo, this.caveRock);
+    group.add(roof);
+
+    // Icicles hang from the vault; glow crystals stud it. Both use the same
+    // height rule as the roof so nothing floats.
+    const roofY = (x: number, z: number, u: number): number => {
+      const wallY = this.terrain.height(x, z);
+      const floorY = this.terrain.height(this.terrain.centerX(z), z);
+      const apex = 6 + 9 * this.terrain.caveAt(z);
+      const t = Math.cos((u * Math.PI) / 2);
+      return wallY + Math.max(0, floorY + apex - wallY) * t * t;
+    };
+    const deep = (z: number) => this.terrain.caveAt(z) > 0.25;
+    for (let k = 0; k < 9; k++) {
+      const z = zLo + rng() * len;
+      if (!deep(z)) continue;
+      const u = (rng() * 2 - 1) * 0.7;
+      const x =
+        this.terrain.centerX(z) + u * (this.terrain.channelHalfWidth(z) + RIBBON_WALL_MARGIN);
+      const drop = 0.8 + rng() * 1.8;
+      const icicle = new THREE.Mesh(new THREE.ConeGeometry(0.18, drop, 5), this.crystal);
+      icicle.rotation.x = Math.PI;
+      icicle.position.set(x, roofY(x, z, u) - drop / 2 + 0.1, z);
+      group.add(icicle);
+    }
+    for (let k = 0; k < 7; k++) {
+      const z = zLo + rng() * len;
+      if (!deep(z)) continue;
+      const u = (rng() * 2 - 1) * 0.85;
+      const x =
+        this.terrain.centerX(z) + u * (this.terrain.channelHalfWidth(z) + RIBBON_WALL_MARGIN);
+      const gem = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.3 + rng() * 0.35, 0),
+        rng() < 0.6 ? this.caveGlowA : this.caveGlowB
+      );
+      gem.position.set(x, roofY(x, z, u) - 0.25, z);
+      gem.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+      group.add(gem);
+    }
+
+    // Runway studs: paired cyan lights every few meters along the floor
+    // edges, the line to ride when the sky goes away.
+    for (let z = Math.floor(zHi) - 2; z > zLo; z -= 5) {
+      if (this.terrain.caveAt(z) === 0) continue;
+      const half = this.terrain.channelHalfWidth(z) + 0.6;
+      for (const side of [-1, 1]) {
+        const x = this.terrain.centerX(z) + side * half;
+        const stud = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), this.caveGlowA);
+        stud.position.set(x, this.terrain.height(x, z) + 0.15, z);
+        group.add(stud);
+      }
+    }
   }
 }

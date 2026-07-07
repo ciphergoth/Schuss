@@ -237,6 +237,21 @@ function steerToward(
   state.heading += rate * dt;
 }
 
+// A solid hit at (ox, oz): start the tumble and carom the skier sideways
+// past the thing. Shared by static obstacles (below) and the sim's moving
+// hazards (sim.ts), so a drone hits exactly like a crystal.
+export function hitSkier(state: SkierState, ox: number, oz: number, r: number): void {
+  state.tumbling = TUMBLE_TIME;
+  state.speed *= TUMBLE_SPEED_KEEP;
+  state.airTime = 0;
+  state.gap = 0;
+  const perpX = Math.cos(state.heading);
+  const perpZ = Math.sin(state.heading);
+  const side = perpX * (state.x - ox) + perpZ * (state.z - oz) >= 0 ? 1 : -1;
+  state.x = ox + perpX * side * (r + 0.05);
+  state.z = oz + perpZ * side * (r + 0.05);
+}
+
 // Obstacles are solid cylinders: overlap in the horizontal plane only counts
 // below their top, so a jump has to genuinely clear them. A hit starts a
 // tumble and caroms the skier sideways past the obstacle.
@@ -247,15 +262,7 @@ function collideObstacles(state: SkierState, terrain: Terrain): void {
     const r = obstacle.radius + SKIER_RADIUS;
     if (dx * dx + dz * dz >= r * r) continue;
     if (state.y >= terrain.height(obstacle.x, obstacle.z) + obstacle.height) continue;
-    state.tumbling = TUMBLE_TIME;
-    state.speed *= TUMBLE_SPEED_KEEP;
-    state.airTime = 0;
-    state.gap = 0;
-    const perpX = Math.cos(state.heading);
-    const perpZ = Math.sin(state.heading);
-    const side = perpX * -dx + perpZ * -dz >= 0 ? 1 : -1;
-    state.x = obstacle.x + perpX * side * (r + 0.05);
-    state.z = obstacle.z + perpZ * side * (r + 0.05);
+    hitSkier(state, obstacle.x, obstacle.z, r);
     return;
   }
 }

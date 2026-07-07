@@ -41,7 +41,14 @@ terrain.ts). At every SECTION BOUNDARY (400m) a SECTOR popup grades average pace
 (25·(avg−12)^2.2 — a full-boost sector outearns several tricks; SECTOR_LENGTH
 = SECTION_LENGTH, so the graded line, the section change, and the glowing arc
 all coincide), so fuel
-burned into speed converts to points: tricks → fuel → speed → score. Every
+burned into speed converts to points: tricks → fuel → speed → score. The
+narrows adds its own score line: SLALOM GATES ride the section's bend
+apexes (one per ess extreme, centered on the swinging centerline —
+terrain.gatesForChunk), and threading one pays GATE_POINTS × the running
+chain (150/300/450..., score only, NEVER fuel; sim.gateChain, each thread
+chimes a step higher); a miss — wide, over the poles, or tumbling
+through — just resets the chain, the forgone escalation being the whole
+punishment. Every
 star is COMPUTED onto a reference flight integrated against the real
 heightfield (terrain.starOnArc): the gold x3 rides the human-pop-at-cruise
 arc, the magenta x5 rides the superhuman-pop-at-boost-pace arc, 30-50m
@@ -114,7 +121,8 @@ loop.
 
 Terrain is a pure height function with SECTION personalities: every 400m
 the course becomes one of cruise / narrows (7m half-width squeeze, empty
-and fast, its own snapping slalom) / bowl (27m playground: obstacle
+and fast, its own snapping slalom — slalom GATES on the apexes, pennant
+bunting overhead) / bowl (27m playground: obstacle
 slaloms, rich coins, kickers of every size) / plunge (the grade breaks
 away mid-section, big L kickers only) / steps (a staircase of launchable
 terraces) / sweeper (deliberate sine S-turns with the floor superelevated
@@ -141,7 +149,17 @@ falls, 30m rhythm), one seeded into each half of the run (25-40% and
 55-70% in, seeded order) — pure added downhill on the spine, so
 walls/banking/star arcs/drainage inherit them for free; the falls are the
 feature (no kickers or obstacles compete, and the max-gap counter treats
-them as featured). Hips and step-down
+them as featured). The THIRD landmark is the GROTTO (terrain.grotto /
+caveAt): 90m of channel under a vaulted ice roof, seeded between the
+falls (44-50% in). The heightfield is UNTOUCHED — a cave is atmosphere,
+not terrain, so physics and drainage can't tell — but the interior keeps
+itself clear: no kickers throw into the dark (the keep-clear reaches
+KICKER_THROW uphill of the mouth), no obstacles lurk in it, coins stay.
+caveAt(z) (0 outside, easing to 1 through each 14m portal) is the render
+layer's dimmer: sky falls to blue-black, fog closes, snowfall and aurora
+hold their breath, and the vault (chunks.addGrotto — roof grid, icicles,
+glow crystals, cyan runway studs along the floor edges) carries the line
+to the far portal; stepping back out is the exhale. Hips and step-down
 scoops never roll on banked-ess ground (sweeper/canyon) — a tilted pad
 or carved scoop there is two banks fighting.
 Sections never repeat back-to-back, blend over their
@@ -182,12 +200,30 @@ plus a victory fanfare, and raises the ceremony panel ~1.8s later: score,
 time, BEST (localStorage key skigame-best-<seed>), and one action — S /
 Ski again — that restarts from the gate (with one course there is no
 picker and no separate retry button; the restart IS the menu).
-The
-section framework is where moving hazards will plug in.
+Moving
+hazards are live: PATROL DRONES (terrain.hazardsForChunk, position =
+hazardX(h, sim.time) — a pure function of seed and time, so the sweep
+you watch IS the sweep that hits) glide laterally across the bowl and
+the glacier on seeded sines, at most one per chunk, never sharing a
+chunk with a kicker's ramp or the uphill lip's landing, never on a
+setpiece or in the grotto, and never in the opening stretch; their sweep
+stays inside the floor so there is always clean snow to dodge onto. A
+hit is an ordinary obstacle hit (hitSkier in skier.ts — same brief
+tumble, same 60% speed kept), a close shave pays the same near-miss
+celebration, and a drone's chunk carries no static obstacles (the dodge
+it demands must never be ambushed).
 The render layer
 draws the course as a ribbon clipped just past the bounce barrier, so the
 walls stay low and the world beyond shows: neon edge poles, a city skyline
-with beacon-topped towers, hot-air balloons, clouds below.
+with beacon-topped towers, hot-air balloons, clouds below. Every section
+also DRESSES its own stretch (chunks.addSectionProps — pure decoration
+on the banks, edges, and overhead, never on the racing floor, and the
+finish apron stays clean): snow-capped pines in the powder, carved
+crystal pillars up the canyon walls, tilted ice monoliths on the glacier
+(whose floor also tints blue with the GRIP channel), lit terrace brinks
+on the steps, gold studs tracing the inside of a sweeper's esses,
+pennant bunting over the narrows, amber speed chevrons down the plunge,
+and the odd floodlight rig over the bowl.
 
 ## Tech stack
 
