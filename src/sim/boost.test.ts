@@ -147,7 +147,10 @@ describe('boost economy', () => {
     venue?: number,
     charge = 1 // banked jump charge spent at the release (1 = superhuman)
   ): number[] {
-    const sim = createSim(1);
+    // Venue hunting happens on the endless mountain: a finite course only
+    // deals ~80 chunks, and a rare venue class (a threadable hip, say) can
+    // simply not roll before the finish line.
+    const sim = createSim(1, Infinity);
     let index = venue ?? 3;
     while (!sim.terrain.jumpForChunk(index)) index++;
     const jump = sim.terrain.jumpForChunk(index)!;
@@ -190,7 +193,7 @@ describe('boost economy', () => {
   // SUCCEEDING is itself an assertion: the mountain keeps dealing stars a
   // reference rider can thread.
   function findThreadableVenue(mult: 3 | 5, speed: number, charge: number, hip: boolean): number {
-    const t = createSim(1).terrain;
+    const t = createSim(1, Infinity).terrain;
     for (let index = 3; index < 600; index++) {
       const jump = t.jumpForChunk(index);
       if (!jump || (jump.hip !== 0) !== hip) continue;

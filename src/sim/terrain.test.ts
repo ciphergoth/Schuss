@@ -161,7 +161,7 @@ describe('terrain', () => {
   });
 
   it('hip pads bank the approach toward the throw', () => {
-    const t = new Terrain(1);
+    const t = new Terrain(1, Infinity); // hips are rare; hunt the endless mountain
     let found = false;
     for (let i = 3; i < 400 && !found; i++) {
       const jump = t.jumpForChunk(i);
@@ -460,7 +460,17 @@ describe('terrain', () => {
         expect(type).not.toBe(t.sectionType(s - 1)); // never repeats
       }
       // Nothing is banned: over 400 sections every type shows up.
-      for (const type of ['cruise', 'narrows', 'bowl', 'plunge', 'steps', 'sweeper']) {
+      for (const type of [
+        'cruise',
+        'narrows',
+        'bowl',
+        'plunge',
+        'steps',
+        'sweeper',
+        'canyon',
+        'glacier',
+        'powder',
+      ]) {
         expect(counts[type] ?? 0).toBeGreaterThan(0);
       }
       // And the mix leans where the weights lean.
@@ -473,6 +483,70 @@ describe('terrain', () => {
     }
     // Determinism: the archetype is a pure function of the seed.
     expect(new Terrain(9).archetype.name).toBe(new Terrain(9).archetype.name);
+  });
+
+  it('a canyon weaves and banks: the esses are the section', () => {
+    const t = new Terrain(4, Infinity);
+    let s = 1;
+    while (t.sectionType(s) !== 'canyon') s++;
+    const z0 = -s * SECTION_LENGTH;
+    // The centerline really swings mid-section...
+    let lo = 1e9;
+    let hi = -1e9;
+    for (let z = z0 - 100; z > z0 - 300; z -= 4) {
+      const c = t.centerX(z);
+      lo = Math.min(lo, c);
+      hi = Math.max(hi, c);
+    }
+    expect(hi - lo).toBeGreaterThan(25); // CANYON_AMP is a real weave
+    // ...and the floor superelevates through the bends: somewhere in the
+    // section the cross-slope approaches the banking cap.
+    let maxCross = 0;
+    for (let z = z0 - 100; z > z0 - 300; z -= 4) {
+      const c = t.centerX(z);
+      const cross = Math.abs(t.height(c + 5, z) - t.height(c - 5, z)) / 10;
+      maxCross = Math.max(maxCross, cross);
+    }
+    expect(maxCross).toBeGreaterThan(0.18);
+  });
+
+  it('glacier ice halves the bite and cross-fades back to snow', () => {
+    const t = new Terrain(4, Infinity);
+    let s = 1;
+    while (t.sectionType(s) !== 'glacier') s++;
+    const mid = -s * SECTION_LENGTH - SECTION_LENGTH / 2;
+    expect(t.gripAt(mid)).toBeCloseTo(0.45, 5);
+    // Neighbors are snow, and the boundary blends — no step.
+    const before = t.gripAt(-s * SECTION_LENGTH + 100);
+    expect(before).toBe(t.sectionType(s - 1) === 'glacier' ? 0.45 : 1);
+    const a = t.gripAt(mid + SECTION_LENGTH / 2 + 1);
+    const b = t.gripAt(mid + SECTION_LENGTH / 2 - 1);
+    expect(Math.abs(a - b)).toBeLessThan(0.05);
+  });
+
+  it('powder buries everything but the groomed ribbon', () => {
+    const t = new Terrain(4, Infinity);
+    let s = 1;
+    while (t.sectionType(s) !== 'powder') s++;
+    // Sample mid-section: the plan lane is clean, the field is deep.
+    let lane = 0;
+    let laneN = 0;
+    let field = 0;
+    let fieldN = 0;
+    for (let z = -s * SECTION_LENGTH - 80; z > -(s + 1) * SECTION_LENGTH + 80; z -= 7) {
+      const center = t.centerX(z);
+      lane += t.stickinessAt(center + t.planOffset(z), z);
+      laneN++;
+      for (const off of [-11, 11]) {
+        const d = t.planOffset(z) + off;
+        if (Math.abs(d) < t.channelHalfWidth(z) - 1) {
+          field += t.stickinessAt(center + d, z);
+          fieldN++;
+        }
+      }
+    }
+    expect(lane / laneN).toBeLessThan(0.1); // the ribbon is groomed
+    expect(field / fieldN).toBeGreaterThan(0.6); // the field is drag
   });
 
   it('star contracts draw seeded demands from their tier pools', () => {

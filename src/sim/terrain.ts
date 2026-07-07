@@ -31,7 +31,8 @@ const SECTION_BLEND = 0.15; // fraction of the section that fades into the next
 // construct Terrain with courseLength Infinity (an endless mountain).
 export const COURSE_LENGTH = SECTION_LENGTH * 8;
 
-export type SectionType = 'cruise' | 'narrows' | 'bowl' | 'plunge' | 'steps' | 'sweeper';
+export type SectionType =
+  'cruise' | 'narrows' | 'bowl' | 'plunge' | 'steps' | 'sweeper' | 'canyon' | 'glacier' | 'powder';
 
 interface SectionSpec {
   half: number; // mean floor half-width
@@ -46,6 +47,9 @@ interface SectionSpec {
   obstacleCount: number;
   crudThreshold: number; // higher = cleaner snow (patch noise cutoff)
   bermRoom: number; // meters of bank kept crud-free: the rideable berm line
+  grip: number; // 1 = snow; below 1 the edges bite less (ice: less
+  // friction, less turn authority). Drag-only stickiness can't express a
+  // faster-than-snow surface, so grip is its own channel.
 }
 
 const TERRACE_LENGTH = 50;
@@ -68,6 +72,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleCount: 1,
     crudThreshold: 0.62,
     bermRoom: 0,
+    grip: 1,
   },
   // High walls, no room, pure nerve. Nothing in the corridor but you.
   narrows: {
@@ -83,6 +88,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleCount: 0,
     crudThreshold: 0.95,
     bermRoom: 0,
+    grip: 1,
   },
   // The playground: wide open, obstacle slaloms, kickers of every size.
   // Rollers run calmer here than in cruise: across 27m of floor the bank
@@ -101,6 +107,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleCount: 3,
     crudThreshold: 0.55,
     bermRoom: 0,
+    grip: 1,
   },
   // The grade breaks away mid-section: raw speed, clean snow, big Ls only.
   plunge: {
@@ -116,6 +123,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleCount: 0,
     crudThreshold: 0.78,
     bermRoom: 0,
+    grip: 1,
   },
   // Giant terraces; every edge is a launch with a landing below.
   steps: {
@@ -131,6 +139,7 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleCount: 0,
     crudThreshold: 0.7,
     bermRoom: 0,
+    grip: 1,
   },
   // Big banked S-turns where carving the wall is the racing line.
   // Rollers run quiet: at each S-turn's bank flip the transition already
@@ -154,6 +163,63 @@ const SECTION_SPECS: Record<SectionType, SectionSpec> = {
     obstacleCount: 1,
     crudThreshold: 0.62,
     bermRoom: 5,
+    grip: 1,
+  },
+  // The pipe: a tight gorge whose esses run banked at the cap — wall to
+  // wall is the only line. Clean snow, no clutter; the walls ARE the
+  // feature. Carries the sweeper's extraDrop for the same reason (the bank
+  // transient must stay inside the drainage budget) — a canyon dives.
+  canyon: {
+    half: 10,
+    swing: 1.5,
+    curveAmp: 14,
+    rollerScale: 0.4,
+    extraDrop: 30,
+    terraced: false,
+    kickerChance: 0.15,
+    kickerKinds: ['S', 'M'],
+    obstacleChance: 0,
+    obstacleCount: 0,
+    crudThreshold: 0.95,
+    bermRoom: 6,
+    grip: 1,
+  },
+  // Blue ice: fast, clean, and slippery — the edges bite less, so turns
+  // arrive late and speed is nearly free. Crystal gardens to thread.
+  glacier: {
+    half: 16,
+    swing: 5,
+    curveAmp: 22,
+    rollerScale: 0.5,
+    extraDrop: 0,
+    terraced: false,
+    kickerChance: 0.25,
+    kickerKinds: ['M', 'L'],
+    obstacleChance: 0.5,
+    obstacleCount: 2,
+    crudThreshold: 0.97,
+    bermRoom: 0,
+    grip: 0.45,
+  },
+  // Deep powder with one groomed ribbon: the golden path is the ONLY fast
+  // line (crudThreshold 0 turns the whole floor to drag except the clean
+  // corridor stickinessAt always keeps along the plan). Line discipline as
+  // a section. Powder is drag, not friction — it can slow you, never trap
+  // you, so the drainage guarantee is untouched.
+  powder: {
+    half: 20,
+    swing: 6,
+    curveAmp: 18,
+    rollerScale: 0.6,
+    extraDrop: 0,
+    terraced: false,
+    kickerChance: 0.2,
+    kickerKinds: ['S', 'M', 'L'],
+    obstacleChance: 0.3,
+    obstacleCount: 1,
+    crudThreshold: 0,
+    bermRoom: 0,
+    grip: 1,
   },
 };
 
@@ -164,6 +230,9 @@ const SECTION_ORDER: readonly SectionType[] = [
   'plunge',
   'steps',
   'sweeper',
+  'canyon',
+  'glacier',
+  'powder',
 ];
 
 // COURSE ARCHETYPES: what kind of course this seed is. Seeds used to differ
@@ -187,7 +256,17 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // The balanced mountain this game grew up on — still in the rotation.
     name: 'The Classic',
-    weights: { cruise: 1, narrows: 1, bowl: 1, plunge: 1, steps: 1, sweeper: 1 },
+    weights: {
+      cruise: 1,
+      narrows: 1,
+      bowl: 1,
+      plunge: 1,
+      steps: 1,
+      sweeper: 1,
+      canyon: 1,
+      glacier: 1,
+      powder: 1,
+    },
     kickers: 1,
     bigAir: 0,
     obstacles: 1,
@@ -196,7 +275,17 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // A kicker circus: wide playgrounds, terraces, XLs everywhere.
     name: 'The Airfield',
-    weights: { cruise: 1.4, narrows: 0.25, bowl: 3, plunge: 0.3, steps: 2, sweeper: 0.8 },
+    weights: {
+      cruise: 1.4,
+      narrows: 0.25,
+      bowl: 3,
+      plunge: 0.3,
+      steps: 2,
+      sweeper: 0.8,
+      canyon: 0.3,
+      glacier: 0.5,
+      powder: 1,
+    },
     kickers: 1.5,
     bigAir: 0.8,
     obstacles: 0.7,
@@ -205,7 +294,17 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // Tight and fast: pinched slaloms into grade breaks, sector money.
     name: 'The Chute',
-    weights: { cruise: 1, narrows: 3, bowl: 0.25, plunge: 2.4, steps: 0.25, sweeper: 1 },
+    weights: {
+      cruise: 1,
+      narrows: 3,
+      bowl: 0.25,
+      plunge: 2.4,
+      steps: 0.25,
+      sweeper: 1,
+      canyon: 2,
+      glacier: 1,
+      powder: 0.25,
+    },
     kickers: 0.6,
     bigAir: 0,
     obstacles: 0.5,
@@ -214,7 +313,17 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // Carving country: superelevated S after S — the bank is the line.
     name: 'The Wall',
-    weights: { cruise: 0.8, narrows: 1.2, bowl: 0.4, plunge: 0.7, steps: 0.3, sweeper: 3.5 },
+    weights: {
+      cruise: 0.8,
+      narrows: 1.2,
+      bowl: 0.4,
+      plunge: 0.7,
+      steps: 0.3,
+      sweeper: 3.5,
+      canyon: 2.2,
+      glacier: 0.6,
+      powder: 0.3,
+    },
     kickers: 0.8,
     bigAir: 0,
     obstacles: 0.8,
@@ -223,7 +332,17 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // The playground: wide bowls, obstacle slaloms, coins everywhere.
     name: 'The Garden',
-    weights: { cruise: 1.4, narrows: 0.4, bowl: 3, plunge: 0.25, steps: 0.5, sweeper: 1 },
+    weights: {
+      cruise: 1.4,
+      narrows: 0.4,
+      bowl: 3,
+      plunge: 0.25,
+      steps: 0.5,
+      sweeper: 1,
+      canyon: 0.3,
+      glacier: 0.4,
+      powder: 1.4,
+    },
     kickers: 1,
     bigAir: 0.25,
     obstacles: 1.6,
@@ -232,11 +351,78 @@ const ARCHETYPES: readonly Archetype[] = [
   {
     // Rhythm country: terrace after terrace, every edge a launch.
     name: 'The Staircase',
-    weights: { cruise: 0.9, narrows: 0.4, bowl: 1, plunge: 0.5, steps: 3, sweeper: 0.7 },
+    weights: {
+      cruise: 0.9,
+      narrows: 0.4,
+      bowl: 1,
+      plunge: 0.5,
+      steps: 3,
+      sweeper: 0.7,
+      canyon: 0.5,
+      glacier: 0.6,
+      powder: 0.6,
+    },
     kickers: 0.9,
     bigAir: 0.4,
     obstacles: 0.8,
     coins: 1,
+  },
+  {
+    // The gorge: banked pipe after banked pipe, wall-to-wall carving.
+    name: 'The Pipeline',
+    weights: {
+      cruise: 0.8,
+      narrows: 1,
+      bowl: 0.3,
+      plunge: 0.8,
+      steps: 0.3,
+      sweeper: 1.2,
+      canyon: 3.5,
+      glacier: 0.5,
+      powder: 0.3,
+    },
+    kickers: 0.7,
+    bigAir: 0,
+    obstacles: 0.6,
+    coins: 1.2,
+  },
+  {
+    // Blue ice: everything fast, nothing bites, crystal gardens to thread.
+    name: 'The Glacier',
+    weights: {
+      cruise: 0.8,
+      narrows: 0.8,
+      bowl: 0.4,
+      plunge: 1.6,
+      steps: 0.4,
+      sweeper: 0.8,
+      canyon: 0.6,
+      glacier: 3.2,
+      powder: 0.25,
+    },
+    kickers: 0.9,
+    bigAir: 0.3,
+    obstacles: 1.1,
+    coins: 0.9,
+  },
+  {
+    // Backcountry: deep drifts, one groomed ribbon, coins off the line.
+    name: 'The Backcountry',
+    weights: {
+      cruise: 1.2,
+      narrows: 0.3,
+      bowl: 1,
+      plunge: 0.4,
+      steps: 0.5,
+      sweeper: 0.7,
+      canyon: 0.3,
+      glacier: 0.4,
+      powder: 3.2,
+    },
+    kickers: 0.9,
+    bigAir: 0.3,
+    obstacles: 0.6,
+    coins: 1.5,
   },
 ];
 
@@ -266,6 +452,11 @@ const SWEEP_WAVELENGTH = 200;
 const SWEEP_EASE = 90;
 const NARROWS_AMP = 15;
 const NARROWS_WAVELENGTH = 115;
+// Canyons carve between the two: tighter than a sweeper's flow, longer
+// than the narrows' snap — the esses run banked at the cap and the pipe's
+// walls are the racing line.
+const CANYON_AMP = 24;
+const CANYON_WAVELENGTH = 170;
 
 export interface Obstacle {
   x: number;
@@ -566,7 +757,9 @@ export class Terrain {
         ? [SWEEP_AMP, SWEEP_WAVELENGTH]
         : type === 'narrows'
           ? [NARROWS_AMP, NARROWS_WAVELENGTH]
-          : [0, 1];
+          : type === 'canyon'
+            ? [CANYON_AMP, CANYON_WAVELENGTH]
+            : [0, 1];
     if (amp === 0) return 0;
     const local = -z - s * SECTION_LENGTH;
     const ease =
@@ -726,17 +919,23 @@ export class Terrain {
     // The kicker sits on the golden path: following the plan lines you up.
     const xOffset = Math.max(-maxOffset, Math.min(maxOffset, this.planOffset(zLip)));
     const variantRoll = hash2(this.seed, index, 7333);
+    // Sweeper and canyon esses superelevate the floor hard; a scooped
+    // landing or a tilted hip pad on that ground is two banks fighting
+    // (the ess's cross-slope drowns the scoop and cancels the pad's
+    // throw). Those sections deal plain kickers only.
+    const sectionType = this.sectionType(this.sectionIndexAt(zLip));
+    const banked = sectionType === 'sweeper' || sectionType === 'canyon';
     // Scoop depth is capped: every extra meter of drop is a meter the
     // carved landing floor must dissipate before it rejoins the grade.
     const stepDown =
-      !opening && kind !== 'S' && variantRoll < 0.3 ? Math.min(lipHeight * 1.6, 3.5) : 0;
+      !opening && !banked && kind !== 'S' && variantRoll < 0.3 ? Math.min(lipHeight * 1.6, 3.5) : 0;
     // Hips throw toward the center so the slung flight stays over the floor;
     // they need lateral room for the landing, and they don't roll in
     // plunges — the mid-plunge grade swing bends flights off any fixed
     // sling line (plunges are for speed and big Ls anyway).
-    const inPlunge = this.sectionType(this.sectionIndexAt(zLip)) === 'plunge';
+    const inPlunge = sectionType === 'plunge';
     const hip =
-      !opening && !inPlunge && stepDown === 0 && halfChannel >= 13 && variantRoll > 0.75
+      !opening && !inPlunge && !banked && stepDown === 0 && halfChannel >= 13 && variantRoll > 0.75
         ? Math.abs(xOffset) > 1
           ? -Math.sign(xOffset)
           : hash2(this.seed, index, 9257) < 0.5
@@ -866,6 +1065,13 @@ export class Terrain {
   // kicker ramps and their approaches stay clean, and a clean racing line
   // always snakes through — crud never walls off the whole course. (Crud
   // BELOW a kicker's flight path is fair game: jump it.)
+  // How well the edges bite here: 1 on snow, below 1 on glacier ice (less
+  // friction, less turn authority — skier.ts scales both). Cross-fades at
+  // section boundaries like every other section scalar.
+  gripAt(z: number): number {
+    return this.sectionParam(z, (spec) => spec.grip);
+  }
+
   stickinessAt(x: number, z: number): number {
     const d = x - this.centerX(z);
     // Sections with berm room keep the first stretch of bank crud-free:

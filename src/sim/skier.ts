@@ -416,7 +416,9 @@ export function stepSkier(
   // Turning authority ramps up with speed (skis can't pivot while
   // stationary); a tuck narrows the target range inside steerToward. The
   // reference is the LAGGED course heading, so bends must be steered.
-  steerToward(state, terrain, input, TURN_RATE * Math.min(state.speed / 4, 1), dt);
+  // Glacier ice halves the edges' bite: turns arrive late there.
+  const grip = terrain.gripAt(state.z);
+  steerToward(state, terrain, input, TURN_RATE * Math.min(state.speed / 4, 1) * grip, dt);
 
   // The banked-turn force: the slope's pull perpendicular to the skis
   // rotates the heading (see GRAVITY_TURN_CAP). This is what makes a
@@ -434,7 +436,9 @@ export function stepSkier(
   // air drag. Friction can stop the skier but never pushes them backwards.
   // Snowplow scales friction up; tuck cuts drag.
   const slopeAccel = -G * (gx * dirX + gz * dirZ);
-  const muG = (FRICTION + plow * (PLOW_FRICTION - FRICTION)) * G;
+  // Ice also bites the brakes less: friction (the plow's included) scales
+  // with grip. Less friction can only help the drainage guarantee.
+  const muG = (FRICTION + plow * (PLOW_FRICTION - FRICTION)) * G * grip;
   const stickiness = terrain.stickinessAt(state.x, state.z);
   const friction =
     muG +
