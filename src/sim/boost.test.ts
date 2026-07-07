@@ -153,6 +153,7 @@ describe('boost economy', () => {
     s.x = t.centerX(z0) + jump.xOffset;
     s.z = z0;
     s.heading = t.trackHeading(z0);
+    s.headingRef = t.trackHeading(z0); // a rider already tracking the course
     s.speed = speed;
     s.y = t.height(s.x, s.z);
     // vy must match the slope (leg-band contact treats a zeroed vy as a

@@ -18,6 +18,9 @@ export interface SkierState {
   y: number; // world height; equals terrain height while grounded
   vy: number; // vertical velocity; terrain-following in full contact
   heading: number; // radians; 0 = straight downhill (-z), positive = toward +x
+  headingRef: number; // lagged "follow the course" reference: eases toward the
+  // live course heading with HEADING_LAG_TAU, so neutral steering TRAILS the
+  // bends and a slalom demands active input instead of auto-following
   speed: number; // horizontal m/s along the heading
   airTime: number; // seconds airborne this jump; 0 = grounded
   tumbling: number; // seconds of tumble remaining; 0 = on skis
@@ -53,11 +56,19 @@ const TUCK_DRAG_CUT = 0.5; // full tuck halves drag: top speed around 41 m/s
 const TUCK_TURN_CUT = 0.4; // full tuck costs 40% of turn authority
 const BOOST_ACCEL = 5.5; // m/s^2 while burning the tank — rocket territory
 // Steering is position-to-direction: the stick/cursor sets a TARGET heading
-// relative to the course direction (center = follow the track), and the
-// heading eases toward it. Rate control (cursor = rotation speed) integrates
-// small errors into wild weaving — pilot-induced oscillation.
+// relative to the course direction (center = follow the track, but a LAGGED
+// version — see HEADING_LAG_TAU), and the heading eases toward it. Rate control
+// (cursor = rotation speed) integrates small errors into wild weaving —
+// pilot-induced oscillation.
 const MAX_STEER_OFFSET = 1.15; // radians of target offset at full deflection
 const STEER_GAIN = 4; // per second: how eagerly heading chases the target
+// Neutral steering follows a LAGGED course heading, not the instantaneous one:
+// "forward" eases toward the live course direction with this time constant, so
+// it trails the bends by ~a couple of seconds. Auto-follow made slaloms dull —
+// now centering the mouse drifts wide through a bend and you have to steer INTO
+// it. First-order (exponential) lag, so tight/fast slaloms both delay AND
+// soften the reference, throwing the racing line back on the player.
+const HEADING_LAG_TAU = 1.5; // seconds
 const TURN_RATE = 2.6; // rad/s ceiling on heading change
 // Gravity's cross-heading component rotates the velocity, not just the
 // speed: banked floors carry you around their turn, walls nose you back to
@@ -137,6 +148,7 @@ export function createSkier(): SkierState {
     y: 0,
     vy: 0,
     heading: 0,
+    headingRef: 0,
     speed: 0,
     airTime: 0,
     tumbling: 0,
@@ -194,7 +206,8 @@ function bankFlip(state: SkierState): void {
 }
 
 // Ease the heading toward the steering target: proportional, rate-limited,
-// no overshoot. Self-centering — steer 0 means "follow the course". A skier
+// no overshoot. Self-centering — steer 0 follows the course, but the LAGGED
+// course (state.headingRef), so bends have to be actively steered. A skier
 // up on a bank additionally gets nosed back toward the floor: centering the
 // heading alone would happily cruise parallel INSIDE the sticky wall forever
 // (the "insists on skiing the wall" bug). Full deflection out-muscles the
@@ -205,6 +218,9 @@ function steerToward(
   state: SkierState,
   terrain: Terrain,
   input: SkierInput,
+  courseHeading: number, // the reference "forward": lagged on the ground (so
+  // slaloms must be steered), instantaneous in the air (so a hands-off flight
+  // lands on the course line and the computed stars stay honest)
   maxRate: number,
   dt: number
 ): void {
@@ -213,7 +229,7 @@ function steerToward(
   const over = Math.abs(d) - terrain.channelHalfWidth(state.z);
   const recovery = over > 0 ? -Math.sign(d) * Math.min(1, over / 6) * BANK_RECOVERY : 0;
   const target =
-    terrain.trackHeading(state.z) +
+    courseHeading +
     terrain.hipAim(state.x, state.z) + // hip pads bend the course line itself
     input.steer * MAX_STEER_OFFSET * (1 - TUCK_TURN_CUT * tuck) +
     recovery;
@@ -269,6 +285,16 @@ export function stepSkier(
   dt: number,
   boosting: boolean // burning the tank this step (the sim decides eligibility)
 ): void {
+  // Ease the "follow the course" reference toward the live course heading, so
+  // it lags the bends (HEADING_LAG_TAU). Runs every step — grounded, airborne,
+  // even tumbling — so the reference is a continuous function of time.
+  const courseHeading = terrain.trackHeading(state.z);
+  const lagDiff = Math.atan2(
+    Math.sin(courseHeading - state.headingRef),
+    Math.cos(courseHeading - state.headingRef)
+  );
+  state.headingRef += lagDiff * (1 - Math.exp(-dt / HEADING_LAG_TAU));
+
   if (state.tumbling > 0) {
     // No control while tumbling: skid straight ahead under heavy friction,
     // glued to the snow, then pop back up. Collisions are ignored — you're
@@ -290,7 +316,16 @@ export function stepSkier(
     // the dedicated trick keys rotate you, and only in real air. Digital keys
     // need no hover deadband.
     const airTuck = Math.max(0, -input.stance);
-    steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
+    // Air aims at the LIVE course (no lag): the mouse gently aims the landing
+    // and a hands-off flight tracks the course line the computed stars ride.
+    steerToward(
+      state,
+      terrain,
+      input,
+      terrain.trackHeading(state.z),
+      TURN_RATE * AIR_TURN_FACTOR,
+      dt
+    );
     if (state.airTime > MIN_TRICK_AIR) {
       const spinInput = input.trickSpin ?? 0;
       const flipInput = input.trickFlip ?? 0; // positive = backflip (S)
@@ -386,8 +421,16 @@ export function stepSkier(
   const tuck = Math.max(0, -input.stance);
 
   // Turning authority ramps up with speed (skis can't pivot while
-  // stationary); a tuck narrows the target range inside steerToward.
-  steerToward(state, terrain, input, TURN_RATE * Math.min(state.speed / 4, 1), dt);
+  // stationary); a tuck narrows the target range inside steerToward. On the
+  // ground the reference is the LAGGED course heading, so bends must be steered.
+  steerToward(
+    state,
+    terrain,
+    input,
+    state.headingRef,
+    TURN_RATE * Math.min(state.speed / 4, 1),
+    dt
+  );
 
   // The banked-turn force: the slope's pull perpendicular to the skis
   // rotates the heading (see GRAVITY_TURN_CAP). This is what makes a

@@ -221,7 +221,13 @@ friction braking).
 
 - Mouse: x position sets a TARGET direction relative to the course (center =
   follow the track, edges = ~66 degrees across it); heading eases toward it
-  with no overshoot. Rate-based steering caused pilot-induced weaving.
+  with no overshoot. Rate-based steering caused pilot-induced weaving. The
+  "follow the track" reference is LAGGED (skier.ts HEADING_LAG_TAU, an
+  exponential decay of ~a couple seconds): on the ground, "forward" trails the
+  course's bends, so a slalom has to be actively steered instead of
+  auto-following — center the mouse through a bend and you drift onto the
+  banks. In the AIR the reference is instantaneous (a hands-off flight tracks
+  the course line the computed stars ride, so placement stays honest).
   y sets stance (top = tuck, bottom = snowplow)
 - Touch: there is NO finger-steering scheme. The TILT is the only touch
   control; if motion access can't be granted the drop-in shows an error

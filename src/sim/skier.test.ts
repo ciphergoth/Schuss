@@ -456,13 +456,22 @@ describe('skier', () => {
     expect(d).toBeLessThan(sim.terrain.channelHalfWidth(sim.skier.z) + 0.5);
   });
 
-  it('a long hands-off run stays on the course, not the walls', () => {
+  it('a long hands-off run stays contained and keeps skiing', () => {
+    // With the LAGGED steering reference, hands-off no longer tracks the
+    // centerline through bends — it drifts onto the banks (a slalom has to be
+    // steered now). What must still hold: the walls CONTAIN it (it never
+    // breaches the bounce barrier) and it never gets pinned to a wall and
+    // parked. Center-tracking is no longer the promise; containment is.
     const sim = createSim(1);
-    run(sim, 40, COAST);
-    const s = sim.skier;
-    const d = Math.abs(s.x - sim.terrain.centerX(s.z));
-    expect(d).toBeLessThan(sim.terrain.channelHalfWidth(s.z) + 1);
-    expect(s.speed).toBeGreaterThan(4); // still skiing, not parked in crud
+    const t = sim.terrain;
+    let maxOver = -99;
+    for (let i = 0; i < Math.round(40 / SIM_DT); i++) {
+      stepSim(sim, COAST);
+      const over = Math.abs(sim.skier.x - t.centerX(sim.skier.z)) - t.channelHalfWidth(sim.skier.z);
+      maxOver = Math.max(maxOver, over);
+    }
+    expect(maxOver).toBeLessThan(WALL_WIDTH); // rideable banks, never past the barrier
+    expect(sim.skier.speed).toBeGreaterThan(4); // still skiing, not parked on a wall
   });
 
   it('never gets stranded: a stalled skier pivots to the fall line', () => {
