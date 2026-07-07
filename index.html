@@ -321,6 +321,11 @@
         font-size: 16px;
         line-height: 1.9;
       }
+      /* Top-align so a short label lines up with the FIRST line of a wrapped
+         description, not floated to its middle — easier to scan down. */
+      #pause td {
+        vertical-align: top;
+      }
       #pause td:first-child {
         padding-right: 22px;
         color: #ffd34d;
