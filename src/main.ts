@@ -76,6 +76,22 @@ const countdownEl = document.getElementById('countdown')!;
 // A short-lived banner: live spin readout while airborne, result on landing.
 let trickBannerUntil = 0;
 
+// Scores are tuned to a build's physics and economy, so mixing bests across
+// versions compares incomparable numbers. The git commit the app was built
+// from (stamped in by vite.config.ts) is stored beside the scores; whenever
+// it changes — i.e. a new version is pushed — every saved BEST is wiped and
+// the fresh version recorded, so each deploy starts a clean ladder.
+const VERSION_KEY = 'skigame-version';
+function resetScoresOnNewVersion(): void {
+  if (localStorage.getItem(VERSION_KEY) === __APP_VERSION__) return;
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key?.startsWith('skigame-best-')) localStorage.removeItem(key);
+  }
+  localStorage.setItem(VERSION_KEY, __APP_VERSION__);
+}
+resetScoresOnNewVersion();
+
 // Best score survives across runs and sessions, per course: every course
 // has its own ladder.
 const bestKey = () => `skigame-best-${currentSeed}`;
