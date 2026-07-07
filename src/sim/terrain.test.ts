@@ -442,7 +442,7 @@ describe('terrain', () => {
     expect(loadouts.size).toBeGreaterThan(2);
   });
 
-  it('the mega deal: the middle tours every section type exactly twice', () => {
+  it('the tour: nine sections, nine different personalities, no repeats', () => {
     const everyType: SectionType[] = [
       'cruise',
       'narrows',
@@ -457,30 +457,30 @@ describe('terrain', () => {
     for (const seed of [1, 2, 5, 12]) {
       const t = new Terrain(seed);
       const last = COURSE_LENGTH / SECTION_LENGTH - 1;
-      const counts: Record<string, number> = {};
-      for (let s = 1; s < last; s++) {
-        const type = t.sectionType(s);
-        counts[type] = (counts[type] ?? 0) + 1;
-        expect(type).not.toBe(t.sectionType(s - 1)); // never twice in a row
-      }
-      // Two full decks: every idea the mountain has, exactly twice.
-      for (const type of everyType) expect(counts[type]).toBe(2);
-      expect(t.sectionType(last - 1)).not.toBe('plunge'); // finale earned, not doubled
-      expect(t.sectionType(last)).not.toBe(t.sectionType(last - 1));
+      const run: SectionType[] = [];
+      for (let s = 0; s <= last; s++) run.push(t.sectionType(s));
+      // The whole course is every idea the mountain has, exactly once each:
+      // every section justifies itself with something new.
+      expect([...run].sort()).toEqual([...everyType].sort());
+      expect(run[0]).toBe('cruise'); // the gentle opening
+      expect(run[last]).toBe('plunge'); // the finale
     }
     // The deal is deterministic per seed, and seeds actually reshuffle it.
     const deal = (seed: number): string => {
       const t = new Terrain(seed);
-      return Array.from({ length: 18 }, (_, i) => t.sectionType(i + 1)).join('>');
+      return Array.from({ length: 7 }, (_, i) => t.sectionType(i + 1)).join('>');
     };
     expect(deal(7)).toBe(deal(7));
     expect(deal(1)).not.toBe(deal(2));
-    // The endless test mountain keeps dealing whole double-decks: any 18-deep
-    // block still contains everything, seams included, no repeats anywhere.
+    // The endless test mountain continues past the tour with shuffled full
+    // decks: everything stays reachable at depth, and no seam ever repeats.
     const endless = new Terrain(3, Infinity);
     const deep = new Set<SectionType>();
-    for (let s = 37; s < 55; s++) deep.add(endless.sectionType(s));
+    for (let s = 8; s < 17; s++) deep.add(endless.sectionType(s)); // one full block
     expect(deep.size).toBe(everyType.length);
+    for (let s = 1; s < 60; s++) {
+      expect(endless.sectionType(s)).not.toBe(endless.sectionType(s - 1));
+    }
   });
 
   it('a canyon weaves and banks: the esses are the section', () => {
