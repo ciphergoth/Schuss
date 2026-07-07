@@ -52,6 +52,7 @@ describe('effects', () => {
         flips: 0,
         flipBack: false,
         parallel: false,
+        variety: false,
         mult: 5,
         points: 2500,
         repeat: false,

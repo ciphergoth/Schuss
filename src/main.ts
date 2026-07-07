@@ -362,15 +362,14 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       audio.playBonus(e.mult);
       showTrick(`×${e.mult}!`, e.mult >= 5 ? '#ff3ddc' : '#ffd34d', 0.9);
     } else if (e.type === 'trick') {
-      // Praise ladder: a SERIAL spin+flip (the big scorer) is INCREDIBLE, a
-      // PARALLEL combo (spin & flip at once) is a COMBO, big same-type tricks
-      // are OUTSTANDING, a single rotation is NICE.
-      const mixed = e.spins >= 1 && e.flips >= 1;
-      const serial = mixed && !e.parallel;
-      audio.playTrick(e.spins + e.flips, e.mult, mixed);
+      // Praise ladder: VARIETY (>=2 different tricks in sequence, the big
+      // scorer) is INCREDIBLE, a PARALLEL combo (spin & flip at once) is a
+      // COMBO, big same-type tricks are OUTSTANDING, a single rotation is NICE.
+      const combo = e.variety || e.parallel;
+      audio.playTrick(e.spins + e.flips, e.mult, combo);
       // The showpieces get fireworks in the sky AND in the mix.
       if (e.mult >= 3) audio.playFireworks(e.mult, e.mult >= 5);
-      else if (mixed) audio.playFireworks(3, false);
+      else if (combo) audio.playFireworks(3, false);
       const parts = [];
       if (e.spins >= 1) parts.push(`${e.spins * 360}°`);
       if (e.flips >= 1) {
@@ -381,9 +380,9 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       // Repeating your last trick demotes the praise: the judges are bored.
       const word = e.repeat
         ? 'AGAIN?'
-        : serial
+        : e.variety
           ? 'INCREDIBLE!'
-          : mixed
+          : e.parallel
             ? 'COMBO!'
             : big
               ? 'OUTSTANDING!'

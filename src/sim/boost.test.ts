@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SIM_DT, Sim, SimEvent, combineTrick, createSim, stepSim } from './sim';
+import { SIM_DT, Sim, SimEvent, createSim, parallelCombine, stepSim } from './sim';
 import { SKIER_RADIUS, SkierInput } from './skier';
 
 const COAST = { steer: 0, stance: 0 };
@@ -10,27 +10,20 @@ function runCollecting(sim: Sim, seconds: number, input = COAST): SimEvent[] {
   return events;
 }
 
-describe('combineTrick: serial vs parallel', () => {
+describe('parallelCombine', () => {
   const a = 500; // spin
   const b = 1100; // backflip
 
   it('a solo axis is just its own value', () => {
-    expect(combineTrick(a, 0, false)).toBe(a);
-    expect(combineTrick(0, b, true)).toBe(b);
+    expect(parallelCombine(a, 0)).toBe(a);
+    expect(parallelCombine(0, b)).toBe(b);
   });
 
-  it('parallel pays more than either alone but less than the sum', () => {
-    const p = combineTrick(a, b, true);
+  it('pays more than either alone but less than the sum', () => {
+    const p = parallelCombine(a, b);
     expect(p).toBeGreaterThan(Math.max(a, b));
     expect(p).toBeLessThan(a + b);
     expect(p).toBe(1400); // 1100 + 0.6*500
-  });
-
-  it('serial pays the sum plus a complexity bonus — and beats parallel', () => {
-    const serial = combineTrick(a, b, false);
-    expect(serial).toBeGreaterThan(a + b);
-    expect(serial).toBeGreaterThan(combineTrick(a, b, true));
-    expect(serial).toBe(2160); // (500 + 1100) * 1.35
   });
 });
 
@@ -491,6 +484,60 @@ describe('boost economy', () => {
     // spin 500 + backflip 1100, serial: (500 + 1100) * 1.35 = 2160 — beats the
     // sum, and beats the same two tricks done in parallel (1400).
     expect(sim.score).toBe(2160);
+  });
+
+  // Spin one full turn, reverse, spin a full turn back — landing forward.
+  function spin360Both(sim: Sim): SimEvent[] {
+    launch(sim, 45, 6); // room for two full spins
+    const events: SimEvent[] = [];
+    const near = (v: number) => Math.abs(v) >= 2 * Math.PI - 0.12;
+    while (sim.skier.airTime > 0 && !near(sim.skier.spinCur)) {
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
+    }
+    while (sim.skier.airTime > 0 && sim.skier.spinCur > -(2 * Math.PI - 0.12)) {
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: -1 }));
+    }
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    return events;
+  }
+
+  it('a 360 one way then a 360 the other counts BOTH and earns variety', () => {
+    const sim = createSim(1);
+    const trick = spin360Both(sim).find((e) => e.type === 'trick');
+    expect(sim.skier.tumbling).toBe(0);
+    expect(trick && trick.type === 'trick' && trick.spins).toBe(2);
+    expect(trick && trick.type === 'trick' && trick.variety).toBe(true);
+    // Two spins (1000) x variety 1.35 = 1350 — the signed accumulator used to
+    // cancel these to a flat zero.
+    expect(sim.score).toBe(1350);
+  });
+
+  it('a half-turn each way is a wiggle, not a trick — scores nothing', () => {
+    const sim = createSim(1);
+    launch(sim, 20, 3);
+    const events: SimEvent[] = [];
+    const half = (v: number) => Math.abs(v) >= Math.PI - 0.1;
+    while (sim.skier.airTime > 0 && !half(sim.skier.spinCur)) {
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
+    }
+    while (sim.skier.airTime > 0 && sim.skier.spinCur > -(Math.PI - 0.1)) {
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: -1 }));
+    }
+    while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+    expect(sim.skier.tumbling).toBe(0);
+    expect(events.find((e) => e.type === 'trick')).toBeUndefined();
+    expect(sim.score).toBe(0);
+  });
+
+  it('repeating the EXACT same sequence docks only the repeat', () => {
+    const sim = createSim(1);
+    const first = spin360Both(sim).find((e) => e.type === 'trick');
+    const afterFirst = sim.score;
+    const second = spin360Both(sim).find((e) => e.type === 'trick');
+    expect(first && first.type === 'trick' && first.repeat).toBe(false);
+    expect(second && second.type === 'trick' && second.repeat).toBe(true);
+    // The repeat pays 70% of the first's 1350 = 945.
+    expect(sim.score - afterFirst).toBe(945);
   });
 
   it('crossing the line fires finish once, locks the score, ends the pay', () => {

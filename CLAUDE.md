@@ -37,18 +37,23 @@ nothing. The mouse
 is REQUIRED and never changes meaning (x steers / aims the landing, y is
 stance, buttons brake/boost); WASD exists only for tricks: in real air (past
 MIN_TRICK_AIR — never roller hops) A/D spins, W frontflips, S backflips, and
-you can aim with the mouse mid-trick. Land within tolerance of whole
-rotations for the payout, and HOW you combine two axes matters
-(sim.combineTrick): a PARALLEL combo — spin AND flip at once — locks both
-axes to the flip's rate, slowed a touch (PARALLEL_SLOWDOWN) so it's a
-little slower and harder than either alone, and scores sub-additively
-(bigger axis + 0.6·smaller: more than either alone, less than their sum);
-a SERIAL spin-THEN-flip (never overlapping, tracked by skier.parallel)
-keeps full solo rates and is the showpiece — the plain sum ×1.35, a
-complexity bonus on top. Repeating your own last trick docks the base
-points to 70% before any star multiplies them (fuel is never docked; the
-banner asks AGAIN?) — the praise ladder reserves INCREDIBLE for serial
-mixes, COMBO for parallel, OUTSTANDING for big same-type tricks, NICE for
+you can aim with the mouse mid-trick. A flight is a SEQUENCE OF TRICK
+SEGMENTS, split at direction reversals (skier.ts banks a segment's whole
+turns when an axis reverses; the running NET facing still gates the
+landing). So a 360 one way then a 360 the other counts BOTH — the old
+signed accumulator cancelled them to nothing — while a lazy 180-each-way
+wiggle banks zero (per-segment tolerance: 350°→1, 180°→0). Each segment's
+turns pay at its type (500/800/1100). VARIETY — two or more DIFFERENT
+tricks in the sequence, where spin-left, spin-right, frontflip, backflip
+ALL count as different — is the showpiece: the plain sum ×1.35. A PARALLEL
+combo (spin AND flip AT ONCE, locked to the flip's rate and slowed by
+PARALLEL_SLOWDOWN so it's harder) is instead sub-additive
+(sim.parallelCombine: bigger axis + 0.6·smaller — more than either alone,
+less than their sum; a simultaneous combo isn't a sequence, so no variety).
+Repeating the EXACT same segment sequence as the previous flight docks the
+base points to 70% before any star multiplies them (fuel is never docked;
+the banner asks AGAIN?) — the praise ladder reserves INCREDIBLE for
+variety, COMBO for parallel, OUTSTANDING for big same-type tricks, NICE for
 singles. Land within tolerance of the correct facing on every rotated axis
 (spin ~52 degrees, flip ~43 — ONE gate for payout and bail alike) or the
 rotation doesn't count: past commit that's a tumble — spins commit just

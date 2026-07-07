@@ -24,13 +24,14 @@ export type SimEvent =
   | { type: 'bonus'; x: number; z: number; mult: number } // trick-bonus star grabbed
   | {
       type: 'trick';
-      spins: number;
-      flips: number;
-      flipBack: boolean;
-      parallel: boolean; // spin+flip at once (combo) vs serial spin-then-flip
+      spins: number; // total spin turns (both directions)
+      flips: number; // total flip turns (front + back)
+      flipBack: boolean; // the dominant flip direction, for the banner name
+      parallel: boolean; // spin+flip at once (sub-additive combo)
+      variety: boolean; // >=2 different tricks in sequence (the complexity bonus)
       mult: number;
       points: number;
-      repeat: boolean; // same trick as the last one landed: docked pay
+      repeat: boolean; // exact same segment sequence as the last: docked pay
     }
   | { type: 'sector'; speed: number; points: number } // 250m pace grade
   | { type: 'finish'; time: number; score: number } // crossed the line
@@ -78,27 +79,28 @@ const SECTOR_MIN_SPEED = 12; // average m/s before a sector pays anything
 const SECTOR_COEFF = 25;
 const SECTOR_EXP = 2.2;
 // Trick pay follows difficulty (slower rotation = more air needed = more
-// money): spin < frontflip < backflip. Two axes in one flight is the hardest
-// thing of all, but HOW you did them matters — see combineTrick.
+// money): spin < frontflip < backflip. But two tricks in one flight is where
+// the real money is, and HOW they combine matters.
 const BOOST_PER_SPIN = 0.15;
 const BOOST_PER_FRONTFLIP = 0.2;
 const BOOST_PER_BACKFLIP = 0.26;
-// SERIAL (spin then flip, never overlapping) is the showpiece: the plain SUM
-// of both, plus a complexity bonus. PARALLEL (spin AND flip at once — the
-// slower, locked-rate combo) pays MORE than either axis alone but LESS than
-// their sum: diminishing returns on the second axis.
-const SERIAL_MULT = 1.35; // serial: (spin + flip) x this
+// A flight is a sequence of trick segments. VARIETY — two or more DIFFERENT
+// tricks in that sequence (spin-left, spin-right, frontflip, backflip all
+// count as different) — is the showpiece: the plain sum times a complexity
+// bonus. A PARALLEL combo (spin AND flip AT ONCE, the slower locked-rate
+// maneuver) is instead sub-additive: the smaller axis pays at a discount, so
+// it beats either alone but not their sum. Repetition of the exact same
+// sequence docks the points.
+const VARIETY_MULT = 1.35; // serial variety: (base sum) x this
 const PARALLEL_SECOND = 0.6; // parallel: bigger axis + this x smaller axis
-const REPEAT_FACTOR = 0.7; // same trick as last time: the judges are bored
+const REPEAT_FACTOR = 0.7; // exact same sequence as last time: the judges are bored
 const BOOST_TRICK_CAP = 0.65; // per landing
 
-// Fold two per-axis values (points or fuel) by how the tricks related in the
-// air. One axis zero = a solo, just the value. Both present = serial (super-
-// additive: sum + bonus) or parallel (sub-additive: > either alone, < sum).
-export function combineTrick(a: number, b: number, parallel: boolean): number {
+// A parallel combo's two axes, folded sub-additively: more than either alone,
+// less than their sum. (One axis zero = a solo, just the sum.)
+export function parallelCombine(a: number, b: number): number {
   if (a === 0 || b === 0) return a + b;
-  if (parallel) return Math.max(a, b) + PARALLEL_SECOND * Math.min(a, b);
-  return (a + b) * SERIAL_MULT;
+  return Math.max(a, b) + PARALLEL_SECOND * Math.min(a, b);
 }
 const BOOST_DRAIN = 0.15; // per second while burning
 // The jump bar: 6 seconds of hold to a full superhuman charge, with the
@@ -194,28 +196,54 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   // and bail alike. Under commit a wide residual is a safe bail, not a
   // payday: without this gate a 185-degree spin rounded up to a paid 360.
   if (airBefore > 0 && s.airTime === 0) {
+    // The flight's segments were banked by the landing judge (skier.ts). A
+    // whole turn on an axis only counts if the NET facing on that axis is
+    // clean (you landed forward / feet-down) — the same gate that tumbles by
+    // past commit; under commit a wide residual is a safe bail, not a payday.
     const spinClean = Math.abs(residual(s.spin)) <= SPIN_TOLERANCE;
     const flipClean = Math.abs(residual(s.flip)) <= FLIP_TOLERANCE;
-    const turns = spinClean ? Math.round(Math.abs(s.spin) / (2 * Math.PI)) : 0;
-    const flipTurns = flipClean ? Math.round(Math.abs(s.flip) / (2 * Math.PI)) : 0;
-    const flipBack = s.flip > 0; // positive pitch lifts the tips: backflip (S)
+    const spinTurns = spinClean ? s.spinTurns : 0;
+    const frontTurns = flipClean ? s.frontTurns : 0;
+    const backTurns = flipClean ? s.backTurns : 0;
+    const seq = s.sequence;
     if (s.tumbling === 0) {
       if (airBefore > MIN_STYLISH_AIR) events.push({ type: 'landing', airTime: airBefore });
-      if (scoring && (turns >= 1 || flipTurns >= 1)) {
-        // Serial vs parallel: only meaningful with both axes, and only if the
-        // second axis actually landed (a blown axis scores 0 turns).
-        const parallel = s.parallel && turns >= 1 && flipTurns >= 1;
-        // Fuel is flat and capped — the mechanical loop.
-        const perFlip = flipBack ? BOOST_PER_BACKFLIP : BOOST_PER_FRONTFLIP;
-        const fuel = combineTrick(turns * BOOST_PER_SPIN, flipTurns * perFlip, parallel);
+      if (scoring && (spinTurns >= 1 || frontTurns >= 1 || backTurns >= 1)) {
+        const spinPts = spinTurns * POINTS_PER_SPIN;
+        const flipPts = frontTurns * POINTS_PER_FRONTFLIP + backTurns * POINTS_PER_BACKFLIP;
+        const spinFuel = spinTurns * BOOST_PER_SPIN;
+        const flipFuel = frontTurns * BOOST_PER_FRONTFLIP + backTurns * BOOST_PER_BACKFLIP;
+        // How many DIFFERENT tricks landed clean, from the sequence tokens:
+        // spin-left, spin-right, frontflip, backflip. Two or more = variety.
+        const types =
+          (spinClean && seq.includes('L') ? 1 : 0) +
+          (spinClean && seq.includes('R') ? 1 : 0) +
+          (flipClean && seq.includes('F') ? 1 : 0) +
+          (flipClean && seq.includes('B') ? 1 : 0);
+        // Parallel (spin AND flip at once) is the sub-additive combine; serial
+        // variety (>=2 different tricks in sequence) is the complexity bonus.
+        // Parallel takes precedence — a simultaneous combo isn't a sequence.
+        const parallel = s.parallel && spinTurns >= 1 && frontTurns + backTurns >= 1;
+        const variety = !parallel && types >= 2;
+        let points: number;
+        let fuel: number;
+        if (parallel) {
+          points = parallelCombine(spinPts, flipPts);
+          fuel = parallelCombine(spinFuel, flipFuel);
+        } else {
+          points = spinPts + flipPts;
+          fuel = spinFuel + flipFuel;
+          if (variety) {
+            points *= VARIETY_MULT;
+            fuel *= VARIETY_MULT;
+          }
+        }
+        // Fuel is flat and capped — the mechanical loop, never docked.
         earnBoost(sim, Math.min(BOOST_TRICK_CAP, fuel));
-        // Points are uncapped and star-multiplied — the ledger of glory.
-        // Repeating your own last trick bores the judges: the base pay is
-        // docked before the star multiplies it. Fuel is never docked — the
-        // mechanical loop doesn't judge style.
-        const perFlipPts = flipBack ? POINTS_PER_BACKFLIP : POINTS_PER_FRONTFLIP;
-        let points = combineTrick(turns * POINTS_PER_SPIN, flipTurns * perFlipPts, parallel);
-        const signature = `${turns}:${flipTurns}:${flipTurns > 0 ? (flipBack ? 'b' : 'f') : '-'}:${parallel ? 'p' : 's'}`;
+        // Points are uncapped and star-multiplied. Repeating the EXACT same
+        // flight (segment sequence + parallel-ness) as last time docks the
+        // base pay before the star multiplies it.
+        const signature = seq + (parallel ? '|P' : '');
         const repeat = sim.lastTrick === signature;
         if (repeat) points *= REPEAT_FACTOR;
         sim.lastTrick = signature;
@@ -223,10 +251,11 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
         sim.score += points;
         events.push({
           type: 'trick',
-          spins: turns,
-          flips: flipTurns,
-          flipBack,
+          spins: spinTurns,
+          flips: frontTurns + backTurns,
+          flipBack: backTurns >= frontTurns,
           parallel,
+          variety,
           mult: sim.trickMult,
           points,
           repeat,
@@ -238,6 +267,12 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     }
     s.spin = 0;
     s.flip = 0;
+    s.spinCur = 0;
+    s.flipCur = 0;
+    s.spinTurns = 0;
+    s.frontTurns = 0;
+    s.backTurns = 0;
+    s.sequence = '';
     s.parallel = false;
   }
 

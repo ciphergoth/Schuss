@@ -21,8 +21,19 @@ export interface SkierState {
   speed: number; // horizontal m/s along the heading
   airTime: number; // seconds airborne this jump; 0 = grounded
   tumbling: number; // seconds of tumble remaining; 0 = on skis
-  spin: number; // trick yaw accumulated this flight (radians)
-  flip: number; // trick pitch accumulated this flight (radians)
+  // A flight is a SEQUENCE of trick segments, split at direction reversals.
+  // spin/flip are the running NET orientation (for rendering and the land-
+  // facing-forward gate); spinCur/flipCur are the current OPEN segment (for
+  // commit and banking); the turn counts and sequence string are what past
+  // segments banked. See stepSkier's air block and sim.ts's landing judge.
+  spin: number; // net yaw this flight (radians)
+  flip: number; // net pitch this flight (radians)
+  spinCur: number; // current spin segment, signed radians (reset at each reversal)
+  flipCur: number; // current flip segment, signed radians
+  spinTurns: number; // whole spin turns banked from closed segments (both directions)
+  frontTurns: number; // whole frontflip turns banked
+  backTurns: number; // whole backflip turns banked
+  sequence: string; // banked segment tokens in order, e.g. 'L1R1' — repetition + variety
   parallel: boolean; // this flight ever spun AND flipped at once (vs serial)
   gap: number; // ballistic daylight the legs are currently bridging (< LEG_REACH)
 }
@@ -131,6 +142,12 @@ export function createSkier(): SkierState {
     tumbling: 0,
     spin: 0,
     flip: 0,
+    spinCur: 0,
+    flipCur: 0,
+    spinTurns: 0,
+    frontTurns: 0,
+    backTurns: 0,
+    sequence: '',
     parallel: false,
     gap: 0,
   };
@@ -139,6 +156,41 @@ export function createSkier(): SkierState {
 // How far a rotation is from "clean" (any whole number of full turns).
 export function residual(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+// Whole turns in a single segment, but ONLY if it landed within tolerance of
+// that many turns: a 350° segment is a 360 (1), a lone 180° is a nothing (0).
+// This is what stops a 180-one-way + 180-the-other from scoring two turns.
+const TWO_PI = 2 * Math.PI;
+function wholeTurns(rot: number, tol: number): number {
+  const n = Math.round(Math.abs(rot) / TWO_PI);
+  return Math.abs(Math.abs(rot) - n * TWO_PI) <= tol ? n : 0;
+}
+
+// Close the current spin segment: bank its whole turns and record it in the
+// sequence (L/R by direction), so a reversal starts a fresh trick.
+function bankSpin(state: SkierState): void {
+  const t = wholeTurns(state.spinCur, SPIN_TOLERANCE);
+  if (t > 0) {
+    state.spinTurns += t;
+    state.sequence += (state.spinCur < 0 ? 'L' : 'R') + t;
+  }
+  state.spinCur = 0;
+}
+
+// Close the current flip segment — front and back are different tricks.
+function bankFlip(state: SkierState): void {
+  const t = wholeTurns(state.flipCur, FLIP_TOLERANCE);
+  if (t > 0) {
+    if (state.flipCur > 0) {
+      state.backTurns += t;
+      state.sequence += 'B' + t;
+    } else {
+      state.frontTurns += t;
+      state.sequence += 'F' + t;
+    }
+  }
+  state.flipCur = 0;
 }
 
 // Ease the heading toward the steering target: proportional, rate-limited,
@@ -250,8 +302,24 @@ export function stepSkier(
       const both = spinInput !== 0 && flipInput !== 0;
       if (both) state.parallel = true;
       const lockedRate = flipRate * PARALLEL_SLOWDOWN;
-      state.spin += (both ? lockedRate : SPIN_RATE) * spinInput * dt;
-      state.flip += (both ? lockedRate : flipRate) * flipInput * dt;
+      // A reversal (input opposes the open segment) closes that segment and
+      // starts a new trick; then accumulate into both the net and the segment.
+      if (spinInput !== 0) {
+        if (state.spinCur !== 0 && Math.sign(spinInput) !== Math.sign(state.spinCur)) {
+          bankSpin(state);
+        }
+        const d = (both ? lockedRate : SPIN_RATE) * spinInput * dt;
+        state.spin += d;
+        state.spinCur += d;
+      }
+      if (flipInput !== 0) {
+        if (state.flipCur !== 0 && Math.sign(flipInput) !== Math.sign(state.flipCur)) {
+          bankFlip(state);
+        }
+        const d = (both ? lockedRate : flipRate) * flipInput * dt;
+        state.flip += d;
+        state.flipCur += d;
+      }
     }
     state.speed = Math.max(
       0,
@@ -292,13 +360,20 @@ export function stepSkier(
       if (horizontal > 0.1) state.heading = Math.atan2(vx, -vz);
       state.speed = horizontal;
 
-      // The landing judges COMMITTED rotation per axis: past the commit
-      // threshold you must arrive within tolerance of whole turns or wipe
-      // out. Anything under commit always lands clean.
-      const blownSpin =
-        Math.abs(state.spin) > TRICK_COMMIT && Math.abs(residual(state.spin)) > SPIN_TOLERANCE;
-      const blownFlip =
-        Math.abs(state.flip) > FLIP_COMMIT && Math.abs(residual(state.flip)) > FLIP_TOLERANCE;
+      // Commit is judged on the CURRENT (open) segment — how far into the
+      // move in progress you are — while "clean" is the NET facing (you must
+      // land forward / feet-down). Past commit and not facing clean = a
+      // tumble; under commit = a safe bail. So you can spin one way then the
+      // other and land forward, but you can't bail out of a big committed
+      // rotation by wrenching the stick back.
+      const spinClean = Math.abs(residual(state.spin)) <= SPIN_TOLERANCE;
+      const flipClean = Math.abs(residual(state.flip)) <= FLIP_TOLERANCE;
+      const blownSpin = Math.abs(state.spinCur) > TRICK_COMMIT && !spinClean;
+      const blownFlip = Math.abs(state.flipCur) > FLIP_COMMIT && !flipClean;
+      // Close the open segments so the banked turns and sequence are final
+      // for the scorer (sim.ts).
+      bankSpin(state);
+      bankFlip(state);
       if (blownSpin || blownFlip) {
         state.tumbling = TUMBLE_TIME;
         state.speed *= TUMBLE_SPEED_KEEP;
