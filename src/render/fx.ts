@@ -438,6 +438,14 @@ export class Effects {
         // Scoring earns the orbiting sparkles for a moment.
         this.orbitColor.copy(e.mult >= 5 ? this.magenta : e.mult >= 3 ? this.gold : this.cyan);
         this.orbitUntil = sim.time + Math.min(2.5, 1.4 + e.points / 8000);
+        // The gallery erupts: confetti fountains up from the crowd itself.
+        if (e.crowd) {
+          const at = new THREE.Vector3(e.crowd.x, s.y + 1.5, e.crowd.z);
+          for (let k = 0; k < NEON_PALETTE.length; k++) {
+            this.sparks.spawn(at, new THREE.Vector3(0, 6 + k, 0), 5, 14, NEON_PALETTE[k]!);
+          }
+          this.particles.spawn(at, new THREE.Vector3(0, 5, 0), 4, 30, this.white);
+        }
       } else if (e.type === 'finish') {
         // The line: the grandest barrage the sky has seen this run.
         this.volley(sim, 12, NEON_PALETTE, 3);

@@ -1,5 +1,7 @@
 import {
+  CROWD_FACTOR,
   ContractDemand,
+  GALLERY_RANGE,
   GATE_HEIGHT,
   GATE_POINTS,
   SECTION_LENGTH,
@@ -49,10 +51,14 @@ export type SimEvent =
       segments: { kind: 'spinL' | 'spinR' | 'front' | 'back'; turns: number }[];
       parallel: boolean; // spin+flip at once (sub-additive combo)
       variety: boolean; // >=2 different tricks in sequence (the complexity bonus)
+      grabbed: boolean; // the GRAB was held through the flight (styled: base x1.2)
       mult: number; // the contract's multiplier if this trick paid it, else 1
       points: number;
       repeat: boolean; // exact same segment sequence as the last: docked pay
       contract?: 'paid' | 'missed'; // how this attempt settled an armed contract
+      // Landed in front of a gallery: the crowd's bonus and where they are
+      // (for the confetti and the cheer).
+      crowd?: { x: number; z: number; points: number };
     }
   | { type: 'sector'; speed: number; points: number } // 250m pace grade
   | { type: 'finish'; time: number; score: number } // crossed the line
@@ -126,6 +132,13 @@ const BOOST_PER_BACKFLIP = 0.26;
 const VARIETY_MULT = 1.35; // serial variety: (base sum) x this
 const PARALLEL_SECOND = 0.6; // parallel: bigger axis + this x smaller axis
 const REPEAT_FACTOR = 0.7; // exact same sequence as last time: the judges are bored
+// The GRAB: holding the boost button in real air (where it has no other
+// job) tweaks the body over the skis. Held for a real beat, it styles the
+// whole flight: base points x1.2 — SCORE only, never fuel (style is glory,
+// not propulsion) — and a grabbed sequence is a different trick from a
+// plain one for the repeat check.
+const GRAB_MULT = 1.2;
+const GRAB_MIN_S = 0.25; // a micro-tap isn't a grab
 const BOOST_TRICK_CAP = 0.65; // per landing
 
 // A parallel combo's two axes, folded sub-additively: more than either alone,
@@ -316,6 +329,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
         // Parallel takes precedence — a simultaneous combo isn't a sequence.
         const parallel = s.parallel && spinTurns >= 1 && frontTurns + backTurns >= 1;
         const variety = !parallel && types >= 2;
+        const grabbed = s.grab >= GRAB_MIN_S;
         let points: number;
         let fuel: number;
         if (parallel) {
@@ -329,6 +343,9 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
             fuel *= VARIETY_MULT;
           }
         }
+        // The grab styles the points, never the fuel: the tank is mechanics,
+        // the tweak is glory.
+        if (grabbed) points *= GRAB_MULT;
         // Fuel is flat and capped — the mechanical loop, never docked.
         earnBoost(sim, Math.min(BOOST_TRICK_CAP, fuel));
         // The armed contract settles on this attempt either way: deliver
@@ -361,12 +378,25 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
         // contract, which DEMANDED that exact trick: docking the showpiece the
         // star asked for (and flashing AGAIN?) would punish obeying the star,
         // so a paid contract is never a repeat.
-        const signature = seq + (parallel ? '|P' : '');
+        const signature = seq + (parallel ? '|P' : '') + (grabbed ? '|G' : '');
         const repeat = contractResult !== 'paid' && sim.lastTrick === signature;
         if (repeat) points *= REPEAT_FACTOR;
         sim.lastTrick = signature;
         points = Math.round(points * mult);
         sim.score += points;
+        // SHOWBOATING: a trick landed in front of a gallery pays a crowd
+        // bonus on top — a cut of the multiplied points, because the crowd
+        // loves the jackpot most of all. One crowd per landing.
+        let crowd: { x: number; z: number; points: number } | undefined;
+        for (const g of sim.terrain.galleriesNear(s.z)) {
+          if (Math.abs(g.z - s.z) > GALLERY_RANGE) continue;
+          const bonus = Math.round(points * CROWD_FACTOR);
+          if (bonus > 0) {
+            sim.score += bonus;
+            crowd = { x: g.x, z: g.z, points: bonus };
+          }
+          break;
+        }
         // Decode the scored sequence, in order, for the banner. Only segments
         // on a clean axis count (a bailed axis scored 0).
         const segments: { kind: 'spinL' | 'spinR' | 'front' | 'back'; turns: number }[] = [];
@@ -393,10 +423,12 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
           segments,
           parallel,
           variety,
+          grabbed,
           mult,
           points,
           repeat,
           contract: contractResult,
+          crowd,
         });
       }
     }
@@ -409,6 +441,7 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
     s.backTurns = 0;
     s.sequence = '';
     s.parallel = false;
+    s.grab = 0;
 
     // Touchdown reveals the grabbed star's contract — for the NEXT trick.
     // It arms after this flight's attempt settled (a trick done while

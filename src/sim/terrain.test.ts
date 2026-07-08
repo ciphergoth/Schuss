@@ -12,6 +12,7 @@ import {
   WYRM_SEGMENTS,
   hazardCircles,
   jellyPose,
+  yetiPose,
 } from './terrain';
 
 // Find the first section of a given type (searching a long way downhill).
@@ -412,19 +413,60 @@ describe('terrain', () => {
     }
   });
 
-  it('kickers sit on the golden path and never come consecutively', () => {
+  it('kickers sit on the golden path; consecutive chunks only as a rhythm pair', () => {
     const t = new Terrain(1);
     let found = 0;
     for (let i = 3; i < 90; i++) {
       const jump = t.jumpForChunk(i);
       if (!jump) continue;
       found++;
-      expect(t.jumpForChunk(i + 1)).toBeNull(); // no overfly-able features
-      const maxOffset = t.channelHalfWidth(jump.zLip) - jump.halfWidth - 2.3;
-      const plan = Math.max(-maxOffset, Math.min(maxOffset, t.planOffset(jump.zLip)));
-      expect(Math.abs(jump.xOffset - plan)).toBeLessThan(0.6);
+      // Adjacent jump chunks exist ONLY as a tuned lead->follow pair; a
+      // plain neighbor would be an overfly-able accident.
+      const next = t.jumpForChunk(i + 1);
+      if (next) {
+        expect(jump.pair).toBe('lead');
+        expect(next.pair).toBe('follow');
+      }
+      if (jump.pair === 'follow') {
+        // The follow rides its lead's line, not the plan's.
+        const lead = t.jumpForChunk(i - 1)!;
+        expect(lead.pair).toBe('lead');
+        expect(Math.abs(jump.xOffset - lead.xOffset)).toBeLessThan(2.5);
+      } else {
+        const maxOffset = t.channelHalfWidth(jump.zLip) - jump.halfWidth - 2.3;
+        const plan = Math.max(-maxOffset, Math.min(maxOffset, t.planOffset(jump.zLip)));
+        expect(Math.abs(jump.xOffset - plan)).toBeLessThan(0.6);
+      }
     }
     expect(found).toBeGreaterThan(3);
+  });
+
+  it('rhythm doubles: two flat Ms on one line, a landing apart', () => {
+    const t = new Terrain(1, Infinity);
+    let pairs = 0;
+    for (let i = 3; i < 500; i++) {
+      const jump = t.jumpForChunk(i);
+      if (!jump || jump.pair !== 'lead') continue;
+      pairs++;
+      const follow = t.jumpForChunk(i + 1)!;
+      expect(follow.pair).toBe('follow');
+      // Tuned spacing: land the lead's cruise flight, two beats, up the
+      // follow's ramp — and no third act (the chunk after stays clear).
+      expect(jump.zLip - follow.zLip).toBeCloseTo(50, 5);
+      expect(t.jumpForChunk(i + 2)).toBeNull();
+      // One idea, twice: both plain flat Ms, the follow a touch wider.
+      for (const j of [jump, follow]) {
+        expect(j.kind).toBe('M');
+        expect(j.stepDown).toBe(0);
+        expect(j.hip).toBe(0);
+      }
+      expect(follow.halfWidth).toBeGreaterThan(jump.halfWidth);
+      // The follow's pad genuinely fits its floor.
+      expect(Math.abs(follow.xOffset) + follow.halfWidth).toBeLessThan(
+        t.channelHalfWidth(follow.zLip)
+      );
+    }
+    expect(pairs).toBeGreaterThan(2); // the endless mountain deals them
   });
 
   it('coins are sparse off-plan temptations, not a breadcrumb trail', () => {
@@ -696,6 +738,7 @@ describe('terrain', () => {
       wyrm: ['powder'],
       jelly: ['cruise', 'bowl'],
       tumbler: ['steps'],
+      yeti: ['sweeper', 'powder'],
     };
     const seen = new Set<string>();
     for (let i = 0; i < 800; i++) {
@@ -730,7 +773,59 @@ describe('terrain', () => {
       if (i < 8) expect(a.hazardsForChunk(i)).toEqual([]);
     }
     // The whole cast shows up somewhere on the endless mountain.
-    expect(seen).toEqual(new Set(['drone', 'wyrm', 'jelly', 'tumbler']));
+    expect(seen).toEqual(new Set(['drone', 'wyrm', 'jelly', 'tumbler', 'yeti']));
+  });
+
+  it('the yeti lumbers, plants, and roars — and the walk stays in bounds', () => {
+    const t = new Terrain(1, Infinity);
+    let yeti: Hazard | null = null;
+    for (let i = 8; i < 800 && !yeti; i++) {
+      yeti = t.hazardsForChunk(i).find((h) => h.kind === 'yeti') ?? null;
+    }
+    expect(yeti).not.toBeNull();
+    let walks = 0;
+    let plants = 0;
+    let roared = false;
+    let plantedX: number | null = null;
+    for (let time = 0; time < 16; time += 0.05) {
+      const p = yetiPose(yeti!, time);
+      expect(Math.abs(p.x - yeti!.x0)).toBeLessThanOrEqual(yeti!.amp + 1e-9);
+      if (p.walking) {
+        walks++;
+        plantedX = null;
+      } else {
+        plants++;
+        if (p.roar > 0.9) roared = true;
+        // Planted means PLANTED: the dodge window holds still.
+        if (plantedX !== null) expect(p.x).toBeCloseTo(plantedX, 9);
+        plantedX = p.x;
+      }
+    }
+    expect(walks).toBeGreaterThan(20);
+    expect(plants).toBeGreaterThan(10);
+    expect(roared).toBe(true);
+  });
+
+  it('galleries camp on the banks beside landing zones, never in the apron', () => {
+    const a = new Terrain(1, Infinity);
+    const b = new Terrain(1, Infinity);
+    let found = 0;
+    for (let i = 0; i < 500; i++) {
+      expect(a.galleriesForChunk(i)).toEqual(b.galleriesForChunk(i)); // pure
+      for (const g of a.galleriesForChunk(i)) {
+        found++;
+        // The crowd watches a real lip's landing...
+        expect(a.jumpForChunk(i - 1)).not.toBeNull();
+        // ...from the bank, never the racing floor.
+        expect(Math.abs(g.x - a.centerX(g.z))).toBeGreaterThan(a.channelHalfWidth(g.z) + 1);
+      }
+    }
+    expect(found).toBeGreaterThan(5);
+    // The course keeps its apron ceremonial-clean.
+    const course = new Terrain(1);
+    for (let i = 0; i < COURSE_LENGTH / CHUNK_LENGTH + 5; i++) {
+      for (const g of course.galleriesForChunk(i)) expect(course.finishApron(g.z)).toBe(false);
+    }
   });
 
   it('creature choreography: humps dive, bells breathe, boulders bounce', () => {

@@ -299,6 +299,42 @@ export class GameAudio {
     }
   }
 
+  // The gallery erupts: a swell of crowd roar (shaped noise) with a couple
+  // of bright whistle blips riding on top.
+  playCheer(): void {
+    if (!this.nodes) return;
+    const { ctx, master, noise } = this.nodes;
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = noise;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = 0.8;
+    filter.frequency.setValueAtTime(700, t);
+    filter.frequency.exponentialRampToValueAtTime(1400, t + 0.3);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.22, t + 0.09);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+    src.connect(filter).connect(gain).connect(master);
+    src.start(t);
+    src.stop(t + 0.85);
+    for (const [offset, freq] of [
+      [0.12, 2100],
+      [0.3, 2600],
+    ] as const) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.06, t + offset);
+      g.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.15);
+      osc.connect(g).connect(master);
+      osc.start(t + offset);
+      osc.stop(t + offset + 0.17);
+    }
+  }
+
   // Slalom gate threaded: a single crisp tick that climbs a whole step per
   // link in the chain — the escalation audible without looking at the HUD.
   playGate(chain: number): void {

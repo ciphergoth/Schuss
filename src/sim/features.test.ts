@@ -93,6 +93,63 @@ describe('slalom gates', () => {
   });
 });
 
+describe('air grabs', () => {
+  // Fly a clean 360, with and without the grab held; compare the ledgers.
+  function fly360(grab: boolean): Sim {
+    const sim = createSim(2, Infinity);
+    sim.nextSectorZ = -1e9;
+    const s = sim.skier;
+    placeSkier(sim, sim.terrain.centerX(-200), -200, 18);
+    s.y += 4; // tossed high enough for a full rotation
+    s.vy = 3;
+    s.airTime = 0.4;
+    while (s.airTime > 0 && Math.abs(s.spin) < 2 * Math.PI - 0.15) {
+      stepSim(sim, { steer: 0, stance: 0, trickSpin: 1, boost: grab });
+    }
+    while (s.airTime > 0) stepSim(sim, { steer: 0, stance: 0, boost: grab });
+    return sim;
+  }
+
+  it('a held grab styles the points x1.2 and never touches the fuel', () => {
+    const plain = fly360(false);
+    const styled = fly360(true);
+    expect(plain.score).toBe(500);
+    expect(styled.score).toBe(600);
+    // Fuel is mechanics, the tweak is glory: identical tanks.
+    expect(styled.boost).toBe(plain.boost);
+    // And a grabbed 360 is a different trick from a plain one: doing one
+    // after the other is variety, not an AGAIN? repeat.
+    expect(styled.lastTrick).not.toBe(plain.lastTrick);
+  });
+});
+
+describe('showboat galleries', () => {
+  it('a trick landed in front of the crowd pays the crowd bonus', () => {
+    const sim = createSim(1, Infinity);
+    sim.nextSectorZ = -1e9;
+    let gallery = null;
+    for (let i = 6; i < 500 && !gallery; i++) {
+      gallery = sim.terrain.galleriesForChunk(i)[0] ?? null;
+    }
+    expect(gallery).not.toBeNull();
+    // Toss a 360 that lands inside GALLERY_RANGE of the crowd.
+    const s = sim.skier;
+    placeSkier(sim, sim.terrain.centerX(gallery!.z + 12), gallery!.z + 12, 16);
+    s.y += 4;
+    s.vy = 3;
+    s.airTime = 0.4;
+    const events: SimEvent[] = [];
+    while (s.airTime > 0 && Math.abs(s.spin) < 2 * Math.PI - 0.15) {
+      events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
+    }
+    while (s.airTime > 0) events.push(...stepSim(sim, NEUTRAL));
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick && trick.type === 'trick' && trick.crowd?.points).toBe(125); // 25% of 500
+    expect(sim.score).toBe(625);
+    expect(Math.abs(s.z - gallery!.z)).toBeLessThan(30); // it really was in front of them
+  });
+});
+
 describe('patrol drones', () => {
   function findCreature(t: Terrain, kind: HazardKind) {
     for (let i = 8; i < 800; i++) {
