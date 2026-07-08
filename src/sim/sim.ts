@@ -325,13 +325,6 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
         }
         // Fuel is flat and capped — the mechanical loop, never docked.
         earnBoost(sim, Math.min(BOOST_TRICK_CAP, fuel));
-        // Points are uncapped. Repeating the EXACT same flight (segment
-        // sequence + parallel-ness) as last time docks the base pay before
-        // any contract multiplies it.
-        const signature = seq + (parallel ? '|P' : '');
-        const repeat = sim.lastTrick === signature;
-        if (repeat) points *= REPEAT_FACTOR;
-        sim.lastTrick = signature;
         // The armed contract settles on this attempt either way: deliver
         // the demand and the multiplier pays; anything else and it's gone.
         let mult = 1;
@@ -356,6 +349,16 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
           }
           sim.contract = null;
         }
+        // Points are uncapped. Repeating the EXACT same flight (segment
+        // sequence + parallel-ness) as last time docks the base pay before
+        // the contract multiplies it — UNLESS this trick just cashed a star
+        // contract, which DEMANDED that exact trick: docking the showpiece the
+        // star asked for (and flashing AGAIN?) would punish obeying the star,
+        // so a paid contract is never a repeat.
+        const signature = seq + (parallel ? '|P' : '');
+        const repeat = contractResult !== 'paid' && sim.lastTrick === signature;
+        if (repeat) points *= REPEAT_FACTOR;
+        sim.lastTrick = signature;
         points = Math.round(points * mult);
         sim.score += points;
         // Decode the scored sequence, in order, for the banner. Only segments

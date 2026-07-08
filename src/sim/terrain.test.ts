@@ -469,6 +469,26 @@ describe('terrain', () => {
     expect(loadouts.size).toBeGreaterThan(2);
   });
 
+  it('the last jump of the course carries no star — its contract could never cash', () => {
+    const finishChunk = Math.ceil(COURSE_LENGTH / CHUNK_LENGTH);
+    for (const seed of [1, 2, 3, 7, 42, 99]) {
+      const t = new Terrain(seed);
+      let lastJump = -1;
+      let earlierStarred = false;
+      for (let i = 3; i <= finishChunk; i++) {
+        if (!t.jumpForChunk(i)) continue;
+        if (lastJump >= 0 && t.bonusesForChunk(lastJump).length > 0) earlierStarred = true;
+        lastJump = i;
+      }
+      // A star arms a contract that pays on the NEXT trick; the final jump has
+      // no next lip before the line, so it never carries one.
+      expect(lastJump).toBeGreaterThan(0);
+      expect(t.bonusesForChunk(lastJump)).toEqual([]);
+      // ...but jumps with a lip still downrange keep their stars.
+      expect(earlierStarred).toBe(true);
+    }
+  });
+
   it('the tour: nine sections, nine different personalities, no repeats', () => {
     const everyType: SectionType[] = [
       'cruise',

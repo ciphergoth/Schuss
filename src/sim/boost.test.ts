@@ -527,6 +527,53 @@ describe('boost economy', () => {
     expect(sim.score).toBe(2450); // the spin is fresh again after the flip
   });
 
+  it('a paid star contract is never docked as a repeat — the star demanded it', () => {
+    const sim = createSim(1);
+    const spin360 = (): SimEvent[] => {
+      launch(sim);
+      const events: SimEvent[] = [];
+      while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
+        events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
+      }
+      while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+      return events;
+    };
+    spin360(); // sets lastTrick to the right-hand 360's signature
+    expect(sim.score).toBe(500);
+    // Arm a gold star that DEMANDS that exact spin, then deliver it. Repeating
+    // the demanded showpiece must NOT dock 30% (nor flash AGAIN?): full base
+    // 500 x3 = 1500, not the docked 350 x3.
+    sim.contract = { mult: 3, demand: 'spinR' };
+    const events = spin360();
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick && trick.type === 'trick' && trick.contract).toBe('paid');
+    expect(trick && trick.type === 'trick' && trick.repeat).toBe(false);
+    expect(sim.score - 500).toBe(1500);
+  });
+
+  it('a MISSED star contract still docks a genuine repeat', () => {
+    const sim = createSim(1);
+    const spin360 = (): SimEvent[] => {
+      launch(sim);
+      const events: SimEvent[] = [];
+      while (sim.skier.airTime > 0 && Math.abs(sim.skier.spin) < 2 * Math.PI - 0.15) {
+        events.push(...stepSim(sim, { steer: 0, stance: 0, trickSpin: 1 }));
+      }
+      while (sim.skier.airTime > 0) events.push(...stepSim(sim, COAST));
+      return events;
+    };
+    spin360();
+    expect(sim.score).toBe(500);
+    // The star asked for a backflip; a repeated spin misses it — so this spin
+    // isn't the star's trick, and the ordinary repeat dock applies: +350.
+    sim.contract = { mult: 3, demand: 'back' };
+    const events = spin360();
+    const trick = events.find((e) => e.type === 'trick');
+    expect(trick && trick.type === 'trick' && trick.contract).toBe('missed');
+    expect(trick && trick.type === 'trick' && trick.repeat).toBe(true);
+    expect(sim.score - 500).toBe(350);
+  });
+
   it('a parallel combo scores between the bigger trick and the full sum', () => {
     const sim = createSim(1);
     launch(sim, 18, 3);
