@@ -121,8 +121,8 @@ loop.
 
 Terrain is a pure height function with SECTION personalities: every 400m
 the course becomes one of cruise / narrows (7m half-width squeeze, empty
-and fast, its own snapping slalom — slalom GATES on the apexes, pennant
-bunting overhead) / bowl (27m playground: obstacle
+and fast, its own snapping slalom — slalom GATES on the apexes, each
+flying its own pennant string between the pole tips) / bowl (27m playground: obstacle
 slaloms, rich coins, kickers of every size) / plunge (the grade breaks
 away mid-section, big L kickers only) / steps (a staircase of launchable
 terraces) / sweeper (deliberate sine S-turns with the floor superelevated
@@ -222,8 +222,11 @@ finish apron stays clean): snow-capped pines in the powder, carved
 crystal pillars up the canyon walls, tilted ice monoliths on the glacier
 (whose floor also tints blue with the GRIP channel), lit terrace brinks
 on the steps, gold studs tracing the inside of a sweeper's esses,
-pennant bunting over the narrows, amber speed chevrons down the plunge,
-and the odd floodlight rig over the bowl.
+amber speed chevrons down the plunge, and the odd floodlight rig over
+the bowl. The narrows' dressing is its own flagged gates: the pennants
+hang from the gate line itself, never from separate bunting — the thing
+with the flags on must BE the thing to thread (a first cut hung them
+overhead as scenery, and the bare gates read as bollards).
 
 ## Tech stack
 
