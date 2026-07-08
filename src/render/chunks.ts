@@ -563,14 +563,18 @@ export class ChunkRenderer {
         group.add(tip);
         tipYs.push(y + GATE_HEIGHT + 0.2);
       }
-      // The string and its flags: a thin bar across the gap, three pennants
-      // hanging into it. Passing under the flags IS threading the gate.
+      // The string and its flags: a thin bar joining the two tips, three
+      // pennants hanging into it. Passing under the flags IS threading the
+      // gate. The narrows floor banks, so the tips sit at DIFFERENT heights —
+      // the line must tilt to actually join them (a flat bar at the mean
+      // height touches neither pole and reads as a funny-angled float), and
+      // each pennant hangs from its own point along that slope.
       const midY = (tipYs[0]! + tipYs[1]!) / 2;
-      const line = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.035, 0.035, g.halfGap * 2, 5).rotateZ(Math.PI / 2),
-        this.flagMast
-      );
+      const dy = tipYs[1]! - tipYs[0]!;
+      const span = Math.hypot(g.halfGap * 2, dy);
+      const line = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, span, 5), this.flagMast);
       line.position.set(g.x, midY, g.z);
+      line.rotation.z = Math.atan2(dy, g.halfGap * 2) - Math.PI / 2;
       group.add(line);
       const flagGeo = new THREE.ConeGeometry(0.3, 0.9, 3);
       for (let k = -1; k <= 1; k++) {
@@ -579,7 +583,9 @@ export class ChunkRenderer {
           this.pennants[(k + 1 + index) % this.pennants.length]!
         );
         flag.rotation.x = Math.PI; // hang point-down from the line
-        flag.position.set(g.x + k * g.halfGap * 0.55, midY - 0.5, g.z);
+        // Follow the tilted line: interpolate the tip heights at this offset.
+        const lineY = midY + k * 0.55 * (dy / 2);
+        flag.position.set(g.x + k * g.halfGap * 0.55, lineY - 0.5, g.z);
         group.add(flag);
       }
     }
