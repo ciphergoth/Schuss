@@ -37,7 +37,13 @@ notes ★ MISSED, trick still pays base) or a blown-trick tumble, kept
 through plain landings, bails, and crashes; a newer grab replaces it; a
 HUD "×N DEMAND" line glows in the star's color while armed (sim.contract;
 demandMet in sim.ts is the judge, demand pools + seeding live in
-terrain.ts). At every SECTION BOUNDARY (400m) a SECTOR popup grades average pace on a savage curve
+terrain.ts). Because a contract needs a FOLLOWING trick to cash, the
+course's LAST jump carries no star — there is no next lip before the line
+locks the score (terrain.hasJumpDownrange gates bonusesForChunk). And a
+trick that CASHES a contract is never docked as a repeat: the star DEMANDED
+that exact showpiece, so obeying it can't earn the AGAIN? dock (sim.ts —
+a paid contract clears the repeat flag; a missed one still docks a genuine
+repeat). At every SECTION BOUNDARY (400m) a SECTOR popup grades average pace on a savage curve
 (25·(avg−12)^2.2 — a full-boost sector outearns several tricks; SECTOR_LENGTH
 = SECTION_LENGTH, so the graded line, the section change, and the glowing arc
 all coincide), so fuel
@@ -75,7 +81,9 @@ PARALLEL_SLOWDOWN so it's harder) is instead sub-additive
 less than their sum; a simultaneous combo isn't a sequence, so no variety).
 Repeating the EXACT same segment sequence as the previous flight docks the
 base points to 70% before any star multiplies them (fuel is never docked;
-the banner asks AGAIN?) — the praise ladder reserves INCREDIBLE for
+the banner asks AGAIN?) — UNLESS the repeat is what CASHED an armed star
+contract, which demanded that exact trick (no dock, no AGAIN?) — the praise
+ladder reserves INCREDIBLE for
 variety, COMBO for parallel, OUTSTANDING for big same-type tricks, NICE for
 singles. Land within tolerance of the correct facing on every rotated axis
 (spin ~52 degrees, flip ~43 — ONE gate for payout and bail alike) or the

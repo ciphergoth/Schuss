@@ -1273,6 +1273,17 @@ export class Terrain {
     return pickups;
   }
 
+  // Is there another kicker between this chunk and the finish? A star's
+  // contract needs a following trick to cash, so the last jump of the course
+  // earns no star. The scan bottoms out where the apron forbids kickers (the
+  // same gate rollsJump/forced use), so it always terminates.
+  private hasJumpDownrange(index: number): boolean {
+    for (let j = index + 1; !this.finishApron(-j * CHUNK_LENGTH - 24 - KICKER_THROW); j++) {
+      if (this.jumpForChunk(j) !== null) return true;
+    }
+    return false;
+  }
+
   // Trick-bonus stars past each kicker, along the lip's flight direction.
   bonusesForChunk(index: number): TrickBonus[] {
     const cached = this.chunkBonuses.get(index);
@@ -1280,7 +1291,10 @@ export class Terrain {
 
     const bonuses: TrickBonus[] = [];
     const jump = this.jumpForChunk(index);
-    if (jump) {
+    // A star arms a CONTRACT that pays on the NEXT trick — so a star on the
+    // course's last jump can never be cashed: the line locks the score before
+    // another lip comes. Withhold stars from any jump with no kicker downrange.
+    if (jump && this.hasJumpDownrange(index)) {
       if (jump.hip !== 0) {
         // Hips pay the x3 for riding the sling; their x5 is withheld until the
         // popped-off-the-curve flight is measured well enough to place it
