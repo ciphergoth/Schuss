@@ -401,9 +401,12 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       // COMBO, big same-type tricks are OUTSTANDING, a single rotation is NICE.
       const combo = e.variety || e.parallel;
       audio.playTrick(e.spins + e.flips, e.mult, combo);
-      // The showpieces get fireworks in the sky AND in the mix.
+      // The showpieces get fireworks in the sky AND in the mix — and the
+      // aurora itself flares for the big ones.
       if (e.mult >= 3) audio.playFireworks(e.mult, e.mult >= 5);
       else if (combo) audio.playFireworks(3, false);
+      if (e.mult >= 3) sceneSetup.flare(e.mult >= 5 ? 1 : 0.75, sim.time);
+      else if (combo) sceneSetup.flare(0.45, sim.time);
       // Spell out the whole sequence in order, so a spin one way then the
       // other reads as the two tricks it was, not a squashed total. Spins
       // carry a rotation arrow so the two directions are distinct.
@@ -438,12 +441,14 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     } else if (e.type === 'finish') {
       audio.playFinish();
       audio.playFireworks(12, true);
+      sceneSetup.flare(1, sim.time); // the sky's grandest blaze for the line
       finishPanelAt = sim.time + 1.8; // let the barrage land first
     } else if (e.type === 'sector') {
       // The pace grade: a fast sector is a jackpot, a slow one just a fact.
       if (e.points > 0) {
         audio.playSector(e.points >= 5000);
         audio.playFireworks(e.points >= 5000 ? 7 : 3, e.points >= 5000);
+        if (e.points >= 5000) sceneSetup.flare(0.9, sim.time);
         showTrick(
           `SECTOR ${Math.round(e.speed)} m/s — +${e.points.toLocaleString('en')}`,
           e.points >= 5000 ? '#ffd34d' : '#9fd4ff',

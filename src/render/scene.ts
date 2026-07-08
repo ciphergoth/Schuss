@@ -12,6 +12,10 @@ export interface SceneSetup {
   update: (x: number, y: number, z: number, time: number, cave?: number) => void;
   // A new course brings its own zone sequence and weather.
   setCourse: (seed: number) => void;
+  // The sky celebrates with you: a jackpot briefly FLARES the aurora to
+  // full blaze wherever you are (strength 0..1, decaying over ~2.5s).
+  // atTime is sim time — the same clock update() runs on.
+  flare: (strength: number, atTime: number) => void;
 }
 
 // Waving sky ribbons: three additive planes whose columns bob on sine waves
@@ -77,6 +81,73 @@ class Aurora {
       pos.needsUpdate = true;
       const shimmer = 0.75 + 0.25 * Math.sin(time * (0.9 + r * 0.3) + r * 4);
       this.materials[r]!.opacity = 0.34 * strength * shimmer;
+    }
+  }
+}
+
+// Shooting stars: brief streaks across the high sky on a seeded schedule —
+// each of a few lanes fires every SHOOT_PERIOD seconds at a seeded moment
+// and heading, so the night is quietly alive without ever demanding
+// attention. Pure function of (seed, time): deterministic, no state.
+const SHOOT_LANES = 3;
+export const SHOOT_PERIOD = 26; // per lane; ~one streak somewhere every ~9s
+const SHOOT_LIFE = 1.1;
+
+export class ShootingStars {
+  private streaks: THREE.Mesh[] = [];
+  private material: THREE.MeshBasicMaterial;
+  private seed = 1;
+
+  constructor(scene: THREE.Scene) {
+    this.material = new THREE.MeshBasicMaterial({
+      color: 0xdff4ff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+    });
+    for (let j = 0; j < SHOOT_LANES; j++) {
+      // A long thin sliver, brightest at the head end via a taper.
+      const geo = new THREE.PlaneGeometry(26, 0.5);
+      const streak = new THREE.Mesh(geo, this.material.clone());
+      streak.frustumCulled = false;
+      streak.visible = false;
+      this.streaks.push(streak);
+      scene.add(streak);
+    }
+  }
+
+  setSeed(seed: number): void {
+    this.seed = seed;
+  }
+
+  // How many streaks are mid-flight right now (tests probe the schedule).
+  liveCount(): number {
+    return this.streaks.filter((s) => s.visible).length;
+  }
+
+  update(x: number, y: number, z: number, time: number, dimmer: number): void {
+    for (let j = 0; j < SHOOT_LANES; j++) {
+      const streak = this.streaks[j]!;
+      const k = Math.floor(time / SHOOT_PERIOD);
+      // Each lane fires once per period, at a seeded moment inside it.
+      const start = k * SHOOT_PERIOD + hash2(this.seed, k, 911 + j) * (SHOOT_PERIOD - SHOOT_LIFE);
+      const u = (time - start) / SHOOT_LIFE;
+      if (u < 0 || u > 1 || dimmer <= 0) {
+        streak.visible = false;
+        continue;
+      }
+      const h1 = hash2(this.seed, k, 917 + j);
+      const h2 = hash2(this.seed, k, 919 + j);
+      const x0 = (h1 * 2 - 1) * 220;
+      const dir = h2 < 0.5 ? 1 : -1;
+      const drop = 22 + h2 * 18;
+      streak.visible = true;
+      streak.position.set(x + x0 + dir * u * 90, y + 150 + h2 * 60 - u * drop, z - 260 - h1 * 80);
+      streak.rotation.z = -dir * Math.atan2(drop, 90);
+      const mat = streak.material as THREE.MeshBasicMaterial;
+      mat.opacity = Math.sin(u * Math.PI) * 0.8 * dimmer;
     }
   }
 }
@@ -173,7 +244,22 @@ export function createScene(): SceneSetup {
 
   const aurora = new Aurora(scene);
   const snow = new Snowfall(scene);
+  const shooting = new ShootingStars(scene);
   const blended = makePalette();
+
+  // The jackpot flare: an envelope that spikes the aurora to full blaze and
+  // decays over a couple of seconds. Runs on sim time (the same clock
+  // update() gets), so a paused game holds its flare mid-bloom.
+  const FLARE_DECAY = 2.5;
+  let flareStrength = 0;
+  let flareAt = -FLARE_DECAY;
+  const flare = (strength: number, atTime: number): void => {
+    // A new flare joins whatever is still glowing rather than cutting it.
+    const u = (atTime - flareAt) / FLARE_DECAY;
+    const live = u >= 0 && u < 1 ? flareStrength * (1 - u) * (1 - u) : 0;
+    flareStrength = Math.min(1, Math.max(live, strength));
+    flareAt = atTime;
+  };
 
   // The course's atmosphere identity: its own zone sequence and weather.
   let zones: readonly Palette[] = courseZones(1);
@@ -184,6 +270,9 @@ export function createScene(): SceneSetup {
     weather = courseWeather(seed);
     fogPhase = hash2(seed, 4177, 37) * Math.PI * 2;
     snow.intensity = weather.snow;
+    shooting.setSeed(seed);
+    flareStrength = 0; // a fresh course starts with a calm sky
+    flareAt = -FLARE_DECAY;
   };
 
   // The grotto's own darkness: blue-black, close, lit by its crystals.
@@ -212,9 +301,14 @@ export function createScene(): SceneSetup {
     hemi.intensity = blended.hemiIntensity * (1 - 0.55 * cave);
     sun.color.copy(blended.sun);
     sun.intensity = blended.sunIntensity * (1 - 0.85 * cave);
-    aurora.update(x, y, z, time, blended.aurora * (1 - cave));
+    // A jackpot briefly blazes the aurora wherever the palette left it —
+    // the sky celebrating with you — and the grotto's roof hides all of it.
+    const fu = (time - flareAt) / FLARE_DECAY;
+    const flareEnv = fu >= 0 && fu < 1 ? flareStrength * (1 - fu) * (1 - fu) : 0;
+    aurora.update(x, y, z, time, Math.min(1, blended.aurora + flareEnv) * (1 - cave));
+    shooting.update(x, y, z, time, 1 - cave);
     snow.update(x, y, z, time, 1 - cave);
   };
 
-  return { scene, sun, update, setCourse };
+  return { scene, sun, update, setCourse, flare };
 }

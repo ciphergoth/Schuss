@@ -106,7 +106,12 @@ the eighth carries you across the line) and
 carries its own WEATHER (courseWeather:
 seeded snowfall — clear/flurries/heavy, a deterministic flake box riding
 with the skier — and drifting fog banks that swell on a seeded rhythm in
-z), under a waving aurora that blazes in the night zone; a
+z), under a waving aurora that blazes in the night zone — and FLARES to
+full blaze anywhere for a jackpot (sceneSetup.flare: star-multiplied
+tricks, jackpot sectors, the finish line; a ~2.5s decay on sim time, so a
+pause holds the bloom) — while seeded SHOOTING STARS streak the high sky
+on a quiet deterministic schedule (scene.ShootingStars, ~one every ~9s;
+both hold their breath in the grotto); a
 glowing neon arc spans the track at every SECTION BOUNDARY (400m, where one
 section personality gives way to the next); paid sectors
 and star-multiplied tricks launch firework volleys over the course (grander
