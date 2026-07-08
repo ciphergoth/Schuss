@@ -6,8 +6,12 @@ import {
   SECTION_LENGTH,
   Terrain,
   WALL_WIDTH,
+  WYRM_SEGMENTS,
   hazardX,
+  jellyPose,
   jumpDrift,
+  tumblerPose,
+  wyrmSegment,
 } from '../sim/terrain';
 import { hash2, mulberry32 } from '../sim/rng';
 
@@ -232,7 +236,26 @@ export class ChunkRenderer {
     depthWrite: false,
     side: THREE.DoubleSide,
   });
-  private droneMeshes = new Map<string, { obj: THREE.Group; hazard: Hazard; beacon: THREE.Mesh }>();
+  // The wyrm: deep-sea teal with a glowing spine, at home under the powder.
+  private wyrmSkin = new THREE.MeshStandardMaterial({
+    color: 0x1d6157,
+    emissive: 0x0a2f2a,
+    roughness: 0.7,
+    flatShading: true,
+  });
+  private wyrmEye = new THREE.MeshBasicMaterial({ color: 0xfff6d8 });
+  // The jelly: additive light, barely a body at all.
+  private jellyTent = new THREE.MeshBasicMaterial({
+    color: 0xb9e8ff,
+    transparent: true,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  // Every live creature registers an animator; update() drives them all on
+  // sim time, so the choreography you watch is the sim's own (hazardCircles
+  // and these poses share the same pure functions).
+  private creatureAnims = new Map<string, (time: number) => void>();
 
   constructor(
     private scene: THREE.Scene,
@@ -250,7 +273,7 @@ export class ChunkRenderer {
     }
     this.chunks.clear();
     this.pickupMeshes.clear();
-    this.droneMeshes.clear();
+    this.creatureAnims.clear();
     this.terrain = terrain;
   }
 
@@ -268,7 +291,7 @@ export class ChunkRenderer {
         });
         for (const p of this.terrain.pickupsForChunk(i)) this.pickupMeshes.delete(p.id);
         for (const b of this.terrain.bonusesForChunk(i)) this.pickupMeshes.delete(b.id);
-        for (const h of this.terrain.hazardsForChunk(i)) this.droneMeshes.delete(h.id);
+        for (const h of this.terrain.hazardsForChunk(i)) this.creatureAnims.delete(h.id);
         this.chunks.delete(i);
       }
     }
@@ -279,16 +302,10 @@ export class ChunkRenderer {
       const baseY = mesh.userData.baseY as number;
       mesh.position.y = baseY + Math.sin(time * 2.2 + mesh.position.x) * 0.14;
     }
-    // Patrol drones glide on the sim's own schedule (hazardX of sim time),
-    // so the sweep you watch is the sweep that hits. The beacon blinks a
-    // slow warning strobe.
-    for (const [, { obj, hazard, beacon }] of this.droneMeshes) {
-      const x = hazardX(hazard, time);
-      const y = this.terrain.height(x, hazard.z);
-      obj.position.set(x, y + 1.2 + Math.sin(time * 2.6 + hazard.phase) * 0.12, hazard.z);
-      obj.rotation.y = time * 2.2;
-      beacon.visible = Math.sin(time * 5 + hazard.phase) > -0.3;
-    }
+    // The menagerie moves on the sim's own clock: every creature's animator
+    // runs the same pure pose functions the collision circles do, so the
+    // shape you watch is the shape that hits.
+    for (const [, animate] of this.creatureAnims) animate(time);
   }
 
   private build(index: number): THREE.Group {
@@ -567,31 +584,12 @@ export class ChunkRenderer {
       }
     }
 
-    // Patrol drones: built here, flown by update() on the sim's schedule.
-    // Loud on purpose — a hazard you can't read from 150m out is an ambush,
-    // so the shell wears a fat amber ring, a blinking beacon on top, and a
-    // beam swept along the snow.
+    // The menagerie: built here, choreographed by update() on sim time.
     for (const h of this.terrain.hazardsForChunk(index)) {
-      const drone = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.95, 0), this.droneShell);
-      body.scale.y = 0.6;
-      body.castShadow = true;
-      drone.add(body);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.14, 6, 20), this.droneGlow);
-      ring.rotation.x = Math.PI / 2;
-      drone.add(ring);
-      const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 6), this.droneGlow);
-      beacon.position.y = 0.78;
-      drone.add(beacon);
-      // The underbeam sweeps the snow: the patrol reads from 200m out.
-      const beam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.14, 0.7, 2.6, 8, 1, true),
-        this.droneBeam
-      );
-      beam.position.y = -1.2;
-      drone.add(beam);
-      group.add(drone);
-      this.droneMeshes.set(h.id, { obj: drone, hazard: h, beacon });
+      if (h.kind === 'drone') this.addDrone(group, h);
+      else if (h.kind === 'wyrm') this.addWyrm(group, h);
+      else if (h.kind === 'jelly') this.addJelly(group, h);
+      else this.addTumbler(group, h);
     }
 
     this.addSectionProps(group, index, zTop, zMid);
@@ -650,6 +648,162 @@ export class ChunkRenderer {
 
     this.scene.add(group);
     return group;
+  }
+
+  // THE MENAGERIE'S BODIES. Each builder adds the meshes to the chunk's
+  // group (so disposal is free) and registers an animator that drives them
+  // from the same pure pose functions the sim's collision circles use.
+
+  // The drone: amber ring, blinking beacon, a beam swept along the snow —
+  // loud on purpose, a hazard you can't read from 150m out is an ambush.
+  private addDrone(group: THREE.Group, h: Hazard): void {
+    const drone = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.95, 0), this.droneShell);
+    body.scale.y = 0.6;
+    body.castShadow = true;
+    drone.add(body);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.14, 6, 20), this.droneGlow);
+    ring.rotation.x = Math.PI / 2;
+    drone.add(ring);
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 6), this.droneGlow);
+    beacon.position.y = 0.78;
+    drone.add(beacon);
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.14, 0.7, 2.6, 8, 1, true),
+      this.droneBeam
+    );
+    beam.position.y = -1.2;
+    drone.add(beam);
+    group.add(drone);
+    this.creatureAnims.set(h.id, (time) => {
+      const x = hazardX(h, time);
+      const y = this.terrain.height(x, h.z);
+      drone.position.set(x, y + 1.2 + Math.sin(time * 2.6 + h.phase) * 0.12, h.z);
+      drone.rotation.y = time * 2.2;
+      beacon.visible = Math.sin(time * 5 + h.phase) > -0.3;
+    });
+  }
+
+  // The wyrm: a chain of humps swimming the drifts. Each segment rides the
+  // shared pose function; below the snow it simply sinks under the ribbon,
+  // so surfacing and diving need no extra effects to read. The head gets a
+  // snout and eyes; a couple of dorsal fins break the water line early —
+  // the tell that something is coming before the first hump crests.
+  private addWyrm(group: THREE.Group, h: Hazard): void {
+    const segs: THREE.Group[] = [];
+    for (let i = 0; i < WYRM_SEGMENTS; i++) {
+      const seg = new THREE.Group();
+      const r = i === 0 ? 0.75 : 0.68 - i * 0.03;
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 7), this.wyrmSkin);
+      ball.castShadow = true;
+      seg.add(ball);
+      // The glowing spine stud: the body reads at night and in the blizzard.
+      const stud = new THREE.Mesh(new THREE.SphereGeometry(0.12, 5, 5), this.caveGlowA);
+      stud.position.y = r * 0.9;
+      seg.add(stud);
+      if (i === 0) {
+        const snout = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.8, 6), this.wyrmSkin);
+        snout.rotation.x = -Math.PI / 2;
+        snout.position.z = -0.8;
+        seg.add(snout);
+        for (const side of [-1, 1]) {
+          const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 5, 5), this.wyrmEye);
+          eye.position.set(side * 0.32, 0.28, -0.5);
+          seg.add(eye);
+        }
+      }
+      if (i === 3 || i === 6) {
+        const fin = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.9, 4), this.wyrmSkin);
+        fin.position.y = r * 0.8;
+        seg.add(fin);
+      }
+      group.add(seg);
+      segs.push(seg);
+    }
+    this.creatureAnims.set(h.id, (time) => {
+      for (let i = 0; i < WYRM_SEGMENTS; i++) {
+        const p = wyrmSegment(h, i, time);
+        const ahead = wyrmSegment(h, i, time + 0.06);
+        const gy = this.terrain.height(p.x, p.z);
+        // lift < 0 sinks the segment under the ribbon; the snow hides it.
+        segs[i]!.position.set(p.x, gy + p.lift * 1.1 - 0.15, p.z);
+        segs[i]!.rotation.y = Math.atan2(ahead.x - p.x, ahead.z - p.z) + Math.PI;
+      }
+    });
+  }
+
+  // The jelly: a pulsing bell of pure light with tentacles dangling to the
+  // clearance line. The pulse IS the readout: bell squeezed high and bright
+  // = the pass-under window; bell spread low and dim = go around.
+  private addJelly(group: THREE.Group, h: Hazard): void {
+    const jelly = new THREE.Group();
+    const bellMat = new THREE.MeshBasicMaterial({
+      color: 0x9fd0ff,
+      transparent: true,
+      opacity: 0.5,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const bell = new THREE.Mesh(new THREE.SphereGeometry(1.15, 10, 8), bellMat);
+    jelly.add(bell);
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), this.magenta);
+    core.position.y = -0.1;
+    jelly.add(core);
+    const TENT_LEN = 2.2;
+    const tentacles: THREE.Mesh[] = [];
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2;
+      const tent = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.02, TENT_LEN, 5),
+        this.jellyTent
+      );
+      tent.position.set(Math.cos(a) * 0.6, -TENT_LEN / 2 - 0.4, Math.sin(a) * 0.6);
+      jelly.add(tent);
+      tentacles.push(tent);
+    }
+    group.add(jelly);
+    this.creatureAnims.set(h.id, (time) => {
+      const p = jellyPose(h, time);
+      const gy = this.terrain.height(p.x, p.z);
+      // The bell floats so its tentacle tips graze the clearance line the
+      // sim collides with: what you see hanging is what hits.
+      jelly.position.set(p.x, gy + p.clearance + TENT_LEN + 0.4, p.z);
+      bell.scale.set(1.2 - 0.3 * p.pulse, 0.62 + 0.33 * p.pulse, 1.2 - 0.3 * p.pulse);
+      bellMat.opacity = 0.35 + 0.4 * p.pulse;
+      for (const [k, tent] of tentacles.entries()) {
+        tent.rotation.z = 0.12 * Math.sin(time * 1.7 + k);
+        tent.rotation.x = 0.12 * Math.cos(time * 1.3 + k * 2);
+      }
+    });
+  }
+
+  // The tumbler: a crystal boulder bouncing down the terraces — squashing
+  // on impact, stretching in flight, forming out of the snow at the top of
+  // its patrol and collapsing at the bottom (presence 0..1 scales it, and
+  // the sim's circle vanishes with it — the respawn can't ambush anyone).
+  private addTumbler(group: THREE.Group, h: Hazard): void {
+    const boulder = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.IcosahedronGeometry(1.0, 0), this.crystal);
+    body.castShadow = true;
+    boulder.add(body);
+    const gem = new THREE.Mesh(new THREE.IcosahedronGeometry(0.4, 0), this.caveGlowB);
+    boulder.add(gem);
+    group.add(boulder);
+    this.creatureAnims.set(h.id, (time) => {
+      const p = tumblerPose(h, time);
+      const gy = this.terrain.height(p.x, p.z);
+      boulder.visible = p.presence > 0.02;
+      boulder.position.set(p.x, gy + p.hop + 1.0, p.z);
+      const land = Math.min(1, p.hop / 0.5);
+      const squash = 0.65 + 0.35 * land;
+      boulder.scale.set(
+        p.presence * (1.15 - 0.15 * land),
+        p.presence * squash,
+        p.presence * (1.15 - 0.15 * land)
+      );
+      boulder.rotation.x = -time * 3.1;
+      boulder.rotation.y = h.phase;
+    });
   }
 
   // SECTION-SIGNATURE PROPS: each personality dresses its own stretch, so a

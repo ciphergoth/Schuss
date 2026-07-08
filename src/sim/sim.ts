@@ -4,11 +4,12 @@ import {
   GATE_POINTS,
   SECTION_LENGTH,
   Terrain,
-  hazardX,
+  hazardCircles,
 } from './terrain';
 import {
   FLIP_COMMIT,
   FLIP_TOLERANCE,
+  SKIER_HEIGHT,
   SKIER_RADIUS,
   SPIN_TOLERANCE,
   TRICK_COMMIT,
@@ -243,20 +244,25 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
   sim.time += SIM_DT;
   sim.nearMissCooldown = Math.max(0, sim.nearMissCooldown - SIM_DT);
 
-  // Moving hazards collide like obstacles, but against where the patrol IS
-  // right now (a pure function of sim.time, so what the render layer shows
-  // is exactly what hits). Checked here, before the tumble ledger below, so
-  // a drone hit fires the same tumble event a crystal does.
+  // Moving hazards collide like obstacles, but against where the creature
+  // IS right now (a pure function of sim.time, so what the render layer
+  // shows is exactly what hits — including what ISN'T there: a submerged
+  // wyrm hump, a lifted jelly tentacle). Each circle carries a vertical
+  // band above its snow; the skier's body spans SKIER_HEIGHT. Checked here,
+  // before the tumble ledger below, so a creature hit fires the same tumble
+  // event a crystal does.
   if (s.tumbling === 0) {
-    for (const h of sim.terrain.hazardsNear(s.z)) {
-      const hx = hazardX(h, sim.time);
-      const dx = hx - s.x;
-      const dz = h.z - s.z;
-      const r = h.radius + SKIER_RADIUS;
-      if (dx * dx + dz * dz >= r * r) continue;
-      if (s.y >= sim.terrain.height(hx, h.z) + h.height) continue;
-      hitSkier(s, hx, h.z, r);
-      break;
+    outer: for (const h of sim.terrain.hazardsNear(s.z)) {
+      for (const c of hazardCircles(h, sim.time)) {
+        const dx = c.x - s.x;
+        const dz = c.z - s.z;
+        const r = c.r + SKIER_RADIUS;
+        if (dx * dx + dz * dz >= r * r) continue;
+        const gy = sim.terrain.height(c.x, c.z);
+        if (s.y >= gy + c.top || s.y + SKIER_HEIGHT <= gy + c.bottom) continue;
+        hitSkier(s, c.x, c.z, r);
+        break outer;
+      }
     }
   }
 
@@ -425,15 +431,18 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
         break;
       }
     }
-    // Slipping past a patrol drone celebrates like grazing a crystal.
+    // Slipping past a creature celebrates like grazing a crystal — and so
+    // does slipping UNDER one (a contracted jelly): any live circle shaved
+    // horizontally counts; the whoosh is the reward for the close call.
     if (sim.nearMissCooldown === 0) {
-      for (const h of sim.terrain.hazardsNear(s.z)) {
-        const hx = hazardX(h, sim.time);
-        const d = Math.hypot(hx - s.x, h.z - s.z);
-        if (d < h.radius + SKIER_RADIUS + NEAR_MISS_RING) {
-          sim.nearMissCooldown = NEAR_MISS_COOLDOWN;
-          events.push({ type: 'nearMiss', x: hx, z: h.z });
-          break;
+      outer: for (const h of sim.terrain.hazardsNear(s.z)) {
+        for (const c of hazardCircles(h, sim.time)) {
+          const d = Math.hypot(c.x - s.x, c.z - s.z);
+          if (d < c.r + SKIER_RADIUS + NEAR_MISS_RING) {
+            sim.nearMissCooldown = NEAR_MISS_COOLDOWN;
+            events.push({ type: 'nearMiss', x: c.x, z: c.z });
+            break outer;
+          }
         }
       }
     }

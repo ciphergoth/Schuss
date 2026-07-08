@@ -76,6 +76,9 @@ const TURN_RATE = 2.6; // rad/s ceiling on heading change
 // aPerp/speed, capped so crawling speeds pivot instead of whipping.
 const GRAVITY_TURN_CAP = 1.0; // rad/s
 export const SKIER_RADIUS = 0.4;
+// The body's vertical reach, for hazards whose danger hangs in the air (a
+// jelly's tentacles): the skier occupies [y, y + SKIER_HEIGHT].
+export const SKIER_HEIGHT = 1.9;
 
 // Contact is a position tolerance, not a force: the body is ballistic (never
 // pulled down harder than g), and the legs bridge up to LEG_REACH of daylight

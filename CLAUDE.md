@@ -106,7 +106,12 @@ the eighth carries you across the line) and
 carries its own WEATHER (courseWeather:
 seeded snowfall — clear/flurries/heavy, a deterministic flake box riding
 with the skier — and drifting fog banks that swell on a seeded rhythm in
-z), under a waving aurora that blazes in the night zone; a
+z), under a waving aurora that blazes in the night zone — and FLARES to
+full blaze anywhere for a jackpot (sceneSetup.flare: star-multiplied
+tricks, jackpot sectors, the finish line; a ~2.5s decay on sim time, so a
+pause holds the bloom) — while seeded SHOOTING STARS streak the high sky
+on a quiet deterministic schedule (scene.ShootingStars, ~one every ~9s;
+both hold their breath in the grotto); a
 glowing neon arc spans the track at every SECTION BOUNDARY (400m, where one
 section personality gives way to the next); paid sectors
 and star-multiplied tricks launch firework volleys over the course (grander
@@ -209,17 +214,36 @@ time, BEST (localStorage key skigame-best-<seed>), and one action — S /
 Ski again — that restarts from the gate (with one course there is no
 picker and no separate retry button; the restart IS the menu).
 Moving
-hazards are live: PATROL DRONES (terrain.hazardsForChunk, position =
-hazardX(h, sim.time) — a pure function of seed and time, so the sweep
-you watch IS the sweep that hits) glide laterally across the bowl and
-the glacier on seeded sines, at most one per chunk, never sharing a
-chunk with a kicker's ramp or the uphill lip's landing, never on a
-setpiece or in the grotto, and never in the opening stretch; their sweep
-stays inside the floor so there is always clean snow to dodge onto. A
-hit is an ordinary obstacle hit (hitSkier in skier.ts — same brief
-tumble, same 60% speed kept), a close shave pays the same near-miss
-celebration, and a drone's chunk carries no static obstacles (the dodge
-it demands must never be ambushed).
+hazards are a MENAGERIE, one creature kind per section personality
+(terrain.hazardsForChunk deals them; terrain.hazardCircles(h, sim.time)
+is the collision truth — time-varying circles, each with a vertical band
+[bottom, top] above its own snow, all pure functions of seed and time,
+so the choreography you watch IS the choreography that hits, including
+what ISN'T there). PATROL DRONES (bowl, glacier) sweep laterally on
+seeded sines. The POWDER WYRM (powder) is a segmented serpent swimming
+the drifts (wyrmSegment: beads trailing a figure-eight head by WYRM_LAG,
+strung out — a short lag read as a pile of shrubs), humps surfacing and
+diving on an emergence wave; only emerged arcs collide, so the dive
+rhythm IS the dodge, and there is never a moment the whole body blocks.
+The AURORA JELLY (cruise, and drifting over the bowl) is a pulsing
+additive-light medusa whose tentacles hang to a breathing clearance line
+(jellyPose): the contracted bell lifts them to 2.7m — high enough that
+the pass-under survives the grade (a skier enters from uphill standing
+~half a meter above the bell's snow) — so you dodge around or time a
+pass beneath, and a clean pass-under pays the near-miss whoosh. The ICE
+TUMBLER (steps) bounces down a fixed TUMBLER_SPAN patrol of the
+staircase in parabolic hops (tumblerPose), squashing on impact,
+dissolving into the snow at the seam and reforming at the top —
+presence < 1 spawns NO circle, so the respawn can never ambush. Shared
+rules: at most one creature per chunk and never in adjacent chunks, kind
+set by section, never sharing a chunk with a kicker's ramp or the uphill
+lip's landing, never on a setpiece or in the grotto, never in the
+opening stretch, activity always inside the floor (clean snow to dodge
+onto), and no static obstacles in a creature's chunk. A hit is an
+ordinary obstacle hit (hitSkier in skier.ts — same brief tumble, same
+60% speed kept; the skier's body spans SKIER_HEIGHT for the vertical
+check); a close shave past any live circle pays the same near-miss
+celebration.
 The render layer
 draws the course as a ribbon clipped just past the bounce barrier, so the
 walls stay low and the world beyond shows: neon edge poles, a city skyline

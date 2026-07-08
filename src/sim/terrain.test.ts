@@ -4,11 +4,14 @@ import {
   COURSE_LENGTH,
   FINISH_APRON,
   GRADE,
+  Hazard,
   SECTION_LENGTH,
   SectionType,
   Terrain,
   WALL_WIDTH,
-  hazardX,
+  WYRM_SEGMENTS,
+  hazardCircles,
+  jellyPose,
 } from './terrain';
 
 // Find the first section of a given type (searching a long way downhill).
@@ -685,32 +688,97 @@ describe('terrain', () => {
     }
   });
 
-  it('patrol drones sweep only the wide sections, clear of everything else', () => {
+  it('the menagerie: each creature kind keeps to its sections, clear of everything else', () => {
     const a = new Terrain(1, Infinity);
     const b = new Terrain(1, Infinity);
-    let drones = 0;
-    for (let i = 0; i < 600; i++) {
+    const homes: Record<string, SectionType[]> = {
+      drone: ['bowl', 'glacier'],
+      wyrm: ['powder'],
+      jelly: ['cruise', 'bowl'],
+      tumbler: ['steps'],
+    };
+    const seen = new Set<string>();
+    for (let i = 0; i < 800; i++) {
       expect(a.hazardsForChunk(i)).toEqual(b.hazardsForChunk(i)); // pure
       for (const h of a.hazardsForChunk(i)) {
-        drones++;
-        // Bowls and glaciers only — the playground and the open ice.
-        expect(['bowl', 'glacier']).toContain(a.sectionType(a.sectionIndexAt(h.z)));
-        // The sweep never leaves the floor: clean snow on both flanks.
+        seen.add(h.kind);
+        // Every creature keeps to its home sections...
+        expect(homes[h.kind]).toContain(a.sectionType(a.sectionIndexAt(h.z)));
+        // ...its activity stays inside the floor (clean snow to dodge onto)...
         expect(h.amp + h.radius).toBeLessThan(a.channelHalfWidth(h.z) - 3);
-        // Never sharing space with a kicker's ramp or the uphill landing...
+        // ...never sharing space with a kicker's ramp or the uphill landing,
+        // never next door to another act...
         expect(a.jumpForChunk(i)).toBeNull();
         expect(a.jumpForChunk(i - 1)).toBeNull();
-        // ...and the drone owns its chunk: no static obstacle hides in the
-        // sweep it forces you to dodge.
+        expect(a.hazardsForChunk(i - 1)).toEqual([]);
+        // ...and it owns its chunk: no static obstacle hides in the dodge.
         expect(a.obstaclesForChunk(i)).toEqual([]);
-        // The patrol is a pure function of time and repeats its period.
-        expect(hazardX(h, 3)).toBeCloseTo(hazardX(h, 3 + h.period), 8);
-        expect(Math.abs(hazardX(h, 5) - h.x0)).toBeLessThanOrEqual(h.amp + 1e-9);
+        // The choreography is a pure function of time, and every collision
+        // circle stays near the anchor (hazardsNear's scan reaches it) and
+        // above the snow in a sane band.
+        for (const t of [1.7, 8.3, 61.2]) {
+          expect(hazardCircles(h, t)).toEqual(hazardCircles(h, t));
+          for (const c of hazardCircles(h, t)) {
+            expect(Math.abs(c.z - h.z)).toBeLessThan(36);
+            expect(Math.abs(c.x - h.x0)).toBeLessThanOrEqual(h.amp + 1e-9);
+            expect(c.top).toBeGreaterThan(c.bottom);
+            expect(c.bottom).toBeGreaterThanOrEqual(0);
+          }
+        }
       }
       // Never in the opening stretch.
       if (i < 8) expect(a.hazardsForChunk(i)).toEqual([]);
     }
-    expect(drones).toBeGreaterThan(5);
+    // The whole cast shows up somewhere on the endless mountain.
+    expect(seen).toEqual(new Set(['drone', 'wyrm', 'jelly', 'tumbler']));
+  });
+
+  it('creature choreography: humps dive, bells breathe, boulders bounce', () => {
+    const t = new Terrain(1, Infinity);
+    const byKind = new Map<string, Hazard>();
+    for (let i = 8; i < 800; i++) {
+      for (const h of t.hazardsForChunk(i)) if (!byKind.has(h.kind)) byKind.set(h.kind, h);
+    }
+    const wyrm = byKind.get('wyrm')!;
+    const jelly = byKind.get('jelly')!;
+    const tumbler = byKind.get('tumbler')!;
+
+    // The wyrm surfaces and dives: the emerged-arc count varies with time,
+    // and it is never the whole body (there is always a gap to ski).
+    const counts = new Set<number>();
+    for (let time = 0; time < 12; time += 0.25) {
+      const n = hazardCircles(wyrm, time).length;
+      counts.add(n);
+      expect(n).toBeLessThan(WYRM_SEGMENTS);
+    }
+    expect(counts.size).toBeGreaterThan(2);
+
+    // The jelly's clearance breathes across head height: sometimes it
+    // blocks a skier (SKIER_HEIGHT ~1.9), sometimes it lifts clear.
+    let blocked = 0;
+    let open = 0;
+    for (let time = 0; time < 8; time += 0.1) {
+      const p = jellyPose(jelly, time);
+      if (p.clearance > 1.95) open++;
+      else blocked++;
+    }
+    expect(blocked).toBeGreaterThan(5);
+    expect(open).toBeGreaterThan(5);
+
+    // The tumbler patrols downhill, hops, and takes its seam break: the
+    // circle vanishes while it reforms, and its bounce leaves the ground.
+    let grounded = 0;
+    let airborne = 0;
+    let absent = 0;
+    for (let time = 0; time < 30; time += 0.1) {
+      const circles = hazardCircles(tumbler, time);
+      if (circles.length === 0) absent++;
+      else if (circles[0]!.bottom > 1) airborne++;
+      else grounded++;
+    }
+    expect(absent).toBeGreaterThan(3);
+    expect(airborne).toBeGreaterThan(10);
+    expect(grounded).toBeGreaterThan(10);
   });
 
   it('the grotto: a roofed stretch mid-run that keeps itself clear', () => {
