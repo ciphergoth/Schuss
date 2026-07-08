@@ -1,3 +1,4 @@
+import { CourseDesign } from './design';
 import {
   CROWD_FACTOR,
   ContractDemand,
@@ -197,8 +198,8 @@ const MIN_STYLISH_AIR = 0.25; // seconds; shorter hops don't reward
 const PICKUP_RADIUS = 1.3;
 const BONUS_RADIUS = 1.7; // stars are generous — reaching them was the feat
 
-export function createSim(seed: number, courseLength?: number): Sim {
-  const terrain = new Terrain(seed, courseLength);
+export function createSim(seed: number, courseLength?: number, design?: CourseDesign): Sim {
+  const terrain = new Terrain(seed, courseLength, design);
   const skier = createSkier();
   skier.y = terrain.height(skier.x, skier.z);
   return {

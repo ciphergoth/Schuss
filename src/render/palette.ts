@@ -74,6 +74,16 @@ export const LIBRARY: readonly Palette[] = [
   palette('ice blue', 0x5b7fa8, 0xcfe6ff, 0x2e4258, 1.05, 0xdff1ff, 1.6, 620, 0.35),
 ];
 
+// A designed course names its zone order outright: look the palettes up by
+// name (throwing on a typo — a silent fallback would repaint the course).
+export function zonesFromNames(names: readonly string[]): Palette[] {
+  return names.map((name) => {
+    const p = LIBRARY.find((candidate) => candidate.name === name);
+    if (!p) throw new Error(`unknown palette: ${name}`);
+    return p;
+  });
+}
+
 // The course's zone timeline: the WHOLE library, all eight palettes in a
 // seeded order — one world per zone, each exactly once per run (see
 // ZONE_LENGTH). Deterministic per seed.
