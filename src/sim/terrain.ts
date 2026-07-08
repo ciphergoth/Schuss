@@ -493,29 +493,159 @@ export interface SlalomGate {
 export const GATE_HEIGHT = 2.6; // fly over the poles and it's not a thread
 export const GATE_POINTS = 150; // x chain
 
-// MOVING HAZARDS: patrol drones sweeping the wide sections — the bowl's
-// playground and the glacier's open ice. Each rides a fixed z, gliding
-// laterally on a seeded sine, a pure function of (seed, time): same seed,
-// same schedule, deterministic to the step. Hitting one is an ordinary
-// obstacle hit (brief tumble, keep most speed); slipping past close pays
-// the same near-miss celebration as a grazed crystal. They never share a
-// chunk with a kicker's launch or landing, never ride a setpiece, and
-// their sweep stays inside the floor.
+// MOVING HAZARDS: a small menagerie, one creature kind per section
+// personality. Every one is a pure function of (seed, sim.time) — same
+// seed, same choreography, deterministic to the step — and every one hits
+// like an ordinary obstacle (brief tumble, keep most speed) and pays the
+// same near-miss celebration when shaved. Shared fairness rules: at most
+// one per chunk and never in adjacent chunks, never sharing a chunk with a
+// kicker's launch or the uphill lip's landing, never on a setpiece / in
+// the grotto / near the apron, never in the opening stretch, and no static
+// obstacles in a creature's chunk (the dodge it demands is never ambushed).
+//
+//   drone   (bowl, glacier) — sweeps laterally on a sine, amber and loud
+//   wyrm    (powder)        — a segmented serpent swimming the drifts, its
+//                             humps surfacing and diving; only the emerged
+//                             arcs collide, so the dive rhythm IS the dodge
+//   jelly   (cruise, bowl)  — a luminous medusa drifting above the floor,
+//                             bell pulsing; its tentacles rise and fall,
+//                             so you dodge around it or time a pass under
+//   tumbler (steps)         — a crystal boulder bouncing down the terraces
+//                             on a fixed patrol, forming from the snow and
+//                             collapsing back; squash, stretch, repeat
+export type HazardKind = 'drone' | 'wyrm' | 'jelly' | 'tumbler';
+
 export interface Hazard {
   id: string;
-  z: number;
-  x0: number; // sweep center (the track centerline at z)
-  amp: number; // sweep half-width
-  period: number; // seconds per full back-and-forth
+  kind: HazardKind;
+  z: number; // anchor: the center of the creature's activity
+  x0: number; // anchor x (the track centerline at z)
+  amp: number; // lateral range of the activity
+  period: number; // main motion period, seconds
   phase: number;
-  radius: number; // collision radius
-  height: number; // collision height above the snow
+  aux: number; // seeded 0..1, a per-kind personality knob (dive rhythm,
+  // pulse tempo, hop cadence)
+  radius: number; // collision radius of one circle/segment
+  height: number; // collision height of the body above its base
 }
 
-// Where a hazard is right now — shared by the sim's collision and the
-// render layer's drone, so what you see is exactly what hits you.
+// A creature's collision footprint at one instant: circles with a vertical
+// band [bottom, top] above the snow AT THAT CIRCLE, so a jelly's danger
+// hangs in the air (pass under it when the bell contracts) and a tumbler's
+// flies its bounce arc. The skier occupies [y, y + SKIER_HEIGHT].
+export interface HazardCircle {
+  x: number;
+  z: number;
+  r: number;
+  bottom: number; // above the snow
+  top: number;
+}
+
+// Where a drone is right now — shared by the sim's collision and the
+// render layer, so what you see is exactly what hits you.
 export function hazardX(h: Hazard, time: number): number {
   return h.x0 + h.amp * Math.sin((time * Math.PI * 2) / h.period + h.phase);
+}
+
+// The wyrm: WYRM_SEGMENTS beads following the head along a seeded
+// figure-eight through the drifts, each trailing the head by a fixed lag.
+// lift is the emergence wave (< 0 = under the powder): humps travel down
+// the body, surfacing and diving. Render draws every segment (submerging
+// smoothly); the sim collides only with genuinely emerged arcs.
+export const WYRM_SEGMENTS = 9;
+// Long enough that the chain strings out into a real serpent (a short lag
+// bunched the whole body into what read as a pile of shrubs).
+const WYRM_LAG = 0.32; // seconds each segment trails the one ahead
+const WYRM_Z_AMP = 9;
+export function wyrmSegment(
+  h: Hazard,
+  i: number,
+  time: number
+): { x: number; z: number; lift: number } {
+  const t = time - i * WYRM_LAG;
+  const w = (Math.PI * 2) / h.period;
+  const divePeriod = 3.2 + h.aux * 2.5;
+  return {
+    x: h.x0 + h.amp * Math.sin(w * t + h.phase),
+    z: h.z + WYRM_Z_AMP * Math.sin(2 * w * t + h.phase * 1.7),
+    lift: Math.sin((Math.PI * 2 * time) / divePeriod + i * 0.85 + h.phase * 3),
+  };
+}
+
+// The jelly: a slow lateral drift with a small z wander; the bell PULSES
+// on its own tempo, and clearance — how much daylight its tentacle tips
+// leave above the snow — breathes with it. High pulse lifts the tentacles
+// WELL above head height: the pass-under window has to survive the grade
+// (a skier entering from uphill stands ~half a meter higher than the snow
+// under the bell), so the contracted bell clears 2.7m, not a token 2m.
+export function jellyPose(
+  h: Hazard,
+  time: number
+): { x: number; z: number; clearance: number; pulse: number } {
+  const w = (Math.PI * 2) / h.period;
+  const pulse = 0.5 + 0.5 * Math.sin((Math.PI * 2 * time) / (2.1 + h.aux * 0.9) + h.phase * 5);
+  return {
+    x: h.x0 + h.amp * Math.sin(w * time + h.phase),
+    z: h.z + 6 * Math.sin(w * 0.63 * time + h.phase * 2),
+    clearance: 1.1 + 1.6 * pulse,
+    pulse,
+  };
+}
+
+// The tumbler: a fixed downhill patrol of TUMBLER_SPAN meters, hopping in
+// parabolic arcs; at the seam it dissolves back into the snow and reforms
+// at the top (u near the ends = inactive, so the respawn can't ambush).
+export const TUMBLER_SPAN = 60;
+const TUMBLER_SEAM = 3; // meters of forming/dissolving at each end
+export function tumblerPose(
+  h: Hazard,
+  time: number
+): { x: number; z: number; hop: number; presence: number } {
+  const speed = 6 + h.aux * 3;
+  const u = (time * speed + h.phase * TUMBLER_SPAN) % TUMBLER_SPAN;
+  const hopT = 1.05 + h.aux * 0.45;
+  const hp = (time % hopT) / hopT;
+  return {
+    x: h.x0 + h.amp * Math.sin((Math.PI * 2 * time) / h.period + h.phase),
+    z: h.z + TUMBLER_SPAN / 2 - u,
+    hop: 4 * 2.3 * hp * (1 - hp), // peak 2.3m mid-hop
+    presence: Math.min(1, Math.min(u, TUMBLER_SPAN - u) / TUMBLER_SEAM),
+  };
+}
+
+// The creature's collision footprint right now. The render layer draws
+// from the same pose helpers, so the shape you watch is the shape that
+// hits — including the shapes that AREN'T there (a submerged wyrm hump, a
+// dissolved tumbler, the daylight under a contracted jelly).
+export function hazardCircles(h: Hazard, time: number): HazardCircle[] {
+  switch (h.kind) {
+    case 'drone':
+      return [{ x: hazardX(h, time), z: h.z, r: h.radius, bottom: 0, top: h.height }];
+    case 'wyrm': {
+      const circles: HazardCircle[] = [];
+      for (let i = 0; i < WYRM_SEGMENTS; i++) {
+        const seg = wyrmSegment(h, i, time);
+        if (seg.lift <= 0.15) continue; // under the powder: no arc, no hit
+        circles.push({
+          x: seg.x,
+          z: seg.z,
+          r: h.radius,
+          bottom: 0,
+          top: 0.5 + seg.lift * h.height,
+        });
+      }
+      return circles;
+    }
+    case 'jelly': {
+      const p = jellyPose(h, time);
+      return [{ x: p.x, z: p.z, r: h.radius, bottom: p.clearance, top: p.clearance + h.height }];
+    }
+    case 'tumbler': {
+      const p = tumblerPose(h, time);
+      if (p.presence < 1) return []; // forming or dissolving: harmless
+      return [{ x: p.x, z: p.z, r: h.radius, bottom: p.hop, top: p.hop + h.height }];
+    }
+  }
 }
 
 export class Terrain {
@@ -1451,11 +1581,12 @@ export class Terrain {
     return gates;
   }
 
-  // Patrol drones: at most one per chunk, only in the wide-open sections
-  // (bowl, glacier), never sharing space with a kicker's ramp OR the
-  // previous chunk's landing zone, never on a setpiece or in the grotto,
-  // and never in the opening stretch — the first drone a run meets should
-  // be read from a distance, not met at the gate.
+  // The menagerie deal: at most one creature per chunk, its KIND set by the
+  // section personality (see HazardKind), never in adjacent chunks (two
+  // choreographies at once is a mugging), never sharing space with a
+  // kicker's ramp OR the previous chunk's landing zone, never on a setpiece
+  // or in the grotto, and never in the opening stretch — the first creature
+  // a run meets should be read from a distance, not met at the gate.
   hazardsForChunk(index: number): Hazard[] {
     const cached = this.chunkHazards.get(index);
     if (cached) return cached;
@@ -1463,33 +1594,52 @@ export class Terrain {
     const zTop = -index * CHUNK_LENGTH;
     const z = zTop - CHUNK_LENGTH / 2 + (hash2(this.seed, index, 7351) * 2 - 1) * 6;
     const type = this.sectionType(this.sectionIndexAt(z));
-    // High per-chunk odds on purpose: kicker chunks (and their landings)
-    // already thin the eligible chunks out, and a patrol you meet once a
-    // run isn't a mechanic, it's a rumor (the first cut spawned ~2 a course).
-    const chance = type === 'bowl' ? 0.85 : type === 'glacier' ? 0.7 : 0;
+    // Per-chunk odds stay high on purpose: kicker chunks (and their
+    // landings) and the adjacency rule already thin the eligible chunks
+    // out, and a creature you meet once a run isn't a mechanic, it's a
+    // rumor. The bowl splits its roll between floor drones and a jelly
+    // drifting over the playground.
+    const roll = hash2(this.seed, index, 7369);
+    let kind: HazardKind | null = null;
+    if (type === 'bowl') kind = roll < 0.55 ? 'drone' : roll < 0.85 ? 'jelly' : null;
+    else if (type === 'glacier') kind = roll < 0.7 ? 'drone' : null;
+    else if (type === 'powder') kind = roll < 0.6 ? 'wyrm' : null;
+    else if (type === 'cruise') kind = roll < 0.5 ? 'jelly' : null;
+    else if (type === 'steps') kind = roll < 0.45 ? 'tumbler' : null;
     if (
+      kind !== null &&
       index >= 8 &&
-      chance > 0 &&
       !this.finishApron(zTop - CHUNK_LENGTH) &&
-      hash2(this.seed, index, 7369) < chance &&
       this.jumpForChunk(index) === null &&
       this.jumpForChunk(index - 1) === null && // the uphill lip lands here
+      this.hazardsForChunk(index - 1).length === 0 && // one act at a time
       !this.onSetpiece(z) &&
       !this.nearGrotto(z)
     ) {
       const half = this.channelHalfWidth(z);
-      if (half >= 10) {
+      // Every creature's activity stays well inside the floor: there is
+      // always clean snow to dodge onto around it. The tumbler bounces
+      // along z, so its lateral weave stays tightest; each kind needs its
+      // own minimum room.
+      const minHalf = kind === 'tumbler' ? 8 : kind === 'wyrm' ? 9 : 10;
+      if (half >= minHalf) {
+        const amp =
+          kind === 'tumbler'
+            ? Math.min(half - 5, 5)
+            : kind === 'wyrm'
+              ? Math.min(half - 5, 12)
+              : Math.min(half - 4.5, 15);
         hazards.push({
           id: `h${index}`,
+          kind,
           z,
           x0: this.centerX(z),
-          // The sweep stays well inside the floor: there is always clean
-          // snow to dodge onto at both ends of the patrol.
-          amp: Math.min(half - 4.5, 15),
+          amp,
           period: 7 + hash2(this.seed, index, 7393) * 4,
           phase: hash2(this.seed, index, 7417) * Math.PI * 2,
-          radius: 0.9,
-          height: 2.3,
+          aux: hash2(this.seed, index, 7433),
+          radius: kind === 'tumbler' ? 1.0 : kind === 'wyrm' ? 0.75 : 0.9,
+          height: kind === 'jelly' ? 2.6 : kind === 'tumbler' ? 2.0 : kind === 'wyrm' ? 1.4 : 2.3,
         });
       }
     }

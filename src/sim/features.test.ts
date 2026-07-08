@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { GATE_POINTS, SlalomGate, Terrain, hazardX } from './terrain';
+import {
+  GATE_POINTS,
+  HazardKind,
+  SlalomGate,
+  Terrain,
+  hazardX,
+  jellyPose,
+  wyrmSegment,
+} from './terrain';
 import { SIM_DT, Sim, SimEvent, createSim, stepSim } from './sim';
 
 // Course-feature behavior: slalom gate chains and patrol-drone hits, driven
@@ -86,13 +94,14 @@ describe('slalom gates', () => {
 });
 
 describe('patrol drones', () => {
-  function findDrone(t: Terrain) {
+  function findCreature(t: Terrain, kind: HazardKind) {
     for (let i = 8; i < 800; i++) {
       const h = t.hazardsForChunk(i)[0];
-      if (h) return h;
+      if (h && h.kind === kind) return h;
     }
-    throw new Error('no drone on this mountain');
+    throw new Error(`no ${kind} on this mountain`);
   }
+  const findDrone = (t: Terrain) => findCreature(t, 'drone');
 
   it('hitting the sweep is an ordinary obstacle hit: brief tumble, most speed kept', () => {
     const sim = createSim(1, Infinity);
@@ -109,6 +118,60 @@ describe('patrol drones', () => {
     const tumble = events.find((e) => e.type === 'tumble');
     expect(tumble).toMatchObject({ type: 'tumble', trick: false });
     expect(sim.skier.speed).toBeLessThan(20 * 0.65); // TUMBLE_SPEED_KEEP + skid
+  });
+
+  it('a low jelly blocks; a contracted one lets you pass beneath', () => {
+    // Blocked: meet the jelly at its pulse minimum (tentacles at their
+    // lowest — clearance well under head height).
+    const blockedSim = createSim(1, Infinity);
+    blockedSim.nextSectorZ = -1e9;
+    const jelly = findCreature(blockedSim.terrain, 'jelly');
+    const pp = 2.1 + jelly.aux * 0.9;
+    // pulse = 0.5 + 0.5 sin(2pi t / pp + phase*5): minimum at sin = -1.
+    const wrap = (a: number) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const tLow = (pp * wrap(1.5 * Math.PI - jelly.phase * 5)) / (Math.PI * 2) + 4 * pp;
+    expect(jellyPose(jelly, tLow).clearance).toBeLessThan(1.3);
+    blockedSim.time = tLow - 0.1;
+    const at = jellyPose(jelly, tLow);
+    placeSkier(blockedSim, at.x, at.z + 2, 20);
+    let events: SimEvent[] = [];
+    for (let t = 0; t < 0.4; t += SIM_DT) events.push(...stepSim(blockedSim, NEUTRAL));
+    expect(events.find((e) => e.type === 'tumble')).toBeDefined();
+
+    // Open: same crossing, timed for the pulse maximum — the tentacles are
+    // above head height and the pass under is clean (and celebrated).
+    const openSim = createSim(1, Infinity);
+    openSim.nextSectorZ = -1e9;
+    const tHigh = (pp * wrap(0.5 * Math.PI - jelly.phase * 5)) / (Math.PI * 2) + 4 * pp;
+    expect(jellyPose(jelly, tHigh).clearance).toBeGreaterThan(2.3);
+    openSim.time = tHigh - 0.1;
+    const at2 = jellyPose(jelly, tHigh);
+    placeSkier(openSim, at2.x, at2.z + 2, 20);
+    events = [];
+    for (let t = 0; t < 0.4; t += SIM_DT) events.push(...stepSim(openSim, NEUTRAL));
+    expect(events.find((e) => e.type === 'tumble')).toBeUndefined();
+    expect(events.find((e) => e.type === 'nearMiss')).toBeDefined(); // the shave pays
+  });
+
+  it('an emerged wyrm hump hits; the powder swallows the rest', () => {
+    const sim = createSim(1, Infinity);
+    sim.nextSectorZ = -1e9;
+    const wyrm = findCreature(sim.terrain, 'wyrm');
+    // Find a moment when the head segment is well emerged.
+    let tUp = 0;
+    for (let t = 5; t < 20; t += 0.05) {
+      if (wyrmSegment(wyrm, 0, t).lift > 0.8) {
+        tUp = t;
+        break;
+      }
+    }
+    expect(tUp).toBeGreaterThan(0);
+    sim.time = tUp;
+    const seg = wyrmSegment(wyrm, 0, tUp);
+    placeSkier(sim, seg.x, seg.z, 0); // parked right on the surfacing arc
+    const events: SimEvent[] = [];
+    for (let t = 0; t < 0.2; t += SIM_DT) events.push(...stepSim(sim, NEUTRAL));
+    expect(events.find((e) => e.type === 'tumble')).toBeDefined();
   });
 
   it('the same run misses the drone when the schedule is elsewhere', () => {
