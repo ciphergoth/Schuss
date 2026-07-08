@@ -1,4 +1,12 @@
 import { hash2, mulberry32 } from './rng';
+import {
+  CourseDesign,
+  DesignedCoinLine,
+  DesignedGallery,
+  DesignedHazard,
+  DesignedObstacle,
+  curve1d,
+} from './design';
 
 // World layout: +y is up, the skier travels toward -z. The course is an
 // SSX-style walled channel floating in the sky: a curving centerline with a
@@ -746,10 +754,27 @@ export class Terrain {
   // 55-70% of the run), so the three landmarks pace the whole descent.
   readonly grotto: Grotto;
 
+  // THE DESIGN: when present, this terrain is the hand-authored course —
+  // sections, bends, widths, lips, stars, obstacles, coins, creatures, and
+  // galleries all come from the spec instead of the seeded generators. The
+  // generator machinery below stays alive for the endless test mountain
+  // and non-default seeds (the physics lab); the design layer only decides
+  // WHAT goes WHERE — the physics, drainage, star arcs, and blending all
+  // run on the same code either way.
+  private readonly design?: CourseDesign;
+  private designJumps = new Map<number, Jump>();
+  private designStars = new Map<number, readonly { mult: 3 | 5; demand: ContractDemand }[]>();
+  private designObstacles = new Map<number, DesignedObstacle[]>();
+  private designCoins = new Map<number, DesignedCoinLine[]>();
+  private designHazards = new Map<number, DesignedHazard[]>();
+  private designGalleries = new Map<number, DesignedGallery[]>();
+
   constructor(
     readonly seed: number,
-    readonly courseLength = COURSE_LENGTH
+    readonly courseLength = COURSE_LENGTH,
+    design?: CourseDesign
   ) {
+    this.design = design;
     // Endless test mountains still get exactly one pair, on the course span.
     const span = Number.isFinite(courseLength) ? courseLength : COURSE_LENGTH;
     const zEarly = -(0.25 + 0.15 * hash2(seed, 8887, 1)) * span;
@@ -770,6 +795,43 @@ export class Terrain {
         [z - 60, 5, 10],
       ],
     });
+    if (design) {
+      // Landmarks at their authored spots (same shapes as ever).
+      this.setpieces = [waterfall(-design.waterfallAt), cascades(-design.cascadesAt)];
+      this.grotto = { z: -design.grottoAt, span: GROTTO_SPAN };
+      // Bucket the authored features by chunk so every ForChunk lookup is
+      // the same O(1) shape the generators cache into.
+      for (const j of design.jumps) {
+        const zLip = -j.at;
+        const { rampLength, lipHeight } = JUMP_GEOMETRY[j.kind];
+        const index = this.chunkIndexAt(zLip);
+        this.designJumps.set(index, {
+          zLip,
+          xOffset: j.x,
+          halfWidth: j.pair === 'follow' ? 4.5 : 3.5,
+          kind: j.kind,
+          rampLength,
+          lipHeight,
+          stepDown: j.stepDown ? Math.min(lipHeight * 1.6, 3.5) : 0,
+          hip: j.hip ?? 0,
+          pair: j.pair ?? null,
+        });
+        this.designStars.set(index, j.stars);
+      }
+      const bucket = <T extends { at: number }>(map: Map<number, T[]>, items: readonly T[]) => {
+        for (const item of items) {
+          const index = this.chunkIndexAt(-item.at);
+          const list = map.get(index) ?? [];
+          list.push(item);
+          map.set(index, list);
+        }
+      };
+      bucket(this.designObstacles, design.obstacles);
+      bucket(this.designCoins, design.coins);
+      bucket(this.designHazards, design.hazards);
+      bucket(this.designGalleries, design.galleries);
+      return;
+    }
     this.setpieces =
       hash2(seed, 8887, 2) < 0.5
         ? [waterfall(zEarly), cascades(zLate)]
@@ -854,6 +916,8 @@ export class Terrain {
   sectionType(s: number): SectionType {
     if (s <= 0) return 'cruise';
     if (s > this.lastSection()) return 'cruise'; // the outrun
+    // The designed tour is an authored order, not a shuffle.
+    if (this.design) return this.design.sections[s] ?? 'plunge';
     if (s === this.lastSection()) return 'plunge'; // the finale
     if (s <= TOUR_TYPES.length) return this.tourDeal()[s - 1]!;
     // Past the tour only the endless test mountain continues: keep dealing
@@ -968,8 +1032,11 @@ export class Terrain {
     return ease * amp * Math.sin((local / wavelength) * Math.PI * 2);
   }
 
-  // Where the middle of the track is at this z.
+  // Where the middle of the track is at this z. Designed courses draw the
+  // wander by hand (an authored trend line the section esses layer onto);
+  // the test mountain keeps its noise.
   centerX(z: number): number {
+    if (this.design) return curve1d(this.design.bends, -z) + this.sweeperSwing(z);
     const t = Math.min(1, Math.max(0, (-z - STRAIGHT_UNTIL) / CURVE_RAMP));
     if (t === 0) return 0;
     const amp = this.sectionParam(z, (spec) => spec.curveAmp);
@@ -978,8 +1045,10 @@ export class Terrain {
     );
   }
 
-  // How wide the skiable floor is at this z.
+  // How wide the skiable floor is at this z. Designed courses breathe on an
+  // authored profile; the test mountain on section means plus noise.
   channelHalfWidth(z: number): number {
+    if (this.design) return curve1d(this.design.widths, -z);
     const half = this.sectionParam(z, (spec) => spec.half);
     const swing = this.sectionParam(z, (spec) => spec.swing);
     return half + (this.noise1(z / 140, 4) - 0.5) * 2 * swing;
@@ -1007,7 +1076,12 @@ export class Terrain {
   // clean snow and the kicker gates to find it IS the game. Coins sit off it
   // as paid detours.
   planOffset(z: number): number {
-    return (this.noise1(z / 90, 6) - 0.5) * 2 * Math.max(1, this.channelHalfWidth(z) - 6);
+    const bound = Math.max(1, this.channelHalfWidth(z) - 6);
+    if (this.design) {
+      const line = curve1d(this.design.line, -z);
+      return Math.max(-bound, Math.min(bound, line));
+    }
+    return (this.noise1(z / 90, 6) - 0.5) * 2 * bound;
   }
 
   // The smooth spine of the course: mean grade plus section drops (plunges,
@@ -1102,6 +1176,7 @@ export class Terrain {
   }
 
   jumpForChunk(index: number): Jump | null {
+    if (this.design) return this.designJumps.get(index) ?? null;
     const cached = this.chunkJumps.get(index);
     if (cached !== undefined) return cached;
     const zLip = -index * CHUNK_LENGTH - 24;
@@ -1444,6 +1519,20 @@ export class Terrain {
 
     const obstacles: Obstacle[] = [];
     const zTop = -index * CHUNK_LENGTH;
+    // Designed obstacles: exactly where the author put them, nothing else.
+    if (this.design) {
+      for (const o of this.designObstacles.get(index) ?? []) {
+        obstacles.push({
+          x: this.centerX(-o.at) + o.x,
+          z: -o.at,
+          radius: o.radius,
+          height: o.kind === 'crystal' ? o.radius * 4.6 : 2.4,
+          kind: o.kind,
+        });
+      }
+      this.chunkObstacles.set(index, obstacles);
+      return obstacles;
+    }
     // Chunks 0-5 stay empty so every run starts in the open; the finish
     // apron and the outrun past it stay empty so every run ends clean and
     // ends in celebration (gate the chunk by its downrange edge, so no
@@ -1509,6 +1598,18 @@ export class Terrain {
     if (cached) return cached;
 
     const pickups: Pickup[] = [];
+    // Designed coin lines: 3m-spaced runs from each authored head.
+    if (this.design) {
+      for (const [lineIdx, line] of (this.designCoins.get(index) ?? []).entries()) {
+        for (let k = 0; k < line.n; k++) {
+          const z = -line.at - k * 3;
+          const x = this.centerX(z) + line.x;
+          pickups.push({ id: `${index}:${lineIdx}:${k}`, x, z, y: this.height(x, z) + 1.1 });
+        }
+      }
+      this.chunkPickups.set(index, pickups);
+      return pickups;
+    }
     // Nothing left to collect once the run-in to the gate begins (gate by
     // the chunk's downrange edge, matching obstacles).
     if (index > 0 && !this.finishApron(-index * CHUNK_LENGTH - CHUNK_LENGTH)) {
@@ -1571,6 +1672,23 @@ export class Terrain {
     // course's last jump can never be cashed: the line locks the score before
     // another lip comes. Withhold stars from any jump with no kicker downrange.
     if (jump && this.hasJumpDownrange(index)) {
+      // Designed loadouts: the author picked which lips carry which deals
+      // (the demands too); only the POSITIONS stay computed, on the same
+      // reference arcs as ever. The cash-venue gate above still applies —
+      // a designed star the course can't pay is a design bug the validator
+      // catches, and this guard refuses to deal it regardless.
+      if (this.design) {
+        for (const s of this.designStars.get(index) ?? []) {
+          bonuses.push({
+            id: `b${index}:${s.mult}`,
+            mult: s.mult,
+            demand: s.demand,
+            ...this.starOnArc(jump, s.mult),
+          });
+        }
+        this.chunkBonuses.set(index, bonuses);
+        return bonuses;
+      }
       if (jump.hip !== 0) {
         // Hips pay the x3 for riding the sling; their x5 is withheld until the
         // popped-off-the-curve flight is measured well enough to place it
@@ -1710,7 +1828,9 @@ export class Terrain {
         const z = -(s * SECTION_LENGTH + local);
         if (z > zTop || z <= zTop - CHUNK_LENGTH) continue; // not this chunk's
         if (this.finishApron(z)) continue;
-        const jitter = (hash2(this.seed, s * 31 + k, 6841) * 2 - 1) * 1.4;
+        // A designed course centers every gate on its apex — the fairest
+        // read; the test mountain keeps its seeded wobble.
+        const jitter = this.design ? 0 : (hash2(this.seed, s * 31 + k, 6841) * 2 - 1) * 1.4;
         gates.push({ id: `g${s}:${k}`, x: this.centerX(z) + jitter, z, halfGap: 3.1 });
       }
     }
@@ -1733,10 +1853,38 @@ export class Terrain {
   // kicker's ramp OR the previous chunk's landing zone, never on a setpiece
   // or in the grotto, and never in the opening stretch — the first creature
   // a run meets should be read from a distance, not met at the gate.
+  // The creature body book: one collision body per kind, shared by the
+  // generator and the design layer so an authored wyrm is the same animal.
+  private static HAZARD_BODY: Record<HazardKind, { radius: number; height: number }> = {
+    drone: { radius: 0.9, height: 2.3 },
+    wyrm: { radius: 0.75, height: 1.4 },
+    jelly: { radius: 0.9, height: 2.6 },
+    tumbler: { radius: 1.0, height: 2.0 },
+    yeti: { radius: 1.0, height: 2.6 },
+  };
+
   hazardsForChunk(index: number): Hazard[] {
     const cached = this.chunkHazards.get(index);
     if (cached) return cached;
     const hazards: Hazard[] = [];
+    // Designed creatures: the author's cast list, with the shared bodies.
+    if (this.design) {
+      for (const h of this.designHazards.get(index) ?? []) {
+        hazards.push({
+          id: `h${index}`,
+          kind: h.kind,
+          z: -h.at,
+          x0: this.centerX(-h.at),
+          amp: h.amp,
+          period: h.period,
+          phase: h.phase,
+          aux: h.aux,
+          ...Terrain.HAZARD_BODY[h.kind],
+        });
+      }
+      this.chunkHazards.set(index, hazards);
+      return hazards;
+    }
     const zTop = -index * CHUNK_LENGTH;
     const z = zTop - CHUNK_LENGTH / 2 + (hash2(this.seed, index, 7351) * 2 - 1) * 6;
     const type = this.sectionType(this.sectionIndexAt(z));
@@ -1820,6 +1968,20 @@ export class Terrain {
     const cached = this.chunkGalleries.get(index);
     if (cached) return cached;
     const galleries: Gallery[] = [];
+    // Designed galleries: the author decides where a crowd is worth its
+    // cheer (every landing that deserves playing to, plus the odd terrace).
+    if (this.design) {
+      for (const g of this.designGalleries.get(index) ?? []) {
+        galleries.push({
+          id: `gal${index}`,
+          x: this.centerX(-g.at) + g.side * (this.channelHalfWidth(-g.at) + 3.5),
+          z: -g.at,
+          side: g.side,
+        });
+      }
+      this.chunkGalleries.set(index, galleries);
+      return galleries;
+    }
     const zTop = -index * CHUNK_LENGTH;
     if (
       index >= 6 &&

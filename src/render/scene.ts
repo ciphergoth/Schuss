@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 import { hash2 } from '../sim/rng';
-import { Palette, blendPalette, courseWeather, courseZones, makePalette } from './palette';
+import { CourseDesign } from '../sim/design';
+import {
+  Palette,
+  blendPalette,
+  courseWeather,
+  courseZones,
+  makePalette,
+  zonesFromNames,
+} from './palette';
 
 export interface SceneSetup {
   scene: THREE.Scene;
@@ -10,8 +18,9 @@ export interface SceneSetup {
   // toward blue-black, fog closes in, and the snowfall and aurora hold
   // their breath under the roof.
   update: (x: number, y: number, z: number, time: number, cave?: number) => void;
-  // A new course brings its own zone sequence and weather.
-  setCourse: (seed: number) => void;
+  // A new course brings its own zone sequence and weather — authored when
+  // a design is riding, seeded otherwise.
+  setCourse: (seed: number, design?: CourseDesign) => void;
   // The sky celebrates with you: a jackpot briefly FLARES the aurora to
   // full blaze wherever you are (strength 0..1, decaying over ~2.5s).
   // atTime is sim time — the same clock update() runs on.
@@ -265,9 +274,9 @@ export function createScene(): SceneSetup {
   let zones: readonly Palette[] = courseZones(1);
   let weather = courseWeather(1);
   let fogPhase = 0;
-  const setCourse = (seed: number): void => {
-    zones = courseZones(seed);
-    weather = courseWeather(seed);
+  const setCourse = (seed: number, design?: CourseDesign): void => {
+    zones = design ? zonesFromNames(design.zones) : courseZones(seed);
+    weather = design ? design.weather : courseWeather(seed);
     fogPhase = hash2(seed, 4177, 37) * Math.PI * 2;
     snow.intensity = weather.snow;
     shooting.setSeed(seed);

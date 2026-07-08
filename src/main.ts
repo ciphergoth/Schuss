@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SIM_DT, Sim, SimEvent, createSim, distanceSkied, stepSim } from './sim/sim';
 import { COURSE_NAME, ContractDemand, SECTION_LENGTH } from './sim/terrain';
 import { SkierInput } from './sim/skier';
+import { GRAND_TOUR } from './sim/design';
 import { setupInput } from './input';
 import { FAR_HOLD_S, THUMB_ZONE, tiltZone } from './tilt';
 import { createScene } from './render/scene';
@@ -39,9 +40,12 @@ const DEMAND_LABEL: Record<ContractDemand, string> = {
   parallel: 'SPIN + FLIP AT ONCE',
 };
 
-// The mega course's generation seed: there is ONE course, and this is its
-// canonical layout; ?seed=N still forces an arbitrary reshuffle of the deal.
+// THE course is hand-designed (GRAND_TOUR in sim/design.ts): every bend,
+// lip, star, creature, and coin line is authored. ?seed=N (any seed but
+// the default 1) still summons a procedurally reshuffled course — the
+// test mountain in course clothes — for comparison and debugging.
 let currentSeed = Number(new URLSearchParams(location.search).get('seed') ?? '1');
+const courseDesign = () => (currentSeed === 1 ? GRAND_TOUR : undefined);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -52,7 +56,7 @@ document.body.appendChild(renderer.domElement);
 
 const sceneSetup = createScene();
 const { scene, sun } = sceneSetup;
-sceneSetup.setCourse(currentSeed); // the first course's zones + weather
+sceneSetup.setCourse(currentSeed, courseDesign()); // the first course's zones + weather
 const camera = createCamera();
 const skierView = createSkierView(scene);
 const fx = new Effects(scene);
@@ -102,7 +106,7 @@ let bestAtCourseStart = best; // for the NEW BEST! call at the line
 // The ceremony panel waits a beat after the line so the barrage lands first.
 let finishPanelAt: number | null = null;
 
-let sim = createSim(currentSeed);
+let sim = createSim(currentSeed, undefined, courseDesign());
 let lastInput: SkierInput = { steer: 0, stance: 0 };
 const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
 
@@ -177,9 +181,9 @@ function setPaused(next: boolean): void {
 function startCourse(): void {
   best = Number(localStorage.getItem(bestKey()) ?? '0');
   bestAtCourseStart = best;
-  sim = createSim(currentSeed);
+  sim = createSim(currentSeed, undefined, courseDesign());
   chunkRenderer.setTerrain(sim.terrain);
-  sceneSetup.setCourse(currentSeed);
+  sceneSetup.setCourse(currentSeed, courseDesign());
   fx.reset();
   finishPanelAt = null;
   finishScreen.classList.remove('visible');

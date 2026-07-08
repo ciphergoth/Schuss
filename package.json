@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky"
+    "prepare": "husky",
+    "map": "esbuild tools/coursemap.ts --bundle --platform=node --format=esm --outfile=node_modules/.design/coursemap.mjs --log-level=silent && node node_modules/.design/coursemap.mjs",
+    "ride": "esbuild tools/ride.ts --bundle --platform=node --format=esm --outfile=node_modules/.design/ride.mjs --log-level=silent && node node_modules/.design/ride.mjs"
   },
   "lint-staged": {
     "**/*.ts": [
@@ -23,6 +25,7 @@
   },
   "devDependencies": {
     "@types/three": "^0.170.0",
+    "esbuild": "^0.28.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "prettier": "^3.7.4",

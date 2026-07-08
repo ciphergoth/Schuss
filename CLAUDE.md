@@ -9,8 +9,25 @@ every idea the mountain has exactly once, so every segment justifies
 itself with something new. (It replaced nine named archetype courses —
 nine menu entries reweighting one shared deck, not nine ideas — and then
 an 8km double-deck mega course whose second helping of everything was
-padding, not variety.) ?seed=N still forces an arbitrary reshuffle of the
-deal. Static site, no server.
+padding, not variety.) THE COURSE IS HAND-DESIGNED, not rolled:
+src/sim/design.ts (GRAND_TOUR) authors the tour order, the centerline
+bends and width profile (monotone-cubic control points — curve1d never
+overshoots a designed extreme), the golden path, and every kicker, star
+loadout+demand, obstacle, coin line, creature, and gallery. Only star
+POSITIONS stay computed (terrain.starOnArc — that's physics, not
+chance); texture noise (rollers, moguls, crud dapple) remains texture.
+The seeded generators live on as the ENDLESS TEST MOUNTAIN: a Terrain
+built without a design (all physics/drainage tests, and ?seed=N for any
+N≠1, which deals a procedural reshuffle for comparison/debugging). The
+DESIGN TOOLS: `pnpm map` renders the whole course as a top-down SVG
+storyboard (tools/coursemap.ts); `pnpm ride` sends three reference
+autopilots down the real sim (cruiser / popper / burner — the burner is
+the worst-case flight-length ceiling) and prints lip speeds, flight
+lengths, landings, tumbles, and sector paces (tools/ride.ts) — lips get
+placed against MEASURED landings, not guesses; src/sim/design.test.ts is
+the generators' whole fairness rulebook re-applied to the authored data
+as assertions (keep-clears, cash-venue law, drainage, home biomes).
+Static site, no server.
 
 Design rules: punishment is light — obstacle hits cost a brief 0.7s tumble
 and a little speed (you keep 60%), a wobble to recover from and never the
@@ -165,8 +182,12 @@ friction AND turn authority in skier.ts — speed nearly free, turns
 arrive late; stickiness is drag-only and can't express faster-than-snow)
 / powder (deep drifts, one groomed ribbon: crudThreshold 0 buries all
 but the clean golden-path corridor; powder is drag, never a trap).
-WHICH sections the course deals is THE TOUR (terrain.ts sectionType /
-tourDeal): the mixed middle (sections 1..7) is one seeded shuffle of the
+WHICH sections the course deals is THE TOUR: on THE course the order is
+AUTHORED (design.sections — cruise, bowl, narrows, sweeper, glacier,
+powder, steps, canyon, plunge: teach → play → squeeze → flow → wonder →
+hush → rhythm → tension → release, with the grotto as the glacier's
+heart and the waterfall diving you into the sweeper). On test mountains
+the mixed middle (sections 1..7) is one seeded shuffle of the
 seven types not already pinned to the arc (cruise opens, plunge closes),
 so every section of the run is a personality you haven't ridden yet —
 nothing repeats, and a shuffle of distinct cards needs no joint patching.
@@ -364,6 +385,8 @@ Or manually: `devenv shell -- pnpm install`, then `devenv shell -- pnpm dev`.
 - `pnpm test` — run simulation tests (Vitest)
 - `pnpm typecheck` — tsc, no emit
 - `pnpm build` — typecheck + production build to `dist/`
+- `pnpm map` — render the designed course as a top-down SVG storyboard (stdout)
+- `pnpm ride` — reference-rider report: three autopilots down the real sim
 
 ## Controls
 
