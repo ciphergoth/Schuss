@@ -1449,7 +1449,10 @@ export class Terrain {
     const zTop = -index * CHUNK_LENGTH;
     const z = zTop - CHUNK_LENGTH / 2 + (hash2(this.seed, index, 7351) * 2 - 1) * 6;
     const type = this.sectionType(this.sectionIndexAt(z));
-    const chance = type === 'bowl' ? 0.55 : type === 'glacier' ? 0.4 : 0;
+    // High per-chunk odds on purpose: kicker chunks (and their landings)
+    // already thin the eligible chunks out, and a patrol you meet once a
+    // run isn't a mechanic, it's a rumor (the first cut spawned ~2 a course).
+    const chance = type === 'bowl' ? 0.85 : type === 'glacier' ? 0.7 : 0;
     if (
       index >= 8 &&
       chance > 0 &&

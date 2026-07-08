@@ -227,11 +227,12 @@ export class ChunkRenderer {
   private droneBeam = new THREE.MeshBasicMaterial({
     color: 0xffb02e,
     transparent: true,
-    opacity: 0.16,
+    opacity: 0.24,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    side: THREE.DoubleSide,
   });
-  private droneMeshes = new Map<string, { obj: THREE.Group; hazard: Hazard }>();
+  private droneMeshes = new Map<string, { obj: THREE.Group; hazard: Hazard; beacon: THREE.Mesh }>();
 
   constructor(
     private scene: THREE.Scene,
@@ -279,12 +280,14 @@ export class ChunkRenderer {
       mesh.position.y = baseY + Math.sin(time * 2.2 + mesh.position.x) * 0.14;
     }
     // Patrol drones glide on the sim's own schedule (hazardX of sim time),
-    // so the sweep you watch is the sweep that hits.
-    for (const [, { obj, hazard }] of this.droneMeshes) {
+    // so the sweep you watch is the sweep that hits. The beacon blinks a
+    // slow warning strobe.
+    for (const [, { obj, hazard, beacon }] of this.droneMeshes) {
       const x = hazardX(hazard, time);
       const y = this.terrain.height(x, hazard.z);
-      obj.position.set(x, y + 1.15 + Math.sin(time * 2.6 + hazard.phase) * 0.12, hazard.z);
+      obj.position.set(x, y + 1.2 + Math.sin(time * 2.6 + hazard.phase) * 0.12, hazard.z);
       obj.rotation.y = time * 2.2;
+      beacon.visible = Math.sin(time * 5 + hazard.phase) > -0.3;
     }
   }
 
@@ -522,11 +525,15 @@ export class ChunkRenderer {
       group.add(beam);
     }
 
-    // Slalom gates in the narrows: paired candy poles with a neon topper,
-    // the gap between them the thing to thread. The sim pays the chain.
+    // Slalom gates in the narrows: paired candy poles with a pennant line
+    // strung between their tips — triangular flags hanging over the gap
+    // itself, so THE GATE is the thing with the flags on (they used to hang
+    // on a separate bunting line overhead, and read as scenery while the
+    // bare poles read as bollards). The sim pays the chain.
     for (const g of this.terrain.gatesForChunk(index)) {
       const neon = this.neons[(index + Math.round(g.z)) % this.neons.length]!;
       const poleGeo = stripedPole(0.14, GATE_HEIGHT, this.red, this.white);
+      const tipYs: number[] = [];
       for (const side of [-1, 1]) {
         const x = g.x + side * g.halfGap;
         const y = this.terrain.height(x, g.z);
@@ -534,31 +541,57 @@ export class ChunkRenderer {
         pole.position.set(x, y + GATE_HEIGHT / 2, g.z);
         pole.castShadow = true;
         group.add(pole);
-        const tip = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 6), neon);
+        const tip = new THREE.Mesh(new THREE.SphereGeometry(0.24, 6, 6), neon);
         tip.position.set(x, y + GATE_HEIGHT + 0.2, g.z);
         group.add(tip);
+        tipYs.push(y + GATE_HEIGHT + 0.2);
+      }
+      // The string and its flags: a thin bar across the gap, three pennants
+      // hanging into it. Passing under the flags IS threading the gate.
+      const midY = (tipYs[0]! + tipYs[1]!) / 2;
+      const line = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.035, 0.035, g.halfGap * 2, 5).rotateZ(Math.PI / 2),
+        this.flagMast
+      );
+      line.position.set(g.x, midY, g.z);
+      group.add(line);
+      const flagGeo = new THREE.ConeGeometry(0.3, 0.9, 3);
+      for (let k = -1; k <= 1; k++) {
+        const flag = new THREE.Mesh(
+          flagGeo,
+          this.pennants[(k + 1 + index) % this.pennants.length]!
+        );
+        flag.rotation.x = Math.PI; // hang point-down from the line
+        flag.position.set(g.x + k * g.halfGap * 0.55, midY - 0.5, g.z);
+        group.add(flag);
       }
     }
 
     // Patrol drones: built here, flown by update() on the sim's schedule.
+    // Loud on purpose — a hazard you can't read from 150m out is an ambush,
+    // so the shell wears a fat amber ring, a blinking beacon on top, and a
+    // beam swept along the snow.
     for (const h of this.terrain.hazardsForChunk(index)) {
       const drone = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.75, 0), this.droneShell);
-      body.scale.y = 0.65;
+      const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.95, 0), this.droneShell);
+      body.scale.y = 0.6;
       body.castShadow = true;
       drone.add(body);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.09, 6, 18), this.droneGlow);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.14, 6, 20), this.droneGlow);
       ring.rotation.x = Math.PI / 2;
       drone.add(ring);
+      const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 6), this.droneGlow);
+      beacon.position.y = 0.78;
+      drone.add(beacon);
       // The underbeam sweeps the snow: the patrol reads from 200m out.
       const beam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.12, 0.55, 2.2, 8, 1, true),
+        new THREE.CylinderGeometry(0.14, 0.7, 2.6, 8, 1, true),
         this.droneBeam
       );
-      beam.position.y = -1.1;
+      beam.position.y = -1.2;
       drone.add(beam);
       group.add(drone);
-      this.droneMeshes.set(h.id, { obj: drone, hazard: h });
+      this.droneMeshes.set(h.id, { obj: drone, hazard: h, beacon });
     }
 
     this.addSectionProps(group, index, zTop, zMid);
@@ -721,29 +754,6 @@ export class ChunkRenderer {
         const d = Math.sign(curv) * (this.terrain.channelHalfWidth(z) + 0.8);
         const stud = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 6), this.gold);
         place(stud, z, d, 0.18);
-      }
-    } else if (type === 'narrows') {
-      // A pennant line strung across the corridor: race-village bunting
-      // sagging overhead, one string per chunk.
-      const z = zTop - 8 - rng() * 22;
-      const half = this.terrain.channelHalfWidth(z) + 1.5;
-      const mastGeo = new THREE.CylinderGeometry(0.09, 0.09, 6.2, 5);
-      for (const side of [-1, 1]) {
-        const mast = new THREE.Mesh(mastGeo, this.flagMast);
-        place(mast, z, side * half, 3.1);
-      }
-      const cX = this.terrain.centerX(z);
-      const yTop =
-        Math.max(this.terrain.height(cX - half, z), this.terrain.height(cX + half, z)) + 6.0;
-      const flags = Math.max(5, Math.round(half));
-      const flagGeo = new THREE.ConeGeometry(0.28, 0.85, 3);
-      for (let k = 0; k < flags; k++) {
-        const u = (k + 0.5) / flags; // 0..1 across the span
-        const sag = Math.sin(u * Math.PI) * 1.1;
-        const flag = new THREE.Mesh(flagGeo, this.pennants[k % this.pennants.length]!);
-        flag.rotation.x = Math.PI; // hang point-down
-        flag.position.set(cX - half + u * half * 2, yTop - sag - 0.5, z);
-        group.add(flag);
       }
     } else if (type === 'plunge') {
       // Speed chevrons streak both edges: amber dashes angled downhill,
