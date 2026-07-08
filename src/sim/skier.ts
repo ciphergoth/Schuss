@@ -38,6 +38,7 @@ export interface SkierState {
   backTurns: number; // whole backflip turns banked
   sequence: string; // banked segment tokens in order, e.g. 'L1R1' — repetition + variety
   parallel: boolean; // this flight ever spun AND flipped at once (vs serial)
+  grab: number; // seconds of GRAB held this flight (the boost button in air)
   gap: number; // ballistic daylight the legs are currently bridging (< LEG_REACH)
 }
 
@@ -164,6 +165,7 @@ export function createSkier(): SkierState {
     backTurns: 0,
     sequence: '',
     parallel: false,
+    grab: 0,
     gap: 0,
   };
 }
@@ -330,6 +332,10 @@ export function stepSkier(
     // is a deliberate steer, not an automatic follow.
     steerToward(state, terrain, input, TURN_RATE * AIR_TURN_FACTOR, dt);
     if (state.airTime > MIN_TRICK_AIR) {
+      // The GRAB: the boost button, which has no other meaning in the air
+      // (burning and charging are grounded), tweaks the body over the skis.
+      // Pure style — no physics change — the sim pays it at landing.
+      if (input.boost) state.grab += dt;
       const spinInput = input.trickSpin ?? 0;
       const flipInput = input.trickFlip ?? 0; // positive = backflip (S)
       const flipRate = flipInput > 0 ? BACKFLIP_RATE : FRONTFLIP_RATE;

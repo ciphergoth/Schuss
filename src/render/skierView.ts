@@ -22,7 +22,8 @@ export interface SkierView {
   torso: THREE.Group;
   legs: [Leg, Leg]; // [left, right]
   skis: [THREE.Mesh, THREE.Mesh]; // [left, right]
-  pose: { tuck: number; plow: number; glow: number }; // smoothed render state
+  arms: [THREE.Group, THREE.Group]; // shoulder pivots [left, right] — the grab reaches
+  pose: { tuck: number; plow: number; glow: number; grab: number }; // smoothed render state
   glowMats: { mat: THREE.MeshStandardMaterial; intensity: number }[];
 }
 
@@ -77,6 +78,7 @@ export function createSkierView(scene: THREE.Scene): SkierView {
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), skin);
   head.position.y = 0.68;
   torso.add(head);
+  const arms: THREE.Group[] = [];
   for (const side of [-1, 1]) {
     const arm = limb(0.09, 0.42, jacket);
     const shoulder = new THREE.Group();
@@ -84,6 +86,7 @@ export function createSkierView(scene: THREE.Scene): SkierView {
     shoulder.rotation.z = side * -0.45;
     shoulder.add(arm);
     torso.add(shoulder);
+    arms.push(shoulder);
   }
   pelvis.add(torso);
 
@@ -99,7 +102,16 @@ export function createSkierView(scene: THREE.Scene): SkierView {
     if (obj instanceof THREE.Mesh) obj.castShadow = true;
   });
   scene.add(group);
-  return { group, pelvis, torso, legs, skis, pose: { tuck: 0, plow: 0, glow: 0 }, glowMats };
+  return {
+    group,
+    pelvis,
+    torso,
+    legs,
+    skis,
+    arms: [arms[0]!, arms[1]!],
+    pose: { tuck: 0, plow: 0, glow: 0, grab: 0 },
+    glowMats,
+  };
 }
 
 export function updateSkierView(
@@ -134,6 +146,16 @@ export function updateSkierView(
   const tuckTarget = state.airTime > 0 ? Math.max(0.6, -input.stance) : Math.max(0, -input.stance);
   pose.tuck += (tuckTarget - pose.tuck) * k;
   pose.plow += (Math.max(0, input.stance) - pose.plow) * k;
+
+  // The GRAB: in real air with the button held, the right hand reaches down
+  // to the ski and the left arm throws out for balance — the classic tweak,
+  // readable in silhouette against the sky.
+  const grabTarget = state.airTime > 0.2 && state.tumbling === 0 && (input.boost ?? false) ? 1 : 0;
+  pose.grab += (grabTarget - pose.grab) * k;
+  const [armL, armR] = view.arms; // base rotation.z: +0.45 left, -0.45 right
+  armL.rotation.z = 0.45 - 1.1 * pose.grab; // left arm throws out wide
+  armR.rotation.z = -0.45 + 0.25 * pose.grab; // right arm tucks in...
+  armR.rotation.x = 1.25 * pose.grab; // ...and reaches down the ski line
 
   // A held jump charge sinks the skier into a preload crouch.
   const phi = NEUTRAL_PHI + 0.75 * pose.tuck + 0.2 * pose.plow + 0.55 * (input.charge ?? 0);

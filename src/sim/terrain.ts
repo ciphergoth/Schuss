@@ -376,10 +376,21 @@ export interface Jump {
   lipHeight: number;
   stepDown: number; // extra drop scooped out of the landing (0 = flat kicker)
   hip: number; // banked-pad throw direction: -1 / 0 / +1 (toward -x / straight / +x)
+  // RHYTHM DOUBLES: some kickers come as a tuned pair — a 'lead' whose
+  // cruise-pace landing (~35m) rolls straight onto the 'follow' ramp on the
+  // SAME line, lips PAIR_SPACING apart. Trick, land, two beats, trick again:
+  // a rhythm no single kicker can ask for. Both are plain flat Ms (a scoop
+  // or a hip mid-combo is two ideas fighting), and the follow is a touch
+  // wider — the second catch is generous by design.
+  pair: 'lead' | 'follow' | null;
 }
 
 const JUMP_EDGE = 1.8; // soft shoulder from full height to flat floor
 const SCOOP_EDGE = 5; // step-down landings get wide, gentle shoulders
+// Rhythm doubles: lip-to-lip distance. An M's cruise-pace flight lands
+// ~30-38m out; the follow's 14m ramp face then starts at ~36m — you touch
+// down at (or rolling onto) its base with a beat to set the next trick.
+const PAIR_SPACING = 50;
 // The max-gap guarantee: never ski more than this many chunks (~160m, ~8s at
 // cruise pace) with NOTHING happening — no kicker, no bend to ride, no
 // staircase. When the natural per-chunk rolls leave a longer dead stretch, a
@@ -503,6 +514,20 @@ export interface SlalomGate {
 export const GATE_HEIGHT = 2.6; // fly over the poles and it's not a thread
 export const GATE_POINTS = 150; // x chain
 
+// SHOWBOAT GALLERIES: pockets of spectators camped on the banks beside
+// kicker landing zones — crowds gather where the show is. Landing a scored
+// trick within GALLERY_RANGE of one pays a CROWD bonus (a fraction of the
+// trick, after any star multiplier: the crowd loves the jackpot most).
+// Pure decoration physically — never a collider, always off the floor.
+export interface Gallery {
+  id: string;
+  x: number; // on the bank
+  z: number;
+  side: number; // -1 / +1
+}
+export const GALLERY_RANGE = 30; // land within this of the crowd to play to it
+export const CROWD_FACTOR = 0.25; // of the trick's (multiplied) points
+
 // MOVING HAZARDS: a small menagerie, one creature kind per section
 // personality. Every one is a pure function of (seed, sim.time) — same
 // seed, same choreography, deterministic to the step — and every one hits
@@ -523,7 +548,11 @@ export const GATE_POINTS = 150; // x chain
 //   tumbler (steps)         — a crystal boulder bouncing down the terraces
 //                             on a fixed patrol, forming from the snow and
 //                             collapsing back; squash, stretch, repeat
-export type HazardKind = 'drone' | 'wyrm' | 'jelly' | 'tumbler';
+//   yeti    (sweeper, powder) — the mascot: lumbers back and forth across
+//                             the floor, stops, ROARS (arms up, facing you),
+//                             lumbers on. The pause is the tell and the
+//                             window: a standing yeti is a dodgeable one
+export type HazardKind = 'drone' | 'wyrm' | 'jelly' | 'tumbler' | 'yeti';
 
 export interface Hazard {
   id: string;
@@ -623,6 +652,36 @@ export function tumblerPose(
   };
 }
 
+// The yeti: walk-pause-ROAR. It lumbers back and forth across its stretch
+// of floor at a fixed amble; every leg of walking ends in a planted pause
+// where it turns uphill and roars (roar rises and falls over the pause).
+// Piecewise but pure: total distance walked is a closed form of time.
+const YETI_SPEED = 2.3; // m/s of lumber
+const YETI_PAUSE = 1.6; // seconds planted (the dodge window)
+export function yetiPose(
+  h: Hazard,
+  time: number
+): { x: number; z: number; walking: boolean; dir: number; roar: number } {
+  const walkT = 2.6 + h.aux * 2;
+  const cycle = walkT + YETI_PAUSE;
+  const k = Math.floor(time / cycle);
+  const u = time - k * cycle;
+  const walked = YETI_SPEED * (k * walkT + Math.min(u, walkT)) + h.phase * h.amp;
+  // Triangle wave across [x0 - amp, x0 + amp].
+  const L = 2 * h.amp;
+  const c = ((walked % (2 * L)) + 2 * L) % (2 * L);
+  const x = c < L ? h.x0 - h.amp + c : h.x0 + h.amp - (c - L);
+  const walking = u < walkT;
+  const roarPhase = walking ? 0 : (u - walkT) / YETI_PAUSE;
+  return {
+    x,
+    z: h.z,
+    walking,
+    dir: c < L ? 1 : -1,
+    roar: Math.sin(roarPhase * Math.PI),
+  };
+}
+
 // The creature's collision footprint right now. The render layer draws
 // from the same pose helpers, so the shape you watch is the shape that
 // hits — including the shapes that AREN'T there (a submerged wyrm hump, a
@@ -655,6 +714,10 @@ export function hazardCircles(h: Hazard, time: number): HazardCircle[] {
       if (p.presence < 1) return []; // forming or dissolving: harmless
       return [{ x: p.x, z: p.z, r: h.radius, bottom: p.hop, top: p.hop + h.height }];
     }
+    case 'yeti': {
+      const p = yetiPose(h, time);
+      return [{ x: p.x, z: p.z, r: h.radius, bottom: 0, top: h.height }];
+    }
   }
 }
 
@@ -665,6 +728,7 @@ export class Terrain {
   private chunkJumps = new Map<number, Jump | null>();
   private chunkGates = new Map<number, SlalomGate[]>();
   private chunkHazards = new Map<number, Hazard[]>();
+  private chunkGalleries = new Map<number, Gallery[]>();
   private chunkSinceFeat = new Map<number, number>();
   private tour: SectionType[] | undefined;
   private blockDeals = new Map<number, SectionType[]>();
@@ -1041,11 +1105,35 @@ export class Terrain {
     const cached = this.chunkJumps.get(index);
     if (cached !== undefined) return cached;
     const zLip = -index * CHUNK_LENGTH - 24;
-    // No consecutive jump chunks: a fast flight covers up to ~40m, so
-    // back-to-back kickers could be overflown entirely — the plan never
-    // schedules a feature you can accidentally skip. Checked against the
-    // PLACED neighbour, so a forced kicker blocks adjacency too.
-    const clearBehind = index < 1 || this.jumpForChunk(index - 1) === null;
+    // A rhythm double's second half: if the uphill chunk dealt a LEAD, this
+    // chunk hosts its FOLLOW — a flat M exactly PAIR_SPACING down the SAME
+    // line, a touch wider (the second catch is generous). Everything about
+    // the spot was validated when the lead committed.
+    const uphill = index >= 1 ? this.jumpForChunk(index - 1) : null;
+    if (uphill && uphill.pair === 'lead') {
+      const zFollow = uphill.zLip - PAIR_SPACING;
+      const { rampLength, lipHeight } = JUMP_GEOMETRY.M;
+      const halfWidth = uphill.halfWidth + 1;
+      const maxOffset = Math.max(0, this.channelHalfWidth(zFollow) - halfWidth - JUMP_EDGE - 0.5);
+      const jump: Jump = {
+        zLip: zFollow,
+        xOffset: Math.max(-maxOffset, Math.min(maxOffset, uphill.xOffset)),
+        halfWidth,
+        kind: 'M',
+        rampLength,
+        lipHeight,
+        stepDown: 0,
+        hip: 0,
+        pair: 'follow',
+      };
+      this.chunkJumps.set(index, jump);
+      return jump;
+    }
+    // No consecutive jump chunks otherwise: a fast flight covers up to
+    // ~40m, so back-to-back kickers could be overflown entirely — the plan
+    // never schedules a feature you can accidentally skip. Checked against
+    // the PLACED neighbour, so a forced kicker blocks adjacency too.
+    const clearBehind = index < 1 || uphill === null;
     const natural = this.rollsJump(index) && clearBehind;
     // The max-gap guarantee: when nothing has happened for MAX_FEATURE_GAP
     // chunks — no kicker, no bend, no staircase — plant a kicker to fill the
@@ -1076,8 +1164,7 @@ export class Terrain {
     const opening = zLip > -SECTION_LENGTH;
     const kinds =
       opening || section.kickerKinds.length === 0 ? ['M' as const] : section.kickerKinds;
-    const kind = kinds[Math.floor(hash2(this.seed, index, 4451) * kinds.length)]!;
-    const { rampLength, lipHeight } = JUMP_GEOMETRY[kind];
+    let kind = kinds[Math.floor(hash2(this.seed, index, 4451) * kinds.length)]!;
     const halfWidth = 3.0 + hash2(this.seed, index, 31338) * 1.5;
     const maxOffset = Math.max(0, halfChannel - halfWidth - JUMP_EDGE - 0.5);
     // The kicker sits on the golden path: following the plan lines you up.
@@ -1089,24 +1176,66 @@ export class Terrain {
     // throw). Those sections deal plain kickers only.
     const sectionType = this.sectionType(this.sectionIndexAt(zLip));
     const banked = sectionType === 'sweeper' || sectionType === 'canyon';
+    const inPlunge = sectionType === 'plunge';
+    // A RHYTHM DOUBLE leads here? Only a natural, unbanked, mid-course M
+    // venue, with the follow's whole spot vetted NOW: its lip, its throw,
+    // and enough floor for its (wider) pad — a lead may never promise a
+    // follow the course can't honor. Plunges sit it out (the mid-plunge
+    // grade swing bends the tuned flight off the follow's ramp).
+    const zFollow = zLip - PAIR_SPACING;
+    const pair: Jump['pair'] =
+      natural &&
+      !opening &&
+      !banked &&
+      !inPlunge &&
+      section.kickerKinds.includes('M') &&
+      hash2(this.seed, index, 8117) < 0.3 &&
+      !this.finishApron(zFollow - KICKER_THROW) &&
+      !this.onSetpiece(zFollow) &&
+      !this.nearGrotto(zFollow) &&
+      this.channelHalfWidth(zFollow) >= halfWidth + 1 + JUMP_EDGE + 2
+        ? 'lead'
+        : null;
+    // Leads are always the classic flat M: the pair is ONE idea — trick,
+    // land, two beats, trick — and a scoop, hip, or booter mid-combo is a
+    // second idea fighting it.
+    if (pair) kind = 'M';
+    const { rampLength, lipHeight } = JUMP_GEOMETRY[kind];
     // Scoop depth is capped: every extra meter of drop is a meter the
     // carved landing floor must dissipate before it rejoins the grade.
     const stepDown =
-      !opening && !banked && kind !== 'S' && variantRoll < 0.3 ? Math.min(lipHeight * 1.6, 3.5) : 0;
+      !pair && !opening && !banked && kind !== 'S' && variantRoll < 0.3
+        ? Math.min(lipHeight * 1.6, 3.5)
+        : 0;
     // Hips throw toward the center so the slung flight stays over the floor;
     // they need lateral room for the landing, and they don't roll in
     // plunges — the mid-plunge grade swing bends flights off any fixed
     // sling line (plunges are for speed and big Ls anyway).
-    const inPlunge = sectionType === 'plunge';
     const hip =
-      !opening && !inPlunge && !banked && stepDown === 0 && halfChannel >= 13 && variantRoll > 0.75
+      !pair &&
+      !opening &&
+      !inPlunge &&
+      !banked &&
+      stepDown === 0 &&
+      halfChannel >= 13 &&
+      variantRoll > 0.75
         ? Math.abs(xOffset) > 1
           ? -Math.sign(xOffset)
           : hash2(this.seed, index, 9257) < 0.5
             ? -1
             : 1
         : 0;
-    const jump: Jump = { zLip, xOffset, halfWidth, kind, rampLength, lipHeight, stepDown, hip };
+    const jump: Jump = {
+      zLip,
+      xOffset,
+      halfWidth,
+      kind,
+      rampLength,
+      lipHeight,
+      stepDown,
+      hip,
+      pair,
+    };
     this.chunkJumps.set(index, jump);
     return jump;
   }
@@ -1620,9 +1749,10 @@ export class Terrain {
     let kind: HazardKind | null = null;
     if (type === 'bowl') kind = roll < 0.55 ? 'drone' : roll < 0.85 ? 'jelly' : null;
     else if (type === 'glacier') kind = roll < 0.7 ? 'drone' : null;
-    else if (type === 'powder') kind = roll < 0.6 ? 'wyrm' : null;
+    else if (type === 'powder') kind = roll < 0.45 ? 'wyrm' : roll < 0.65 ? 'yeti' : null;
     else if (type === 'cruise') kind = roll < 0.5 ? 'jelly' : null;
     else if (type === 'steps') kind = roll < 0.45 ? 'tumbler' : null;
+    else if (type === 'sweeper') kind = roll < 0.4 ? 'yeti' : null;
     if (
       kind !== null &&
       index >= 8 &&
@@ -1638,14 +1768,16 @@ export class Terrain {
       // always clean snow to dodge onto around it. The tumbler bounces
       // along z, so its lateral weave stays tightest; each kind needs its
       // own minimum room.
-      const minHalf = kind === 'tumbler' ? 8 : kind === 'wyrm' ? 9 : 10;
+      const minHalf = kind === 'tumbler' ? 8 : kind === 'wyrm' || kind === 'yeti' ? 9 : 10;
       if (half >= minHalf) {
         const amp =
           kind === 'tumbler'
             ? Math.min(half - 5, 5)
             : kind === 'wyrm'
               ? Math.min(half - 5, 12)
-              : Math.min(half - 4.5, 15);
+              : kind === 'yeti'
+                ? Math.min(half - 5, 10)
+                : Math.min(half - 4.5, 15);
         hazards.push({
           id: `h${index}`,
           kind,
@@ -1655,8 +1787,15 @@ export class Terrain {
           period: 7 + hash2(this.seed, index, 7393) * 4,
           phase: hash2(this.seed, index, 7417) * Math.PI * 2,
           aux: hash2(this.seed, index, 7433),
-          radius: kind === 'tumbler' ? 1.0 : kind === 'wyrm' ? 0.75 : 0.9,
-          height: kind === 'jelly' ? 2.6 : kind === 'tumbler' ? 2.0 : kind === 'wyrm' ? 1.4 : 2.3,
+          radius: kind === 'tumbler' || kind === 'yeti' ? 1.0 : kind === 'wyrm' ? 0.75 : 0.9,
+          height:
+            kind === 'jelly' || kind === 'yeti'
+              ? 2.6
+              : kind === 'tumbler'
+                ? 2.0
+                : kind === 'wyrm'
+                  ? 1.4
+                  : 2.3,
         });
       }
     }
@@ -1671,5 +1810,42 @@ export class Terrain {
       hazards.push(...this.hazardsForChunk(i));
     }
     return hazards;
+  }
+
+  // Spectator galleries camp on the banks beside kicker landing zones: the
+  // uphill chunk's lip throws its flights right past them, so a trick
+  // landed here is landed in front of a crowd. Never in the apron — the
+  // finish has its own ceremony.
+  galleriesForChunk(index: number): Gallery[] {
+    const cached = this.chunkGalleries.get(index);
+    if (cached) return cached;
+    const galleries: Gallery[] = [];
+    const zTop = -index * CHUNK_LENGTH;
+    if (
+      index >= 6 &&
+      !this.finishApron(zTop - CHUNK_LENGTH) &&
+      this.jumpForChunk(index - 1) !== null && // the crowd watches that lip's landing
+      hash2(this.seed, index, 9311) < 0.55
+    ) {
+      const z = zTop - 19; // mid landing zone (~35m past the uphill lip)
+      const side = hash2(this.seed, index, 9319) < 0.5 ? -1 : 1;
+      galleries.push({
+        id: `gal${index}`,
+        x: this.centerX(z) + side * (this.channelHalfWidth(z) + 3.5),
+        z,
+        side,
+      });
+    }
+    this.chunkGalleries.set(index, galleries);
+    return galleries;
+  }
+
+  galleriesNear(z: number): Gallery[] {
+    const center = this.chunkIndexAt(z);
+    const galleries: Gallery[] = [];
+    for (let i = center - 1; i <= center + 1; i++) {
+      galleries.push(...this.galleriesForChunk(i));
+    }
+    return galleries;
   }
 }

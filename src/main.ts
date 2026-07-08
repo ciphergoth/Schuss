@@ -416,6 +416,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
         const name = s.kind === 'back' ? 'BACKFLIP' : 'FRONTFLIP';
         return s.turns > 1 ? `${s.turns}× ${name}` : name;
       });
+      if (e.grabbed) parts.push('GRAB');
       const big = e.spins >= 2 || e.flips >= 2;
       // Repeating your last trick demotes the praise: the judges are bored.
       const word = e.repeat
@@ -431,10 +432,13 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
       // A missed contract dies quietly in gray — the trick still gets its
       // due, the star just didn't pay.
       const missed = e.contract === 'missed' ? ' · ★ MISSED' : '';
+      // Landed in front of a gallery: the crowd goes up and so does the pay.
+      const crowd = e.crowd ? ` · CROWD +${e.crowd.points.toLocaleString('en')}` : '';
+      if (e.crowd) audio.playCheer();
       const color =
         e.mult >= 5 ? '#ff3ddc' : e.mult >= 3 ? '#ffd34d' : e.repeat ? '#b9c4d6' : '#7dff8a';
       showTrick(
-        `${parts.join(' + ')}${mult} — ${word} +${e.points.toLocaleString('en')}${missed}`,
+        `${parts.join(' + ')}${mult} — ${word} +${e.points.toLocaleString('en')}${missed}${crowd}`,
         color,
         1.4
       );

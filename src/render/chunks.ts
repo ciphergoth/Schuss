@@ -12,6 +12,7 @@ import {
   jumpDrift,
   tumblerPose,
   wyrmSegment,
+  yetiPose,
 } from '../sim/terrain';
 import { hash2, mulberry32 } from '../sim/rng';
 
@@ -244,6 +245,12 @@ export class ChunkRenderer {
     flatShading: true,
   });
   private wyrmEye = new THREE.MeshBasicMaterial({ color: 0xfff6d8 });
+  // The yeti: warm bone-white fur — pure white vanished against the snow.
+  private yetiFur = new THREE.MeshStandardMaterial({
+    color: 0xd9c9b4,
+    roughness: 0.95,
+    flatShading: true,
+  });
   // The jelly: additive light, barely a body at all.
   private jellyTent = new THREE.MeshBasicMaterial({
     color: 0xb9e8ff,
@@ -374,9 +381,13 @@ export class ChunkRenderer {
       // follow it so the lit runway IS the line to ride.
       const coreAt = (u: number) => jump.xOffset + jumpDrift(jump, u);
       // Poles grow with the kicker: an L reads as a bigger event from afar.
+      // A rhythm double's follow flies its LEAD's color: the matched gates
+      // read as one combo from up the hill.
       const poleHeight = 8 + jump.lipHeight * 1.5;
       const neonGeo = new THREE.CylinderGeometry(0.22, 0.22, poleHeight, 6);
-      const neon = this.neons[index % this.neons.length]!;
+      const neonIndex = jump.pair === 'follow' ? index - 1 : index;
+      const neon =
+        this.neons[((neonIndex % this.neons.length) + this.neons.length) % this.neons.length]!;
       for (const side of [-1, 1]) {
         const x = this.terrain.centerX(jump.zLip) + coreAt(0) + side * (jump.halfWidth + 0.6);
         const pole = new THREE.Mesh(neonGeo, neon);
@@ -589,7 +600,48 @@ export class ChunkRenderer {
       if (h.kind === 'drone') this.addDrone(group, h);
       else if (h.kind === 'wyrm') this.addWyrm(group, h);
       else if (h.kind === 'jelly') this.addJelly(group, h);
+      else if (h.kind === 'yeti') this.addYeti(group, h);
       else this.addTumbler(group, h);
+    }
+
+    // Showboat galleries: a huddle of spectators camped on the bank beside
+    // a landing zone, torches at each end. Pure scenery — the sim pays the
+    // crowd bonus; the confetti and cheer live in the fx/audio layers.
+    for (const gal of this.terrain.galleriesForChunk(index)) {
+      const grng = mulberry32(
+        Math.floor(hash2(this.terrain.seed, Math.round(gal.z), 90013) * 2 ** 31)
+      );
+      const figures = 6 + Math.floor(grng() * 3);
+      for (let k = 0; k < figures; k++) {
+        const along = (k - figures / 2) * 1.1 + (grng() - 0.5) * 0.5;
+        const zf = gal.z + along;
+        const xf =
+          this.terrain.centerX(zf) +
+          gal.side * (this.terrain.channelHalfWidth(zf) + 3.2 + grng() * 1.6);
+        const y = this.terrain.height(xf, zf);
+        const h = 0.8 + grng() * 0.35;
+        const body = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.16, 0.22, h, 6),
+          this.balloons[Math.floor(grng() * this.balloons.length)]!
+        );
+        body.position.set(xf, y + h / 2, zf);
+        body.castShadow = true;
+        group.add(body);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 6), this.flagMast);
+        head.position.set(xf, y + h + 0.13, zf);
+        group.add(head);
+      }
+      for (const end of [-1, 1]) {
+        const zt = gal.z + end * (figures / 2 + 1.2);
+        const xt = this.terrain.centerX(zt) + gal.side * (this.terrain.channelHalfWidth(zt) + 3.4);
+        const yt = this.terrain.height(xt, zt);
+        const torch = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.4, 5), this.flagMast);
+        torch.position.set(xt, yt + 1.2, zt);
+        group.add(torch);
+        const flame = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 6), this.amber);
+        flame.position.set(xt, yt + 2.5, zt);
+        group.add(flame);
+      }
     }
 
     this.addSectionProps(group, index, zTop, zMid);
@@ -774,6 +826,63 @@ export class ChunkRenderer {
         tent.rotation.z = 0.12 * Math.sin(time * 1.7 + k);
         tent.rotation.x = 0.12 * Math.cos(time * 1.3 + k * 2);
       }
+    });
+  }
+
+  // The yeti: the mascot. A shaggy white lump that lumbers across the
+  // floor with a waddle-bob, then plants itself, turns uphill — at YOU —
+  // and ROARS, arms thrown wide. The pause is the tell and the window.
+  private addYeti(group: THREE.Group, h: Hazard): void {
+    const yeti = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, 1.6, 7), this.yetiFur);
+    body.position.y = 0.8;
+    body.castShadow = true;
+    yeti.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 7), this.yetiFur);
+    head.position.y = 1.85;
+    head.castShadow = true;
+    yeti.add(head);
+    // The face: a dark patch with two amber eyes — readable rage.
+    const face = new THREE.Mesh(new THREE.SphereGeometry(0.3, 7, 6), this.droneShell);
+    face.position.set(0, 1.85, -0.25);
+    face.scale.z = 0.55;
+    yeti.add(face);
+    for (const side of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 5), this.droneGlow);
+      eye.position.set(side * 0.12, 1.92, -0.48);
+      yeti.add(eye);
+    }
+    const arms: THREE.Group[] = [];
+    for (const side of [-1, 1]) {
+      const shoulder = new THREE.Group();
+      shoulder.position.set(side * 0.62, 1.45, 0);
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.0, 5), this.yetiFur);
+      arm.position.y = -0.5;
+      arm.castShadow = true;
+      shoulder.add(arm);
+      shoulder.rotation.z = side * 0.35;
+      yeti.add(shoulder);
+      arms.push(shoulder);
+    }
+    group.add(yeti);
+    this.creatureAnims.set(h.id, (time) => {
+      const p = yetiPose(h, time);
+      const gy = this.terrain.height(p.x, p.z);
+      const bob = p.walking ? Math.abs(Math.sin(time * 5.5)) * 0.12 : 0;
+      yeti.position.set(p.x, gy + bob, p.z);
+      yeti.rotation.z = p.walking ? Math.sin(time * 5.5) * 0.07 : 0;
+      // Walking it faces its travel; planted it squares up UPHILL (+z,
+      // where you are coming from) to roar.
+      const walkFacing = (p.dir > 0 ? 1 : -1) * (Math.PI / 2);
+      yeti.rotation.y = p.walking ? walkFacing : 0;
+      for (const [k, shoulder] of arms.entries()) {
+        const side = k === 0 ? -1 : 1;
+        const swing = p.walking ? Math.sin(time * 5.5 + k * Math.PI) * 0.5 : 0;
+        // The roar throws both arms up and wide.
+        shoulder.rotation.z = side * (0.35 + 2.1 * p.roar);
+        shoulder.rotation.x = swing;
+      }
+      head.position.y = 1.85 + 0.12 * p.roar; // the bellow lifts the chin
     });
   }
 

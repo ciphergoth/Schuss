@@ -53,6 +53,7 @@ describe('effects', () => {
         segments: [{ kind: 'spinR', turns: 1 }],
         parallel: false,
         variety: false,
+        grabbed: false,
         mult: 5,
         points: 2500,
         repeat: false,

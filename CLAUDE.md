@@ -59,7 +59,13 @@ terrain.gatesForChunk), and threading one pays GATE_POINTS × the running
 chain (150/300/450..., score only, NEVER fuel; sim.gateChain, each thread
 chimes a step higher); a miss — wide, over the poles, or tumbling
 through — just resets the chain, the forgone escalation being the whole
-punishment. Every
+punishment. SHOWBOAT GALLERIES (terrain.galleriesForChunk) camp on the
+banks beside kicker landing zones — crowds gather where the show is —
+and a scored trick landed within GALLERY_RANGE (30m) of one pays a
+CROWD bonus: 25% of the trick's points AFTER any star multiplier (the
+crowd loves the jackpot most), with confetti fountaining from the crowd,
+a synthesized cheer, and · CROWD +N on the banner. Score only, never a
+collider, never in the apron (the finish has its own ceremony). Every
 star is COMPUTED onto a reference flight integrated against the real
 heightfield (terrain.starOnArc): the gold x3 rides the human-pop-at-cruise
 arc, the magenta x5 rides the superhuman-pop-at-boost-pace arc, 30-50m
@@ -77,7 +83,14 @@ turns when an axis reverses; the running NET facing still gates the
 landing). So a 360 one way then a 360 the other counts BOTH — the old
 signed accumulator cancelled them to nothing — while a lazy 180-each-way
 wiggle banks zero (per-segment tolerance: 350°→1, 180°→0). Each segment's
-turns pay at its type (500/800/1100). VARIETY — two or more DIFFERENT
+turns pay at its type (500/800/1100). The GRAB: the boost button, which
+has no other job in the air (burning and charging are grounded), tweaks
+the body over the skis — held ≥0.25s it styles the WHOLE flight, base
+points ×1.2, SCORE only, never fuel (style is glory, not propulsion);
+the banner appends + GRAB, the pose reads in silhouette (one arm thrown
+wide, one reaching down the ski line — skierView pose.grab), and a
+grabbed sequence is a DIFFERENT trick from a plain one for the repeat
+check. VARIETY — two or more DIFFERENT
 tricks in the sequence, where spin-left, spin-right, frontflip, backflip
 ALL count as different — is the showpiece: the plain sum ×1.35. A PARALLEL
 combo (spin AND flip AT ONCE, locked to the flip's rate and slowed by
@@ -188,7 +201,14 @@ component rotates a grounded skier's velocity (capped at 1 rad/s), so a
 superelevated sweeper carries a hands-off rider around its S-turns at full
 pace and a wall ride carves back down to the floor. Kickers come in S/M/L (ramp 10/14/19m, lip
 1.5/2.2/3.2m), 30% of M/L are step-downs (the landing scooped out for
-float and a soft catch), the first kicker of a run is always a flat M, and
+float and a soft catch), the first kicker of a run is always a flat M,
+some kickers come as RHYTHM DOUBLES (Jump.pair: a 'lead' whose
+cruise-pace landing rolls straight onto its 'follow' ramp on the SAME
+line, lips PAIR_SPACING=50m apart — trick, land, two beats, trick
+again; both always plain flat Ms, the follow a touch wider and flying
+its lead's neon color, the follow's whole spot vetted when the lead
+commits, never in plunges or banked esses — the ONLY legal
+consecutive-chunk kickers), and
 the trick-bonus stars sit per-size on the popped-at-the-lip flight arc
 (STAR_TABLE, tuned by simulated flights). HIP kickers ride the banking
 physics for real: the pad tilts to 0.38 cross-slope over a 20m run-up,
@@ -239,7 +259,12 @@ pass beneath, and a clean pass-under pays the near-miss whoosh. The ICE
 TUMBLER (steps) bounces down a fixed TUMBLER_SPAN patrol of the
 staircase in parabolic hops (tumblerPose), squashing on impact,
 dissolving into the snow at the seam and reforming at the top —
-presence < 1 spawns NO circle, so the respawn can never ambush. Shared
+presence < 1 spawns NO circle, so the respawn can never ambush. The YETI
+(sweeper, powder) is the mascot: it lumbers back and forth across the
+floor at a fixed amble (yetiPose — walked distance is a closed form of
+time), then plants itself, squares up UPHILL at you, and ROARS with both
+arms thrown wide; the pause is the tell AND the dodge window (a planted
+yeti holds perfectly still). Shared
 rules: at most one creature per chunk and never in adjacent chunks, kind
 set by section, never sharing a chunk with a kicker's ramp or the uphill
 lip's landing, never on a setpiece or in the grotto, never in the
