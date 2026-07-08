@@ -39,7 +39,12 @@ HUD "×N DEMAND" line glows in the star's color while armed (sim.contract;
 demandMet in sim.ts is the judge, demand pools + seeding live in
 terrain.ts). Because a contract needs a FOLLOWING trick to cash, the
 course's LAST jump carries no star — there is no next lip before the line
-locks the score (terrain.hasJumpDownrange gates bonusesForChunk). And a
+locks the score — and neither does any jump a SHORT DISTANCE behind it: a
+star hangs up to ~50m downrange and you fly its whole arc before touchdown,
+so a follower only a chunk or two ahead gets overflown and, near the line,
+the contract could never cash. A star needs a kicker at least STAR_CASH_GAP
+(~100m) downrange to be a real cash venue, not merely SOME lip before the
+finish (terrain.hasJumpDownrange gates bonusesForChunk). And a
 trick that CASHES a contract is never docked as a repeat: the star DEMANDED
 that exact showpiece, so obeying it can't earn the AGAIN? dock (sim.ts —
 a paid contract clears the repeat flag; a missed one still docks a genuine

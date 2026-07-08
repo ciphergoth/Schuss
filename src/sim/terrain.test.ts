@@ -492,6 +492,32 @@ describe('terrain', () => {
     }
   });
 
+  it('no star sits a short distance behind the last jump — its contract needs a reachable cash venue', () => {
+    // A star hangs up to ~50m downrange and you fly its whole arc before
+    // touching down, so a following kicker only a chunk or two ahead gets
+    // overflown; near the line that means the star can never cash. Every
+    // starred jump must therefore have a following kicker comfortably beyond
+    // the star's reach (well past the bare 2-chunk no-overfly spacing), not
+    // merely SOME lip before the finish.
+    const finishChunk = Math.ceil(COURSE_LENGTH / CHUNK_LENGTH);
+    let checked = 0;
+    for (const seed of [1, 2, 3, 5, 7, 11, 42, 99]) {
+      const t = new Terrain(seed);
+      for (let i = 3; i <= finishChunk; i++) {
+        if (t.bonusesForChunk(i).length === 0) continue;
+        const lip = -i * CHUNK_LENGTH - 24;
+        let cashVenue = false;
+        for (let j = i + 1; j <= finishChunk; j++) {
+          if (!t.jumpForChunk(j)) continue;
+          if (lip - (-j * CHUNK_LENGTH - 24) >= 3 * CHUNK_LENGTH) cashVenue = true;
+        }
+        expect(cashVenue).toBe(true);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(10);
+  });
+
   it('the tour: nine sections, nine different personalities, no repeats', () => {
     const everyType: SectionType[] = [
       'cruise',

@@ -426,6 +426,16 @@ const STAR3_TIME = 1.5; // seconds into that flight
 const STAR5_SPEED = 25; // arrive at real race pace (boost territory)...
 const STAR5_CHARGE = 1; // ...with a superhuman, fuel-burned pop
 const STAR5_TIME = 1.9; // deep downrange: slower flights are meters under it
+// A star's contract cashes on the NEXT trick, so the star needs a following
+// kicker to launch off — but the star itself hangs up to ~50m downrange
+// (STAR5_SPEED·STAR5_TIME), and grabbing it means flying that whole arc before
+// you touch down. The next kicker must sit comfortably beyond that reach with
+// room to land and set up, or you'd overfly it (nothing left before the line)
+// and the star could never cash. So a star needs a kicker at least this far
+// downrange — ~50m of star reach plus ~50m to land and re-launch — not merely
+// SOME kicker before the finish; a lip only 80m ahead is a short distance too
+// close behind the last jump to be a real cash venue.
+const STAR_CASH_GAP = 100;
 const POP_MAX = 5.4; // mirrors skier.ts JUMP_POP_MAX
 const POP_CAP_RATIO = 0.35; // mirrors skier.ts LAUNCH_MAX_VY_RATIO
 // Hip flights converge onto the aim corridor's equilibrium line; this is
@@ -1403,13 +1413,20 @@ export class Terrain {
     return pickups;
   }
 
-  // Is there another kicker between this chunk and the finish? A star's
-  // contract needs a following trick to cash, so the last jump of the course
-  // earns no star. The scan bottoms out where the apron forbids kickers (the
-  // same gate rollsJump/forced use), so it always terminates.
+  // Is there a kicker far enough downrange to CASH this chunk's star? A star's
+  // contract needs a following trick to cash, and that trick needs a following
+  // kicker to launch off — but not just any lip before the finish: the star
+  // hangs up to ~50m out and you fly its whole arc before touching down, so a
+  // lip only a chunk or two ahead gets overflown, and near the line that means
+  // the star can never cash. The last jump earns no star (nothing downrange),
+  // and so does any jump a short distance behind it whose only follower is too
+  // close to be a real cash venue. The scan bottoms out where the apron forbids
+  // kickers (the same gate rollsJump/forced use), so it always terminates.
   private hasJumpDownrange(index: number): boolean {
+    const lip = -index * CHUNK_LENGTH - 24;
     for (let j = index + 1; !this.finishApron(-j * CHUNK_LENGTH - 24 - KICKER_THROW); j++) {
-      if (this.jumpForChunk(j) !== null) return true;
+      const gap = lip - (-j * CHUNK_LENGTH - 24); // downrange distance to this lip
+      if (gap >= STAR_CASH_GAP && this.jumpForChunk(j) !== null) return true;
     }
     return false;
   }
