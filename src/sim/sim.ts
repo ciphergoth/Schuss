@@ -197,12 +197,14 @@ const NEAR_MISS_COOLDOWN = 0.6;
 const MIN_STYLISH_AIR = 0.25; // seconds; shorter hops don't reward
 const PICKUP_RADIUS = 1.3;
 const BONUS_RADIUS = 1.7; // stars are generous — reaching them was the feat
-// A star is a tall spinning triangle rising from the arc point, not a coin at
-// one height: cresting the lip too high used to overfly it. The catch is a
-// column that reaches BONUS_UP_REACH ABOVE the arc so an over-pop still grabs,
-// but stays tight (BONUS_RADIUS) BELOW it — a low, unpopped flight passing
+// A star is a spinning cone that POINTS DOWN — its apex at the arc point, its
+// mouth up top — so the catch disc fans WIDER the higher the chest clears the
+// arc: the higher you jump, the easier it is to catch, and a big pop can't
+// overfly it. The mouth reaches BONUS_UP_REACH above the arc. At or below the
+// arc the catch is the usual generous disc; a low, unpopped flight passing
 // beneath still misses, so reaching the arc is still the feat.
 const BONUS_UP_REACH = 6.0;
+const BONUS_CONE_FLARE = 0.5; // extra catch radius per meter cleared above the arc
 
 export function createSim(seed: number, courseLength?: number, design?: CourseDesign): Sim {
   const terrain = new Terrain(seed, courseLength, design);
@@ -512,11 +514,9 @@ export function stepSim(sim: Sim, input: SkierInput): SimEvent[] {
       const dx = star.x - s.x;
       const dz = star.z - s.z;
       const dy = star.y - (s.y + 1.0); // >0: skier below the arc; <0: above it
-      if (
-        dx * dx + dz * dz < BONUS_RADIUS * BONUS_RADIUS &&
-        dy < BONUS_RADIUS &&
-        dy > -BONUS_UP_REACH
-      ) {
+      const cleared = Math.max(0, -dy); // how far the chest cleared the arc point
+      const reach = BONUS_RADIUS + cleared * BONUS_CONE_FLARE; // the cone widening upward
+      if (dx * dx + dz * dz < reach * reach && dy < BONUS_RADIUS && dy > -BONUS_UP_REACH) {
         sim.collected.add(star.id);
         const contract: Contract = { mult: star.mult, demand: star.demand };
         if (s.airTime > 0) {
