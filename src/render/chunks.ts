@@ -31,19 +31,28 @@ const SNOW_FLOOR = new THREE.Color(0xf4f9ff);
 const SNOW_CRUD = new THREE.Color(0x8494cf); // slow crud: dusty periwinkle
 const SNOW_ICE = new THREE.Color(0x9fd8ff); // glacier: the GRIP channel made visible
 
-// Flat five-pointed star, the classic prize shape.
-function starGeometry(radius: number): THREE.ShapeGeometry {
-  const shape = new THREE.Shape();
-  for (let i = 0; i < 10; i++) {
-    const r = i % 2 === 0 ? radius : radius * 0.45;
-    const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
-    const x = Math.cos(a) * r;
-    const y = Math.sin(a) * r;
-    if (i === 0) shape.moveTo(x, y);
-    else shape.lineTo(x, y);
-  }
-  shape.closePath();
-  return new THREE.ShapeGeometry(shape);
+// The prize marker: a tall triangular SPIRE, not a flat coin — a flat star at
+// one height was easy to overfly by popping too high. Two vertical triangles
+// crossed at 90° read as a 3D crystal spike from any angle as it spins; the
+// column rises from the collection point (y=0) up past the catch's upward
+// reach, and drops a little below so the whole grab zone is lit. Slim in x/z,
+// several times taller than wide — the sim's tall catch column made visible.
+function spireGeometry(halfWidth: number, drop: number, rise: number): THREE.BufferGeometry {
+  // One vertical triangle, apex up, base straddling the collection point.
+  const tri = (): [number, number, number][] => [
+    [-halfWidth, -drop, 0],
+    [halfWidth, -drop, 0],
+    [0, rise, 0],
+  ];
+  const a = tri();
+  // The second blade is the first rotated 90° around the vertical axis.
+  const b = a.map(([x, y, z]) => [z, y, -x] as [number, number, number]);
+  const verts: number[] = [];
+  for (const t of [a, b]) for (const [x, y, z] of t) verts.push(x, y, z);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.computeVertexNormals();
+  return geo;
 }
 
 // Candy-striped marker: a cylinder with horizontal color bands baked into
@@ -522,21 +531,25 @@ export class ChunkRenderer {
       this.pickupMeshes.set(p.id, mesh);
     }
 
-    // Trick-bonus stars past the kicker lip: gold x3, bigger magenta x5,
-    // each with a halo ring, riding its own light beam up from the snow so
-    // the flight line reads from hundreds of meters out.
+    // Trick-bonus stars past the kicker lip: gold x3, bigger magenta x5, each
+    // a tall spinning triangular spire (so an over-pop still threads it) with a
+    // halo ring marking the collection point, riding its own light beam up from
+    // the snow so the flight line reads from hundreds of meters out.
     for (const b of this.terrain.bonusesForChunk(index)) {
       const big = b.mult === 5;
       const holder = new THREE.Group();
       const star = new THREE.Mesh(
-        starGeometry(big ? 1.25 : 0.9),
+        spireGeometry(big ? 1.15 : 0.85, 1.5, big ? 6.5 : 5.0),
         big ? this.magenta : this.goldStar
       );
       holder.add(star);
+      // A horizontal ring at the collection point — rotationally symmetric
+      // about the spin axis, so it hangs steady while the spire turns.
       const halo = new THREE.Mesh(
-        new THREE.TorusGeometry(big ? 1.7 : 1.25, 0.07, 8, 32),
+        new THREE.TorusGeometry(big ? 1.5 : 1.15, 0.07, 8, 32),
         big ? this.magentaHalo : this.goldHalo
       );
+      halo.rotation.x = Math.PI / 2;
       holder.add(halo);
       holder.position.set(b.x, b.y, b.z);
       holder.userData.baseY = b.y;
