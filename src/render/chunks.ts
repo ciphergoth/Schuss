@@ -31,19 +31,19 @@ const SNOW_FLOOR = new THREE.Color(0xf4f9ff);
 const SNOW_CRUD = new THREE.Color(0x8494cf); // slow crud: dusty periwinkle
 const SNOW_ICE = new THREE.Color(0x9fd8ff); // glacier: the GRIP channel made visible
 
-// Flat five-pointed star, the classic prize shape.
-function starGeometry(radius: number): THREE.ShapeGeometry {
-  const shape = new THREE.Shape();
-  for (let i = 0; i < 10; i++) {
-    const r = i % 2 === 0 ? radius : radius * 0.45;
-    const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
-    const x = Math.cos(a) * r;
-    const y = Math.sin(a) * r;
-    if (i === 0) shape.moveTo(x, y);
-    else shape.lineTo(x, y);
-  }
-  shape.closePath();
-  return new THREE.ShapeGeometry(shape);
+// The prize marker: a spinning cone that POINTS DOWN — a flat star at one
+// height was easy to overfly by popping too high. The apex sits at the
+// collection point and the mouth opens UP, so the wide part is up where a big
+// pop crests (the sim's catch fans out to match). Three radial segments make
+// it a crisp triangular cone whose silhouette visibly turns as it spins —
+// conical, low-poly, unmistakably rotating.
+function coneGeometry(radius: number, height: number): THREE.BufferGeometry {
+  // Cone apex is at +height/2 by default; flip it to point down and lift it so
+  // the apex lands at the collection point (y = 0) with the mouth `height` up.
+  const geo = new THREE.ConeGeometry(radius, height, 3);
+  geo.rotateX(Math.PI);
+  geo.translate(0, height / 2, 0);
+  return geo;
 }
 
 // Candy-striped marker: a cylinder with horizontal color bands baked into
@@ -522,21 +522,26 @@ export class ChunkRenderer {
       this.pickupMeshes.set(p.id, mesh);
     }
 
-    // Trick-bonus stars past the kicker lip: gold x3, bigger magenta x5,
-    // each with a halo ring, riding its own light beam up from the snow so
-    // the flight line reads from hundreds of meters out.
+    // Trick-bonus stars past the kicker lip: gold x3, bigger magenta x5, each a
+    // spinning downward cone (apex at the grab point, mouth up top, so a high
+    // pop threads the wide part) with a halo ring marking the collection point,
+    // riding its own light beam up from the snow so the flight line reads from
+    // hundreds of meters out.
     for (const b of this.terrain.bonusesForChunk(index)) {
       const big = b.mult === 5;
       const holder = new THREE.Group();
       const star = new THREE.Mesh(
-        starGeometry(big ? 1.25 : 0.9),
+        coneGeometry(big ? 1.35 : 1.05, big ? 6.5 : 5.0),
         big ? this.magenta : this.goldStar
       );
       holder.add(star);
+      // A horizontal ring at the collection point — rotationally symmetric
+      // about the spin axis, so it hangs steady while the cone turns.
       const halo = new THREE.Mesh(
-        new THREE.TorusGeometry(big ? 1.7 : 1.25, 0.07, 8, 32),
+        new THREE.TorusGeometry(big ? 1.5 : 1.15, 0.07, 8, 32),
         big ? this.magentaHalo : this.goldHalo
       );
+      halo.rotation.x = Math.PI / 2;
       holder.add(halo);
       holder.position.set(b.x, b.y, b.z);
       holder.userData.baseY = b.y;
