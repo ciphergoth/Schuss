@@ -166,16 +166,9 @@ export class ChunkRenderer {
     opacity: 0.55,
   });
   private neons = NEON_COLORS.map((c) => new THREE.MeshBasicMaterial({ color: glowColor(c) }));
-  private gateGlows = NEON_COLORS.map(
-    (c) =>
-      new THREE.MeshBasicMaterial({
-        color: glowColor(c),
-        transparent: true,
-        opacity: 0.35,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      })
-  );
+  // Section-boundary arcs stay OUT of the bloom pass: they're wayfinding, not
+  // a reward, and shouldn't outshine the jackpot fireworks. Plain color.
+  private sectionArcs = NEON_COLORS.map((c) => new THREE.MeshBasicMaterial({ color: c }));
   private beamGold = new THREE.MeshBasicMaterial({
     color: glowColor(0xffd34d),
     transparent: true,
@@ -501,14 +494,11 @@ export class ChunkRenderer {
       const cX = this.terrain.centerX(zg);
       const floorY = this.terrain.height(cX, zg);
       const radius = this.terrain.channelHalfWidth(zg) + 2.5;
-      const color = this.neons[k % this.neons.length]!;
-      const glow = this.gateGlows[k % this.gateGlows.length]!;
+      // A slim plain arc, no halo: a marker you pass under, not an event.
+      const color = this.sectionArcs[k % this.sectionArcs.length]!;
       const arc = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.4, 8, 40, Math.PI), color);
       arc.position.set(cX, floorY + 0.3, zg);
       group.add(arc);
-      const halo = new THREE.Mesh(new THREE.TorusGeometry(radius, 1.1, 8, 40, Math.PI), glow);
-      halo.position.copy(arc.position);
-      group.add(halo);
     }
 
     // Obstacles: ice crystals and fat striped bollards on the floor. Visual
