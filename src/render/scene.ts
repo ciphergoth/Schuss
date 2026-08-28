@@ -232,8 +232,10 @@ export function createScene(): SceneSetup {
   const scene = new THREE.Scene();
   // The palette owns the mood: sky, fog, and lights cross-fade between color
   // zones as the run descends (see palette.ts). Start in dusk.
+  // `sky` drives the fog (and the dome's gradient); it is NOT the scene
+  // background — the dome fully encloses the camera, and painting a
+  // background behind it would be a wasted full-screen fill every frame.
   const sky = new THREE.Color(0x3d4490);
-  scene.background = sky; // the fallback behind the dome's rim
   scene.fog = new THREE.Fog(sky, 110, 520);
 
   // THE SKY DOME: the top third of every frame used to be scene.background —
