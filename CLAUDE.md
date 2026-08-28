@@ -343,8 +343,12 @@ overhead as scenery, and the bare gates read as bollards).
   seeded tileable DataTextures — snow gets a mottled color map with glint
   pixels plus a fine bump map, on world-space UVs so the grain tiles in
   meters across chunk seams). Binary assets are PERMITTED when they earn
-  their keep (none committed yet — prefer generated where quality allows;
-  keep everything out of src/sim/, which stays pure and asset-free).
+  their keep — the first are committed: public/textures/ holds two CC0
+  scanned surface normals (from @pmndrs/assets; see its README) that load
+  async over the generated maps — snow-normal.webp becomes the ribbon's
+  normal map, ice-normal.webp dresses the crystal props and grotto vault.
+  Prefer generated where quality allows; keep everything out of src/sim/,
+  which stays pure and asset-free.
 - **Vitest** — simulation tests
 - **pnpm** via **devenv/direnv** for the development environment
 

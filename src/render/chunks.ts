@@ -290,10 +290,38 @@ export class ChunkRenderer {
     private terrain: Terrain,
     maxAnisotropy = 1
   ) {
-    const tex = makeSnowTextures(Math.min(8, maxAnisotropy));
+    const aniso = Math.min(8, maxAnisotropy);
+    const tex = makeSnowTextures(aniso);
     this.snow.map = tex.map;
     this.snow.bumpMap = tex.bumpMap;
     this.snow.bumpScale = 0.25;
+
+    // The first real binary assets: CC0 scanned surface normals (see
+    // public/textures/README.md), loaded async — the generated maps above
+    // cover the opening frames, then the real relief swaps in. The color
+    // map stays generated: snow hue belongs to the palette's vertex tints.
+    const loader = new THREE.TextureLoader();
+    loader.load(`${import.meta.env.BASE_URL}textures/snow-normal.webp`, (t) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = aniso;
+      this.snow.normalMap = t; // three prefers normalMap over bumpMap
+      this.snow.normalScale.set(0.55, 0.55);
+      this.snow.needsUpdate = true;
+    });
+    loader.load(`${import.meta.env.BASE_URL}textures/ice-normal.webp`, (t) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = aniso;
+      this.crystal.normalMap = t;
+      this.crystal.normalScale.set(0.8, 0.8);
+      this.crystal.needsUpdate = true;
+      // The vault spans ~90m: its own copy tiles the crust plates rather
+      // than stretching one across the whole roof.
+      const vault = t.clone();
+      vault.repeat.set(8, 4);
+      this.caveRock.normalMap = vault;
+      this.caveRock.normalScale.set(0.7, 0.7);
+      this.caveRock.needsUpdate = true;
+    });
   }
 
   // Swap to a new course (next seed): tear down every chunk and rebuild
