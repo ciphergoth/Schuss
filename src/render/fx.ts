@@ -42,6 +42,7 @@ interface ParticleOptions {
   fadeRate?: number; // how eagerly (default 6); lower = holds color longer
   lifeScale?: number; // multiplies every spawned lifetime (default 1)
   sprite?: THREE.Texture; // soft glow map for light-like particles
+  hdrBoost?: number; // spawn colors scaled past 1.0 so the bloom pass ignites them
 }
 
 class Particles {
@@ -93,9 +94,10 @@ class Particles {
 
   private stamp(i: number, color: THREE.Color, life: number): void {
     this.life[i] = this.maxLife[i] = life * (this.opts.lifeScale ?? 1);
-    this.colors[i * 3] = color.r;
-    this.colors[i * 3 + 1] = color.g;
-    this.colors[i * 3 + 2] = color.b;
+    const boost = this.opts.hdrBoost ?? 1;
+    this.colors[i * 3] = color.r * boost;
+    this.colors[i * 3 + 1] = color.g * boost;
+    this.colors[i * 3 + 2] = color.b * boost;
   }
 
   spawn(
@@ -251,7 +253,9 @@ class Trail {
         // its own color; faint blue otherwise.
         if (flow > 0.4) {
           const hue = (time * 90 + i * 4) % 360;
-          color.setHSL(hue / 360, 0.35 + flow * 0.6, 0.72);
+          // HDR rainbow: at full boost the trail crosses the bloom threshold
+          // and the burn reads as light laid on the snow.
+          color.setHSL(hue / 360, 0.35 + flow * 0.6, 0.72).multiplyScalar(1 + flow);
         } else if (armed >= 3) {
           const pulse = 0.62 + 0.12 * Math.sin(time * 6 + i * 0.3);
           color.setHSL(armed >= 5 ? 0.88 : 0.12, 0.95, pulse);
@@ -314,6 +318,7 @@ export class Effects {
       additive: true,
       fade: BLACK,
       sprite: glow,
+      hdrBoost: 1.8, // glitter catches the bloom
     });
     // Fireworks bloom 30-90m away: the sprites must be house-window sized
     // up close to survive perspective at that range.
@@ -326,6 +331,7 @@ export class Effects {
       fadeRate: 3.2, // blooms hold their color, then dim out
       lifeScale: 1.6,
       sprite: glow,
+      hdrBoost: 2.6, // fireworks burn genuinely hot in the bloom pass
     });
     this.trail = new Trail(scene);
   }

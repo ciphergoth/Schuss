@@ -15,6 +15,8 @@ import {
   yetiPose,
 } from '../sim/terrain';
 import { hash2, mulberry32 } from '../sim/rng';
+import { glowColor } from './post';
+import { SNOW_TILE, makeSnowTextures } from './textures';
 
 // The course renders as a ribbon that follows the centerline — beyond its
 // edges there is nothing but sky, city, and clouds far below. SSX rules.
@@ -135,7 +137,7 @@ export class ChunkRenderer {
     roughness: 0.3,
     flatShading: true,
   });
-  private gold = new THREE.MeshBasicMaterial({ color: 0xffd34d });
+  private gold = new THREE.MeshBasicMaterial({ color: glowColor(0xffd34d) });
   private city = new THREE.MeshBasicMaterial({ color: 0x10173a });
   private cloud = new THREE.MeshBasicMaterial({
     color: 0xffffff,
@@ -145,23 +147,29 @@ export class ChunkRenderer {
   private red = new THREE.Color(0xff3b30);
   private white = new THREE.Color(0xffffff);
   private orange = new THREE.Color(0xff8b1a);
-  private goldStar = new THREE.MeshBasicMaterial({ color: 0xffd34d, side: THREE.DoubleSide });
-  private magenta = new THREE.MeshBasicMaterial({ color: 0xff3ddc, side: THREE.DoubleSide });
+  private goldStar = new THREE.MeshBasicMaterial({
+    color: glowColor(0xffd34d),
+    side: THREE.DoubleSide,
+  });
+  private magenta = new THREE.MeshBasicMaterial({
+    color: glowColor(0xff3ddc),
+    side: THREE.DoubleSide,
+  });
   private goldHalo = new THREE.MeshBasicMaterial({
-    color: 0xffe9a8,
+    color: glowColor(0xffe9a8),
     transparent: true,
     opacity: 0.55,
   });
   private magentaHalo = new THREE.MeshBasicMaterial({
-    color: 0xff9df0,
+    color: glowColor(0xff9df0),
     transparent: true,
     opacity: 0.55,
   });
-  private neons = NEON_COLORS.map((c) => new THREE.MeshBasicMaterial({ color: c }));
+  private neons = NEON_COLORS.map((c) => new THREE.MeshBasicMaterial({ color: glowColor(c) }));
   private gateGlows = NEON_COLORS.map(
     (c) =>
       new THREE.MeshBasicMaterial({
-        color: c,
+        color: glowColor(c),
         transparent: true,
         opacity: 0.35,
         blending: THREE.AdditiveBlending,
@@ -169,14 +177,14 @@ export class ChunkRenderer {
       })
   );
   private beamGold = new THREE.MeshBasicMaterial({
-    color: 0xffd34d,
+    color: glowColor(0xffd34d),
     transparent: true,
     opacity: 0.3,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
   private beamMagenta = new THREE.MeshBasicMaterial({
-    color: 0xff3ddc,
+    color: glowColor(0xff3ddc),
     transparent: true,
     opacity: 0.3,
     blending: THREE.AdditiveBlending,
@@ -186,7 +194,7 @@ export class ChunkRenderer {
     (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7 })
   );
   private flagMast = new THREE.MeshStandardMaterial({ color: 0xcfd6e0, roughness: 0.5 });
-  private beacon = new THREE.MeshBasicMaterial({ color: 0xffd34d });
+  private beacon = new THREE.MeshBasicMaterial({ color: glowColor(0xffd34d) });
   private basket = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.9 });
   // Section-signature props: each personality dresses its own stretch.
   private pineTrunk = new THREE.MeshStandardMaterial({ color: 0x5b4632, roughness: 0.9 });
@@ -200,7 +208,7 @@ export class ChunkRenderer {
     roughness: 1,
     flatShading: true,
   });
-  private amber = new THREE.MeshBasicMaterial({ color: 0xffa02e });
+  private amber = new THREE.MeshBasicMaterial({ color: glowColor(0xffa02e) });
   private pennants = NEON_COLORS.map(
     (c) => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })
   );
@@ -220,15 +228,15 @@ export class ChunkRenderer {
     flatShading: true,
     side: THREE.DoubleSide,
   });
-  private caveGlowA = new THREE.MeshBasicMaterial({ color: 0x7df2ff });
-  private caveGlowB = new THREE.MeshBasicMaterial({ color: 0xb96bff });
+  private caveGlowA = new THREE.MeshBasicMaterial({ color: glowColor(0x7df2ff) });
+  private caveGlowB = new THREE.MeshBasicMaterial({ color: glowColor(0xb96bff) });
   // Patrol drones: dark shell, warning-amber glow ring and underbeam.
   private droneShell = new THREE.MeshStandardMaterial({
     color: 0x232a52,
     roughness: 0.4,
     flatShading: true,
   });
-  private droneGlow = new THREE.MeshBasicMaterial({ color: 0xffb02e });
+  private droneGlow = new THREE.MeshBasicMaterial({ color: glowColor(0xffb02e) });
   private droneBeam = new THREE.MeshBasicMaterial({
     color: 0xffb02e,
     transparent: true,
@@ -264,10 +272,18 @@ export class ChunkRenderer {
   // and these poses share the same pure functions).
   private creatureAnims = new Map<string, (time: number) => void>();
 
+  // maxAnisotropy: renderer.capabilities.getMaxAnisotropy(), so the snow
+  // grain stays sharp down the long forward view instead of mip-blurring.
   constructor(
     private scene: THREE.Scene,
-    private terrain: Terrain
-  ) {}
+    private terrain: Terrain,
+    maxAnisotropy = 1
+  ) {
+    const tex = makeSnowTextures(Math.min(8, maxAnisotropy));
+    this.snow.map = tex.map;
+    this.snow.bumpMap = tex.bumpMap;
+    this.snow.bumpScale = 0.25;
+  }
 
   // Swap to a new course (next seed): tear down every chunk and rebuild
   // against the new terrain as the update loop asks for it.
@@ -330,6 +346,7 @@ export class ChunkRenderer {
     geo.translate(0, 0, zMid);
     geo = geo.toNonIndexed();
     const pos = geo.getAttribute('position');
+    const uv = geo.getAttribute('uv');
     const colors = new Float32Array(pos.count * 3);
     const c = new THREE.Color();
     for (let v = 0; v < pos.count; v++) {
@@ -339,6 +356,9 @@ export class ChunkRenderer {
       const x = this.terrain.centerX(z) + d;
       pos.setX(v, x);
       pos.setY(v, this.terrain.height(x, z));
+      // World-space UVs: the snow texture tiles in meters across chunk seams
+      // and curves alike, so the grain never stretches with the channel width.
+      uv.setXY(v, x / SNOW_TILE, z / SNOW_TILE);
       // What you see is what slows you: crud tint tracks the sim's friction,
       // and glacier blue tracks the GRIP channel — where the floor reads icy,
       // the edges genuinely bite less.

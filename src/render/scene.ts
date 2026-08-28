@@ -47,6 +47,10 @@ class Aurora {
       for (let v = 0; v < pos.count; v++) {
         const u = (pos.getX(v) + 310) / 620;
         color.setHSL(0.38 + u * 0.38 + r * 0.06, 0.9, 0.55); // green -> violet
+        // HDR headroom: where the three additive ribbons overlap at full
+        // blaze (the night zone, a jackpot flare) they cross the bloom
+        // threshold and the sky genuinely glows.
+        color.multiplyScalar(2.2);
         colors[v * 3] = color.r;
         colors[v * 3 + 1] = color.g;
         colors[v * 3 + 2] = color.b;
@@ -109,7 +113,7 @@ export class ShootingStars {
 
   constructor(scene: THREE.Scene) {
     this.material = new THREE.MeshBasicMaterial({
-      color: 0xdff4ff,
+      color: new THREE.Color(0xdff4ff).multiplyScalar(2), // hot head, blooms at peak
       transparent: true,
       opacity: 0,
       blending: THREE.AdditiveBlending,

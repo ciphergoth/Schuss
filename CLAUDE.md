@@ -314,7 +314,19 @@ overhead as scenery, and the bare gates read as bollards).
 ## Tech stack
 
 - **TypeScript** + **Vite** — build tool and dev server
-- **Three.js** — 3D rendering (procedural low-poly art, no binary assets)
+- **Three.js** — 3D rendering. Stylized low-poly GEOMETRY is still the art
+  direction (readable silhouettes are how tricks get landed), but the old
+  "procedural low-poly art, no binary assets" austerity is TORN UP: richness
+  is welcome. Today that means an HDR post pipeline (render/post.ts: ACES
+  filmic tone mapping + selective UnrealBloom — glow-flavored materials carry
+  colors boosted past 1.0 via glowColor(), so neon, stars, fireworks, the
+  blazing aurora, and the airborne skis bloom while lit snow mostly stays
+  under the threshold) and runtime-generated textures (render/textures.ts:
+  seeded tileable DataTextures — snow gets a mottled color map with glint
+  pixels plus a fine bump map, on world-space UVs so the grain tiles in
+  meters across chunk seams). Binary assets are PERMITTED when they earn
+  their keep (none committed yet — prefer generated where quality allows;
+  keep everything out of src/sim/, which stays pure and asset-free).
 - **Vitest** — simulation tests
 - **pnpm** via **devenv/direnv** for the development environment
 
@@ -344,6 +356,9 @@ src/
 │   │                    disposed as you ski
 │   ├── skierView.ts   - Articulated skier model (posable legs/torso)
 │   ├── fx.ts          - Particles (spray/sparks/fireworks), auras, flow trail
+│   ├── post.ts        - HDR post pipeline: ACES tone mapping + bloom;
+│   │                    glowColor() marks materials as bloom-hot
+│   ├── textures.ts    - Seeded runtime-generated textures (snow map + bump)
 │   └── camera.ts      - Third-person follow camera, speed/flow FOV kick
 └── audio/             - Web Audio only, fully synthesized (no audio assets)
     ├── params.ts      - Pure state -> synth parameter curves (unit tested)
