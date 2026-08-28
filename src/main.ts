@@ -388,15 +388,25 @@ window.addEventListener('resize', () => {
 const clock = new THREE.Clock();
 let accumulator = 0;
 
-// ---- Headroom meter ---------------------------------------------------
+// ---- Headroom meter & adaptive resolution ------------------------------
 // The render layer spends real GPU budget now (post pipeline, textures), so
 // the frame rate stays on screen: average rAF rate plus the worst single
 // frame over a ~2s window, refreshed twice a second. Amber under 50 FPS,
 // red under 30 — the signal that a richness change overspent.
+//
+// The meter doesn't just report — it GOVERNS. Post-pipeline cost scales
+// with resolution, so when the average sags the render scale steps down
+// (phones smooth themselves out), and when it holds healthy for a while it
+// climbs back toward the device's native cap. A reduced scale shows in the
+// meter as "· 1.4x" so a soft image is never a mystery.
 const fpsText = document.getElementById('fps')!;
 const FPS_WINDOW = 2; // seconds of frames the meter averages over
+const SCALE_MAX = Math.min(window.devicePixelRatio, 2);
+const SCALE_MIN = 1.2; // below this the neon smears; better to drop effects
 const frameDurations: number[] = [];
 let fpsRefreshIn = 0;
+let renderScale = SCALE_MAX;
+let steadyFor = 0; // seconds of healthy readings spent below the cap
 function updateFpsMeter(dt: number): void {
   // A huge delta is a discontinuity (hidden tab, debugger pause), not a
   // slow frame: restart the window instead of reporting a phantom spike.
@@ -415,7 +425,24 @@ function updateFpsMeter(dt: number): void {
   fpsRefreshIn = 0.5;
   const avg = frameDurations.length / sum;
   const worst = Math.max(...frameDurations) * 1000;
-  fpsText.textContent = `${Math.round(avg)} FPS · ${Math.ceil(worst)}ms`;
+  if (avg < 45 && renderScale > SCALE_MIN) {
+    renderScale = Math.max(SCALE_MIN, renderScale - 0.2);
+    post.setPixelRatio(renderScale);
+    steadyFor = 0;
+  } else if (avg > 55 && renderScale < SCALE_MAX) {
+    // Climb back slowly: one step per 6 healthy seconds, so the scale
+    // never oscillates against the budget it just blew.
+    steadyFor += 0.5;
+    if (steadyFor >= 6) {
+      renderScale = Math.min(SCALE_MAX, renderScale + 0.2);
+      post.setPixelRatio(renderScale);
+      steadyFor = 0;
+    }
+  } else {
+    steadyFor = 0;
+  }
+  const scaleNote = renderScale < SCALE_MAX - 0.01 ? ` · ${renderScale.toFixed(1)}x` : '';
+  fpsText.textContent = `${Math.round(avg)} FPS · ${Math.ceil(worst)}ms${scaleNote}`;
   fpsText.style.color = avg < 30 ? '#ff6a5a' : avg < 50 ? '#ffd34d' : '';
 }
 

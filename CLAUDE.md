@@ -380,9 +380,11 @@ src/
 │   ├── skierView.ts   - Articulated skier model: posable legs/torso, helmet
 │   │                    + lit visor, poles, and a wind/spin-animated scarf
 │   ├── fx.ts          - Particles (spray/sparks/fireworks), auras, flow trail
-│   ├── post.ts        - HDR post pipeline: ACES tone mapping + bloom +
-│   │                    final grade (vignette, saturation); glowColor()
-│   │                    marks materials as bloom-hot
+│   ├── post.ts        - HDR post pipeline: bloom, then ONE combined output
+│   │                    pass (ACES tone map + sRGB + vignette/saturation
+│   │                    grade); glowColor() marks materials as bloom-hot;
+│   │                    setPixelRatio() rescales the chain (the adaptive-
+│   │                    resolution governor lives on the FPS meter)
 │   ├── textures.ts    - Seeded runtime-generated textures (snow map + bump)
 │   └── camera.ts      - Third-person follow camera, speed/flow FOV kick
 └── audio/             - Web Audio only, fully synthesized (no audio assets)
@@ -414,7 +416,11 @@ METER sits bottom-right (main.ts updateFpsMeter): 2s-window average FPS plus
 the worst single frame in ms, amber under 50 FPS, red under 30 — the render
 budget made visible, so a richness change that overspends (especially on
 phones, where the post pipeline's bandwidth is the ceiling) shows up
-immediately.
+immediately. The meter also GOVERNS: sustained sag under 45 FPS steps the
+render scale down (0.2 at a time, floor 1.2x — phones smooth themselves
+out), six healthy seconds step it back toward the device cap, and a
+reduced scale shows in the meter as "· 1.4x" so a soft image is never a
+mystery (post.setPixelRatio rescales the whole pass chain).
 
 ## Running
 
