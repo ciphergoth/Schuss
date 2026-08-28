@@ -298,10 +298,15 @@ celebration.
 The render layer
 draws the course as a ribbon clipped just past the bounce barrier, so the
 walls stay low and the world beyond shows: neon edge poles, a city skyline
-with beacon-topped towers, hot-air balloons, clouds below. Every section
+with beacon-topped towers whose windows burn in warm and cool pinpricks
+(one Points cloud per chunk — dozens of lights, a single draw call),
+hot-air balloons, clouds below. Every section
 also DRESSES its own stretch (chunks.addSectionProps — pure decoration
 on the banks, edges, and overhead, never on the racing floor, and the
-finish apron stays clean): snow-capped pines in the powder, carved
+finish apron stays clean): a CHAIRLIFT strung along one bank of the
+cruise (pylons, sagging cable, empty chairs — every pylon a pure
+function of chunk index, so spans meet exactly across chunk seams) with
+neon venue flags up the banks, snow-capped pines in the powder, carved
 crystal pillars up the canyon walls, tilted ice monoliths on the glacier
 (whose floor also tints blue with the GRIP channel), lit terrace brinks
 on the steps, gold studs tracing the inside of a sweeper's esses,

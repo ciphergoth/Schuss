@@ -202,6 +202,24 @@ export class ChunkRenderer {
     flatShading: true,
   });
   private amber = new THREE.MeshBasicMaterial({ color: glowColor(0xffa02e) });
+  // The chairlift: dark steel towers and cable, navy chairs.
+  private steel = new THREE.MeshStandardMaterial({
+    color: 0x46506a,
+    roughness: 0.55,
+    flatShading: true,
+  });
+  private chairSeat = new THREE.MeshStandardMaterial({
+    color: 0x2b3a6e,
+    roughness: 0.7,
+    flatShading: true,
+  });
+  // Lit tower windows: one Points cloud per chunk — dozens of warm
+  // pinpricks up the skyline for a single draw call.
+  private windowLights = new THREE.PointsMaterial({
+    size: 1.4,
+    vertexColors: true,
+    sizeAttenuation: true,
+  });
   private pennants = NEON_COLORS.map(
     (c) => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })
   );
@@ -284,7 +302,7 @@ export class ChunkRenderer {
     for (const [, group] of this.chunks) {
       this.scene.remove(group);
       group.traverse((obj) => {
-        if (obj instanceof THREE.Mesh) obj.geometry.dispose();
+        if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) obj.geometry.dispose();
       });
     }
     this.chunks.clear();
@@ -303,7 +321,7 @@ export class ChunkRenderer {
       if (i < lo || i > hi) {
         this.scene.remove(group);
         group.traverse((obj) => {
-          if (obj instanceof THREE.Mesh) obj.geometry.dispose();
+          if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) obj.geometry.dispose();
         });
         for (const p of this.terrain.pickupsForChunk(i)) this.pickupMeshes.delete(p.id);
         for (const b of this.terrain.bonusesForChunk(i)) this.pickupMeshes.delete(b.id);
@@ -673,6 +691,11 @@ export class ChunkRenderer {
     // plus hot-air balloons drifting beside the track and clouds below.
     const baseY = this.terrain.height(this.terrain.centerX(zMid), zMid);
     const towers = 4 + Math.floor(rng() * 4);
+    // Lit windows gather into ONE Points cloud per chunk: dozens of warm
+    // pinpricks up the dark towers — a city that's inhabited, not a stage
+    // flat — for a single extra draw call.
+    const windowPos: number[] = [];
+    const windowCol: number[] = [];
     for (let t = 0; t < towers; t++) {
       const side = rng() < 0.5 ? -1 : 1;
       const w = 12 + rng() * 22;
@@ -688,6 +711,24 @@ export class ChunkRenderer {
         light.position.set(x, top + 1, z);
         group.add(light);
       }
+      // Windows scatter up the track-facing face; mostly warm gold, the
+      // odd office still burning cool blue.
+      const winCount = 2 + Math.floor(rng() * 7);
+      for (let wnd = 0; wnd < winCount; wnd++) {
+        windowPos.push(
+          x - side * (w / 2 + 0.4),
+          baseY - 130 + (0.2 + rng() * 0.75) * h,
+          z + (rng() - 0.5) * w * 0.7
+        );
+        const warm = rng() < 0.8;
+        windowCol.push(warm ? 1 : 0.65, 0.85, warm ? 0.55 : 1);
+      }
+    }
+    if (windowPos.length > 0) {
+      const winGeo = new THREE.BufferGeometry();
+      winGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(windowPos), 3));
+      winGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(windowCol), 3));
+      group.add(new THREE.Points(winGeo, this.windowLights));
     }
     if (rng() < 0.4) {
       const balloon = new THREE.Group();
@@ -1052,6 +1093,80 @@ export class ChunkRenderer {
             place(bar, z - k * 1.4, d, 0.3);
           }
         }
+      }
+    } else if (type === 'cruise') {
+      // The opening's dressing: a CHAIRLIFT strung along one bank — pylons,
+      // sagging cable, empty chairs over the snow — the mountain's own
+      // furniture. The lift side is fixed per course and every pylon is a
+      // pure function of chunk index, so chunk i finds chunk i+1's pylon
+      // and strings its own span; spans meet exactly across chunk seams.
+      const PYLON_H = 8;
+      const liftSide = hash2(this.terrain.seed, 7, 90011) < 0.5 ? -1 : 1;
+      const pylonTop = (i: number): THREE.Vector3 => {
+        const z = -i * CHUNK_LENGTH - CHUNK_LENGTH / 2;
+        const x = this.terrain.centerX(z) + liftSide * (this.terrain.channelHalfWidth(z) + 8);
+        return new THREE.Vector3(x, this.terrain.height(x, z) + PYLON_H, z);
+      };
+      const cruiseAt = (i: number): boolean => {
+        const zm = -i * CHUNK_LENGTH - CHUNK_LENGTH / 2;
+        return (
+          !this.terrain.finishApron(zm) &&
+          !this.terrain.pastFinish(zm) &&
+          this.terrain.sectionType(this.terrain.sectionIndexAt(zm)) === 'cruise'
+        );
+      };
+      const top = pylonTop(index);
+      const column = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.36, PYLON_H, 6), this.steel);
+      column.position.set(top.x, top.y - PYLON_H / 2, top.z);
+      column.castShadow = true;
+      group.add(column);
+      const crossarm = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.22, 0.3), this.steel);
+      crossarm.position.set(top.x, top.y - 0.25, top.z);
+      group.add(crossarm);
+      if (cruiseAt(index + 1)) {
+        const next = pylonTop(index + 1);
+        const span = next.clone().sub(top);
+        const cable = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.05, 0.05, span.length(), 4),
+          this.steel
+        );
+        cable.position.copy(top).addScaledVector(span, 0.5);
+        cable.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.clone().normalize());
+        group.add(cable);
+        // Chairs hang along the span, dipping with its sag.
+        for (const t of [0.25, 0.5, 0.75]) {
+          const at = top.clone().addScaledVector(span, t);
+          at.y -= Math.sin(t * Math.PI) * 0.7;
+          const chair = new THREE.Group();
+          const hanger = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.3, 4), this.steel);
+          hanger.position.y = -0.65;
+          chair.add(hanger);
+          const seat = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.09, 0.45), this.chairSeat);
+          seat.position.y = -1.3;
+          chair.add(seat);
+          const back = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 0.08), this.chairSeat);
+          back.position.set(0, -1.08, 0.22);
+          chair.add(back);
+          chair.position.copy(at);
+          group.add(chair);
+        }
+      }
+      // Venue flags up the banks: neon pennants on short masts, the start
+      // area dressed like the race it is.
+      for (let k = 0; k < 2; k++) {
+        if (rng() < 0.3) continue;
+        const z = zTop - 6 - rng() * (CHUNK_LENGTH - 12);
+        const side = k === 0 ? -1 : 1;
+        const d = side * (this.terrain.channelHalfWidth(z) + 2.5 + rng() * 3);
+        const mastH = 3.6 + rng() * 1.4;
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, mastH, 5), this.flagMast);
+        place(mast, z, d, mastH / 2);
+        const flag = new THREE.Mesh(
+          new THREE.PlaneGeometry(1.5, 0.75),
+          this.pennants[Math.floor(rng() * this.pennants.length)]!
+        );
+        // Flown inward from the mast top, facing up/down the track.
+        place(flag, z, d - side * 0.85, mastH - 0.42);
       }
     } else if (type === 'bowl' && rng() < 0.5) {
       // A floodlight rig over the playground: a tall mast and a soft beam
