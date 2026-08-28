@@ -711,15 +711,21 @@ export class ChunkRenderer {
         light.position.set(x, top + 1, z);
         group.add(light);
       }
-      // Windows scatter up the track-facing face; mostly warm gold, the
-      // odd office still burning cool blue.
+      // Windows scatter over the faces the PLAY CAMERA actually sees: the
+      // camera rides behind the skier looking down-track, so a tower ahead
+      // shows its UPHILL (+z) face head-on and its inner (track-side) face
+      // obliquely — never the far side. Mostly warm gold, the odd office
+      // still burning cool blue.
       const winCount = 2 + Math.floor(rng() * 7);
       for (let wnd = 0; wnd < winCount; wnd++) {
-        windowPos.push(
-          x - side * (w / 2 + 0.4),
-          baseY - 130 + (0.2 + rng() * 0.75) * h,
-          z + (rng() - 0.5) * w * 0.7
-        );
+        const y = baseY - 130 + (0.2 + rng() * 0.75) * h;
+        if (rng() < 0.6) {
+          // The uphill face: seen square-on down the whole approach.
+          windowPos.push(x + (rng() - 0.5) * w * 0.7, y, z + w / 2 + 0.4);
+        } else {
+          // The inner face: catches the eye as the tower slides past.
+          windowPos.push(x - side * (w / 2 + 0.4), y, z + (rng() - 0.5) * w * 0.7);
+        }
         const warm = rng() < 0.8;
         windowCol.push(warm ? 1 : 0.65, 0.85, warm ? 0.55 : 1);
       }
