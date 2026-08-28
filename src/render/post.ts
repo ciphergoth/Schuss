@@ -3,6 +3,36 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+// The finishing grade, applied AFTER tone mapping (sRGB domain, where
+// saturation and vignette behave intuitively): a whisper of saturation so
+// the palette zones pop, and a gentle corner vignette pulling the eye to
+// the track. Cheap — pure math on pixels already shaded.
+const GradeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position.xy, 0.0, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      float luma = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      c.rgb = mix(vec3(luma), c.rgb, 1.07);
+      float d = length((vUv - 0.5) * 2.0); // 0 center, ~1.41 corners
+      c.rgb *= 1.0 - 0.28 * smoothstep(0.72, 1.5, d);
+      gl_FragColor = c;
+    }
+  `,
+};
 
 // The HDR post pipeline: the scene renders linear into a half-float target,
 // bloom skims off everything brighter than a screen white, and the OutputPass
@@ -56,6 +86,7 @@ export function createPost(
   );
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
+  composer.addPass(new ShaderPass(GradeShader)); // last: grades the tone-mapped image
 
   return {
     render: () => composer.render(),
