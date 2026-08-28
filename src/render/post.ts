@@ -37,7 +37,16 @@ export function createPost(
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15; // ACES darkens mids; lift back to taste
 
-  const composer = new EffectComposer(renderer);
+  // The composer's default target has no MSAA, which would silently drop the
+  // canvas's antialiasing the moment rendering moved off it — jaggies on
+  // every low-poly edge. Hand it a multisampled half-float target instead
+  // (cheap on tile-based mobile GPUs, where MSAA resolves in-tile).
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const target = new THREE.WebGLRenderTarget(size.x, size.y, {
+    type: THREE.HalfFloatType,
+    samples: 4,
+  });
+  const composer = new EffectComposer(renderer, target);
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
@@ -50,6 +59,8 @@ export function createPost(
 
   return {
     render: () => composer.render(),
+    // CSS sizes, like renderer.setSize: the composer applies the renderer's
+    // pixel ratio itself (custom target or not).
     setSize: (width: number, height: number) => composer.setSize(width, height),
   };
 }
