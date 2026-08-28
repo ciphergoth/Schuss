@@ -233,8 +233,65 @@ export function createScene(): SceneSetup {
   // The palette owns the mood: sky, fog, and lights cross-fade between color
   // zones as the run descends (see palette.ts). Start in dusk.
   const sky = new THREE.Color(0x3d4490);
-  scene.background = sky;
+  scene.background = sky; // the fallback behind the dome's rim
   scene.fog = new THREE.Fog(sky, 110, 520);
+
+  // THE SKY DOME: the top third of every frame used to be scene.background —
+  // one flat color. This sphere rides with the skier and paints a vertical
+  // gradient from a deep zenith down to a glowing horizon band (warmed by
+  // the key light's quarter of the sky), falling to a darker under-color
+  // below the course's floating edge. All four colors are re-derived every
+  // frame from the SAME palette blend that drives fog and lights, so each
+  // zone keeps its identity and gains depth — and the grotto dims the dome
+  // exactly as it dims everything else.
+  const domeUniforms = {
+    zenith: { value: new THREE.Color() },
+    horizon: { value: new THREE.Color() },
+    under: { value: new THREE.Color() },
+    glow: { value: new THREE.Color() },
+    glowStrength: { value: 0 },
+    // The low key light's azimuth (sun sits at +40x, -12z of the skier).
+    sunDir: { value: new THREE.Vector2(40, -12).normalize() },
+  };
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(700, 32, 20),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false,
+      uniforms: domeUniforms,
+      vertexShader: /* glsl */ `
+        varying vec3 vDir;
+        void main() {
+          vDir = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        varying vec3 vDir;
+        uniform vec3 zenith;
+        uniform vec3 horizon;
+        uniform vec3 under;
+        uniform vec3 glow;
+        uniform float glowStrength;
+        uniform vec2 sunDir;
+        void main() {
+          vec3 d = normalize(vDir);
+          vec3 sky = d.y >= 0.0
+            ? mix(horizon, zenith, pow(smoothstep(0.0, 0.42, d.y), 0.8))
+            : mix(horizon, under, smoothstep(0.0, -0.4, d.y));
+          // The key light's quarter of the horizon carries a warm glow band.
+          float az = max(dot(normalize(d.xz), sunDir), 0.0);
+          float band = exp(-abs(d.y - 0.02) * 8.0);
+          sky += glow * (glowStrength * pow(az, 6.0) * band);
+          gl_FragColor = vec4(sky, 1.0);
+        }
+      `,
+    })
+  );
+  dome.frustumCulled = false;
+  dome.renderOrder = -10; // painted first, behind everything
+  scene.add(dome);
 
   const hemi = new THREE.HemisphereLight(0x93a2ff, 0x2c3260, 0.95);
   scene.add(hemi);
@@ -314,6 +371,16 @@ export function createScene(): SceneSetup {
     hemi.intensity = blended.hemiIntensity * (1 - 0.55 * cave);
     sun.color.copy(blended.sun);
     sun.intensity = blended.sunIntensity * (1 - 0.85 * cave);
+    // The dome re-derives its gradient from the (cave-dimmed) sky: deep
+    // overhead, warmed toward the key light at the horizon, darker below
+    // the floating course's edge. The grotto flattens the gradient too.
+    dome.position.set(x, y, z);
+    domeUniforms.zenith.value.copy(sky).multiplyScalar(0.52);
+    domeUniforms.horizon.value.copy(sky).lerp(blended.sun, 0.32).multiplyScalar(1.1);
+    if (cave > 0) domeUniforms.horizon.value.lerp(sky, cave);
+    domeUniforms.under.value.copy(sky).multiplyScalar(0.4);
+    domeUniforms.glow.value.copy(blended.sun);
+    domeUniforms.glowStrength.value = 0.35 * blended.sunIntensity * (1 - cave);
     // A jackpot briefly blazes the aurora wherever the palette left it —
     // the sky celebrating with you — and the grotto's roof hides all of it.
     const fu = (time - flareAt) / FLARE_DECAY;

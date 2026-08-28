@@ -367,7 +367,8 @@ src/
 │   └── sim.ts         - World state, fixed SIM_DT stepping, flow/score,
 │                        SimEvents (nearMiss/landing/tumble) for fx + audio
 ├── render/            - Three.js only
-│   ├── scene.ts       - Lights, dynamic sky/fog, aurora, shadow-casting sun
+│   ├── scene.ts       - Lights, gradient sky dome, dynamic fog, aurora,
+│   │                    shadow-casting sun
 │   ├── palette.ts     - Color zones: palettes cross-fading every 450m of course
 │   ├── chunks.ts      - Track ribbon, bollards, section-boundary gates, obstacles,
 │   │                    pickups, star beams, skyline/clouds; created and
@@ -375,8 +376,9 @@ src/
 │   ├── skierView.ts   - Articulated skier model: posable legs/torso, helmet
 │   │                    + lit visor, poles, and a wind/spin-animated scarf
 │   ├── fx.ts          - Particles (spray/sparks/fireworks), auras, flow trail
-│   ├── post.ts        - HDR post pipeline: ACES tone mapping + bloom;
-│   │                    glowColor() marks materials as bloom-hot
+│   ├── post.ts        - HDR post pipeline: ACES tone mapping + bloom +
+│   │                    final grade (vignette, saturation); glowColor()
+│   │                    marks materials as bloom-hot
 │   ├── textures.ts    - Seeded runtime-generated textures (snow map + bump)
 │   └── camera.ts      - Third-person follow camera, speed/flow FOV kick
 └── audio/             - Web Audio only, fully synthesized (no audio assets)
