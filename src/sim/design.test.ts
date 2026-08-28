@@ -137,6 +137,57 @@ describe('the Grand Tour design', () => {
     expect(last.stars).toHaveLength(0);
   });
 
+  it('the rhythm rule: every deal has a reachable, fitting venue; deserts start clean', () => {
+    // A contract pays on the NEXT trick, so a star's real cash venue is the
+    // literal NEXT LIP — these assertions are the law that keeps a deal
+    // from being armed with nowhere to land it.
+    const sorted = [...design.jumps].sort((a, b) => a.at - b.at);
+    const bigAir = (j: (typeof sorted)[number]): boolean =>
+      j.kind === 'XL' || (j.kind === 'L' && j.stepDown === true);
+    const midAir = (j: (typeof sorted)[number]): boolean =>
+      j.kind === 'XL' || j.kind === 'L' || j.stepDown === true;
+    for (let i = 0; i < sorted.length; i++) {
+      const j = sorted[i]!;
+      if (j.stars.length === 0) continue;
+      const next = sorted[i + 1]!;
+      expect(next).toBeDefined();
+      const gap = next.at - j.at;
+      if (j.pair === 'lead') {
+        // The double IS its own venue: grab on the lead, deliver on the
+        // follow — the one designed sub-100m cash.
+        expect(next.pair).toBe('follow');
+      } else if (j.hip) {
+        // The hip's deal rides the quilt to the big L: the course's single
+        // long anticipation, and even it stays bounded.
+        expect(gap).toBeLessThanOrEqual(420);
+      } else {
+        // Everyone else: far enough to land and recharge, close enough
+        // that the deal never drags through a jumpless act.
+        expect(gap).toBeGreaterThanOrEqual(100);
+        expect(gap).toBeLessThanOrEqual(260);
+      }
+      // The venue's air fits the demand: no deal the next lip can't hold.
+      for (const s of j.stars) {
+        if (s.demand === 'flip2' || s.demand === 'parallel') {
+          expect(bigAir(next)).toBe(true);
+        } else if (s.demand === 'spin2' || s.demand === 'mix') {
+          expect(midAir(next)).toBe(true);
+        } else {
+          expect(next.kind).not.toBe('S'); // singles still need real air
+        }
+      }
+    }
+    // The finale answers to the BURNER, not the cruiser: from the last
+    // starred lip, the worst-case measured flight (~175m off a boosted XL)
+    // must land short of the victory ramp, so every pace gets its cash
+    // attempt before the line locks the score.
+    const starred = sorted.filter((j) => j.stars.length > 0);
+    const lastStarred = starred[starred.length - 1]!;
+    const victory = sorted[sorted.length - 1]!;
+    const victoryRamp = t.jumpForChunk(Math.floor(victory.at / CHUNK_LENGTH))!.rampLength;
+    expect(victory.at - victoryRamp).toBeGreaterThanOrEqual(lastStarred.at + 175);
+  });
+
   it('obstacles never ambush: off ramps, landings, hazard chunks, and the dark', () => {
     for (const o of design.obstacles) {
       expect(onFalls(o.at)).toBe(false);

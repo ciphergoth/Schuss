@@ -61,7 +61,20 @@ star hangs up to ~50m downrange and you fly its whole arc before touchdown,
 so a follower only a chunk or two ahead gets overflown and, near the line,
 the contract could never cash. A star needs a kicker at least STAR_CASH_GAP
 (~100m) downrange to be a real cash venue, not merely SOME lip before the
-finish (terrain.hasJumpDownrange gates bonusesForChunk). And a
+finish (terrain.hasJumpDownrange gates bonusesForChunk). On THE course the
+authored loadouts answer to the stricter RHYTHM RULE (design.test.ts
+"rhythm rule"): a star's venue is the literal NEXT lip, 100-260m downrange
+— far enough to land and recharge, close enough that the deal never drags
+through a jumpless act — with two designed exceptions (the double's follow
+IS its lead's venue, and the hip's deal rides the quilt ~405m to the big
+L, the course's one long anticipation); the venue's air must HOLD the
+demand (flip2/parallel cash only into an XL or step-down L, spin2/mix need
+L-class air, singles any popped M); deserts (the needle, the canyon, the
+line) are entered contract-free; and the finale is measured against the
+BURNER, not the cruiser — the send's worst-case ~175m flight lands short
+of the victory ramp, so every pace gets its cash attempt before the line
+(an earlier layout let fast riders overfly the last lip entirely, arming
+a deal that could never be met). And a
 trick that CASHES a contract is never docked as a repeat: the star DEMANDED
 that exact showpiece, so obeying it can't earn the AGAIN? dock (sim.ts —
 a paid contract clears the repeat flag; a missed one still docks a genuine
