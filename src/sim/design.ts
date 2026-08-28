@@ -221,13 +221,14 @@ export const GRAND_TOUR: CourseDesign = {
   line: [
     [0, 0],
     [190, 0],
-    [470, 6],
-    [550, -9],
-    [624, -8],
-    [674, -8],
-    [745, 0],
-    [900, 0],
-    [1400, 0],
+    [420, 4],
+    [455, 6],
+    [520, -3],
+    [585, -9],
+    [650, -8],
+    [776, -8],
+    [850, 0],
+    [1374, 0],
     [1859, 0],
     [1950, 4],
     [2299, -3],
@@ -244,71 +245,93 @@ export const GRAND_TOUR: CourseDesign = {
   cascadesAt: 2140,
   grottoAt: 1660,
 
-  // Thirteen lips, front-loaded where play is the theme. Chunk math: each
-  // lip's in-chunk offset must be >= its ramp length (the heightfield scans
-  // one chunk of approach), and only the rhythm pair may share adjacent
-  // chunks. Demands sequence gold's whole pool before repeating; both
-  // magenta 'parallel's hang off the two XL booters (the only lips with
-  // air for it); the LAST lip carries nothing — no next kicker, no deal.
-  // Every lip placement below was tuned against the reference rider
-  // (`pnpm ride`): the double's spacing fits the REAL landing (a popped M
-  // at bowl pace flies ~63m, not the generator's cruise-pace 50), the bowl
-  // exits through a flowing double-into-booter line, the glacier's one
-  // showpiece is the hip (an L there flew 127m and landed on whatever
-  // followed), and the finale XL's popped flight lands well short of the
-  // victory kicker instead of on its lip.
+  // Fourteen lips under THE RHYTHM RULE. A star's contract pays on the
+  // NEXT trick, so its real cash venue is the literal NEXT LIP — and the
+  // first plan kept getting that backwards (flip demands hung ON the soft
+  // stepdown instead of on the lip whose venue it is; the send's deal had
+  // no venue a fast rider could reach at all). The law now:
+  //   1. Every starred lip's next lip sits 100-250m downrange — far enough
+  //      to land and recharge, close enough that the deal stays alive in
+  //      your head. One designed exception: the hip's deal rides the whole
+  //      quilt (405m of hush) to the L — the course's single long
+  //      anticipation, placed in its quietest act.
+  //   2. The venue's air fits the demand: flip2/parallel need an XL or a
+  //      step-down L to cash; spin2/mix need L-class air; singles cash off
+  //      any popped M.
+  //   3. A desert is entered CLEAN: the last lip before the needle, the
+  //      canyon, and the line carries no stars, so no contract ever drags
+  //      through a jumpless act (the old plan hung a x5 on the bowl's exit
+  //      and let it die 750m later in the narrows).
+  //   4. The finale is measured against the BURNER, not the cruiser: the
+  //      send at 3232 with the victory L at 3439 leaves the worst-case
+  //      175m flight landing short of the victory ramp (base 3420), so
+  //      every pace still gets its cash attempt before the line.
+  // Chunk math: each lip's in-chunk offset must be >= its ramp length (the
+  // heightfield scans one chunk of approach). Demands sequence gold's whole
+  // pool before repeating. Every placement below is tuned against the
+  // reference riders (`pnpm ride`): the double's spacing fits the REAL
+  // popped-M landing (~60m at bowl pace), and no flight lands on the
+  // cascades' faces (which is why the quilt keeps exactly one lip, after
+  // the falls).
   jumps: [
-    { at: 190, x: 0, kind: 'M', stars: [{ mult: 3, demand: 'front' }] }, // the tutorial
+    { at: 190, x: 0, kind: 'M', stars: [] }, // the tutorial: learn the lip first
     { at: 335, x: -4, kind: 'S', stars: [] }, // pop practice, pure air
-    { at: 455, x: 6, kind: 'M', stars: [{ mult: 3, demand: 'spinL' }] },
     {
-      at: 550,
-      x: -9,
-      kind: 'L',
-      stepDown: true, // float and a soft catch for the first flip demand
+      at: 455,
+      x: 6,
+      kind: 'M',
       stars: [
-        { mult: 3, demand: 'back' },
-        { mult: 5, demand: 'flip2' },
+        { mult: 3, demand: 'front' },
+        { mult: 5, demand: 'parallel' },
       ],
-    },
-    { at: 624, x: -8, kind: 'M', pair: 'lead', stars: [] }, // the double: land at the...
-    { at: 700, x: -8, kind: 'M', pair: 'follow', stars: [{ mult: 3, demand: 'spinR' }] }, // ...ramp base, go again
-    { at: 745, x: 0, kind: 'XL', stars: [{ mult: 5, demand: 'parallel' }] }, // the follow's flight
-    // sets you down BESIDE this booter's ramp: cut in and send the bowl's exit
-    { at: 1494, x: 0, kind: 'M', stars: [{ mult: 3, demand: 'spin2' }] }, // one lip in the flow
-    { at: 1894, x: 4, kind: 'M', hip: -1, stars: [{ mult: 3, demand: 'spinL' }] }, // slung off the ice,
-    // the glacier's single showpiece (anything bigger here flew 120m+)
+    }, // the fairground opens the book: both deals cash on the booter's air
+    { at: 585, x: -9, kind: 'XL', stars: [{ mult: 3, demand: 'back' }] }, // THE BOOTER:
+    // the venue with air for anything, carrying its own deal into the double
+    { at: 700, x: -8, kind: 'M', pair: 'lead', stars: [{ mult: 3, demand: 'spinL' }] }, // the
+    // double: grab on the first hit, land at the follow's ramp base...
+    { at: 776, x: -8, kind: 'M', pair: 'follow', stars: [] }, // ...deliver on the second.
+    // Clean into the needle: the gates are its whole economy
+    { at: 1374, x: 0, kind: 'M', stars: [{ mult: 3, demand: 'spinR' }] }, // out of the
+    // waterfall, into the flow: deal and venue two beats apart
+    { at: 1494, x: 0, kind: 'M', stars: [] }, // the venue; clean into the grotto's dark
+    { at: 1894, x: 4, kind: 'M', hip: -1, stars: [{ mult: 3, demand: 'spin2' }] }, // slung off
+    // the ice — the deal rides the quilt to the big L (the one long carry)
     {
       at: 2299,
       x: -3,
       kind: 'L',
       stars: [
-        { mult: 3, demand: 'front' },
-        { mult: 5, demand: 'mix' },
+        { mult: 3, demand: 'spinL' },
+        { mult: 5, demand: 'flip2' },
       ],
-    }, // the quilt's one big hit
+    }, // the quilt's big hit: both deals cash in the organ's soft catch
+    { at: 2539, x: 0, kind: 'L', stepDown: true, stars: [{ mult: 3, demand: 'back' }] }, // the
+    // organ's step-down: float for the flip2, its own deal two terraces on
+    { at: 2660, x: 0, kind: 'M', stars: [] }, // the venue; clean into the canyon
     {
-      at: 3265,
+      at: 3232,
       x: 0,
       kind: 'XL',
       stars: [
         { mult: 3, demand: 'spin2' },
-        { mult: 5, demand: 'parallel' },
+        { mult: 5, demand: 'mix' },
       ],
-    }, // THE SEND
-    { at: 3420, x: 0, kind: 'L', stars: [] }, // the victory hit; the line locks the score
+    }, // THE SEND: demands the victory L's air can actually hold
+    { at: 3439, x: 0, kind: 'L', stars: [] }, // the victory hit; the line locks the score
   ],
 
   // Six obstacles, each a deliberate cue: a gate-pair to weave in the
   // drop-in, barrels walling the wrong side of the double's line, one
   // crystal pinching the XL approach honest.
   obstacles: [
-    { at: 250, x: 4, kind: 'crystal', radius: 0.6 },
-    { at: 250, x: -6, kind: 'bollard', radius: 0.7 },
-    { at: 285, x: -1, kind: 'crystal', radius: 0.55 }, // clear of the S's approach
+    // The drop-in weave, between the S's landing and the fairground's first
+    // ramp (and out of the jelly's chunk).
+    { at: 370, x: 4, kind: 'crystal', radius: 0.6 },
+    { at: 378, x: -6, kind: 'bollard', radius: 0.7 },
+    { at: 395, x: -1, kind: 'crystal', radius: 0.55 },
 
-    { at: 600, x: 12, kind: 'bollard', radius: 0.75 },
-    { at: 608, x: 9, kind: 'bollard', radius: 0.7 },
+    { at: 600, x: 12, kind: 'bollard', radius: 0.75 }, // walling the wrong side
+    { at: 608, x: 9, kind: 'bollard', radius: 0.7 }, //  of the booter's line
     { at: 688, x: 13, kind: 'crystal', radius: 0.65 },
   ],
 
@@ -336,13 +359,13 @@ export const GRAND_TOUR: CourseDesign = {
     { at: 2180, x: 0, n: 3 },
     { at: 2230, x: 0, n: 3 },
     { at: 2447, x: 0, n: 3 },
-    { at: 2547, x: -4, n: 3 },
-    { at: 2697, x: 4, n: 3 },
+    { at: 2620, x: -4, n: 3 }, // between the step-down's landing and the venue's ramp
+    { at: 2730, x: 4, n: 3 },
     { at: 2842, x: 7, n: 3 },
     { at: 2927, x: -7, n: 3 },
     { at: 3097, x: -7, n: 3 },
-    { at: 3240, x: 0, n: 5 },
-    { at: 3460, x: 3, n: 3 },
+    { at: 3155, x: 0, n: 5 }, // the canyon-exit speed line, before the send's ramp
+    { at: 3180, x: 0, n: 4 },
   ],
 
   // Seven creatures, one act at a time, each in its home biome and each
@@ -352,12 +375,12 @@ export const GRAND_TOUR: CourseDesign = {
   // deeper in, and the tumblers work the organ.
   hazards: [
     { at: 401, kind: 'jelly', amp: 8, period: 12, phase: 0.5, aux: 0.4 },
-    { at: 1340, kind: 'yeti', amp: 8, period: 9, phase: 0.2, aux: 0.5 },
+    { at: 1440, kind: 'yeti', amp: 8, period: 9, phase: 0.2, aux: 0.5 }, // between the flow lips
     { at: 1790, kind: 'drone', amp: 11, period: 9, phase: 1.2, aux: 0.3 },
     { at: 2065, kind: 'wyrm', amp: 12, period: 11, phase: 2.1, aux: 0.5 },
     { at: 2380, kind: 'yeti', amp: 9, period: 9, phase: 3.4, aux: 0.8 },
-    { at: 2530, kind: 'tumbler', amp: 4, period: 8, phase: 0.15, aux: 0.35 },
-    { at: 2690, kind: 'tumbler', amp: 5, period: 8, phase: 0.65, aux: 0.7 },
+    { at: 2445, kind: 'tumbler', amp: 4, period: 8, phase: 0.15, aux: 0.35 }, // above the step-down
+    { at: 2745, kind: 'tumbler', amp: 5, period: 8, phase: 0.65, aux: 0.7 }, // below the venue
   ],
 
   // Ten galleries, one at every landing worth playing to — including the
@@ -367,14 +390,15 @@ export const GRAND_TOUR: CourseDesign = {
   // actually touches down (cruiser AND popper), not where a designer
   // guessed a landing might be.
   galleries: [
-    { at: 225, side: -1 },
-    { at: 515, side: 1 },
-    { at: 740, side: -1 },
-    { at: 800, side: 1 },
-    { at: 1530, side: 1 },
-    { at: 1945, side: -1 },
-    { at: 2380, side: 1 },
+    { at: 238, side: -1 }, // the tutorial's landing: the first cheer teaches the mechanic
+    { at: 520, side: 1 },
+    { at: 642, side: -1 }, // the booter's landing
+    { at: 818, side: 1 }, // the follow's landing, waving you into the needle
+    { at: 1422, side: 1 },
+    { at: 1542, side: -1 },
+    { at: 1996, side: -1 }, // where cruiser and popper hip flights both come down
+    { at: 2390, side: 1 },
     { at: 2600, side: -1 },
-    { at: 3395, side: -1 },
+    { at: 3340, side: -1 }, // the send's landing
   ],
 };
