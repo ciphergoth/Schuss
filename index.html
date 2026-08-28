@@ -250,6 +250,20 @@
           transform: scale(1);
         }
       }
+      /* Headroom meter: average rAF rate and worst frame over the last ~2s,
+         bottom-right where no other HUD element lives. Quietly present —
+         the render budget made visible, not a score. */
+      #fps {
+        position: fixed;
+        right: 16px;
+        bottom: 10px;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 1px 3px rgba(0, 0, 40, 0.6);
+        user-select: none;
+        pointer-events: none;
+      }
       /* Stacking order of the full-screen overlays: the finish ceremony sits
          below the pause guide, so pausing during the ceremony always brings
          the pause screen frontmost. */
@@ -543,6 +557,7 @@
     <div id="progress"></div>
     <div id="overlay">Wipeout!</div>
     <div id="trick"></div>
+    <div id="fps"></div>
     <div id="countdown"></div>
     <div id="coursecall"></div>
     <div id="pause">
