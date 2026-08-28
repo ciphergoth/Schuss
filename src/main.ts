@@ -383,6 +383,37 @@ window.addEventListener('resize', () => {
 const clock = new THREE.Clock();
 let accumulator = 0;
 
+// ---- Headroom meter ---------------------------------------------------
+// The render layer spends real GPU budget now (post pipeline, textures), so
+// the frame rate stays on screen: average rAF rate plus the worst single
+// frame over a ~2s window, refreshed twice a second. Amber under 50 FPS,
+// red under 30 — the signal that a richness change overspent.
+const fpsText = document.getElementById('fps')!;
+const FPS_WINDOW = 2; // seconds of frames the meter averages over
+const frameDurations: number[] = [];
+let fpsRefreshIn = 0;
+function updateFpsMeter(dt: number): void {
+  // A huge delta is a discontinuity (hidden tab, debugger pause), not a
+  // slow frame: restart the window instead of reporting a phantom spike.
+  if (dt <= 0 || dt > 0.5) {
+    frameDurations.length = 0;
+    return;
+  }
+  frameDurations.push(dt);
+  let sum = 0;
+  for (const d of frameDurations) sum += d;
+  while (frameDurations.length > 1 && sum - frameDurations[0]! >= FPS_WINDOW) {
+    sum -= frameDurations.shift()!;
+  }
+  fpsRefreshIn -= dt;
+  if (fpsRefreshIn > 0) return;
+  fpsRefreshIn = 0.5;
+  const avg = frameDurations.length / sum;
+  const worst = Math.max(...frameDurations) * 1000;
+  fpsText.textContent = `${Math.round(avg)} FPS · ${Math.ceil(worst)}ms`;
+  fpsText.style.color = avg < 30 ? '#ff6a5a' : avg < 50 ? '#ffd34d' : '';
+}
+
 function renderFrame(delta: number, events: SimEvent[] = []): void {
   // The sim owns the jump charge; inject it so the crouch pose and the
   // charge-ring fx read the real meter.
@@ -586,7 +617,9 @@ window.__game.step = (seconds: number) => {
 };
 
 function frame(): void {
-  const delta = Math.min(clock.getDelta(), 0.25);
+  const rawDelta = clock.getDelta();
+  updateFpsMeter(rawDelta); // measured on every path — paused frames render too
+  const delta = Math.min(rawDelta, 0.25);
   if (paused) {
     // Keep drawing (resizes still work) but freeze the world; the clock keeps
     // draining so resuming doesn't fast-forward.

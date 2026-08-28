@@ -384,7 +384,12 @@ idle self-play and synthetic debug events can never set it. `?debug` adds an
 on-device input readout (timer-driven, so it survives a wedged rAF loop):
 the orient/touch Δ columns are heartbeats — a Δ stuck at 0 while you tilt or
 tap is the moment those events stop reaching the page (sensor vs touch vs
-both), for chasing the mobile "controls go dead" bug.
+both), for chasing the mobile "controls go dead" bug. An always-on HEADROOM
+METER sits bottom-right (main.ts updateFpsMeter): 2s-window average FPS plus
+the worst single frame in ms, amber under 50 FPS, red under 30 — the render
+budget made visible, so a richness change that overspends (especially on
+phones, where the post pipeline's bandwidth is the ceiling) shows up
+immediately.
 
 ## Running
 
