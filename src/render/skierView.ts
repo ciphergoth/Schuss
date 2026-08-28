@@ -25,10 +25,16 @@ export interface SkierView {
   arms: [THREE.Group, THREE.Group]; // shoulder pivots [left, right] — the grab reaches
   pose: { tuck: number; plow: number; glow: number; grab: number }; // smoothed render state
   glowMats: { mat: THREE.MeshStandardMaterial; intensity: number }[];
+  // The scarf: a chain of lagged segments off the neck, animated by wind
+  // (speed) and whipped by rotation — spin direction made readable in cloth.
+  scarf: { segments: THREE.Group[]; phase: number; lastSpin: number };
 }
 
-function limb(width: number, length: number, material: THREE.Material): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, length, width), material);
+// Limbs are tapered hexagonal prisms, not boxes: flat-shaded so the low-poly
+// facets stay, but the taper reads as a body instead of scaffolding.
+function limb(topR: number, botR: number, length: number, material: THREE.Material): THREE.Mesh {
+  const geo = new THREE.CylinderGeometry(topR, botR, length, 6);
+  const mesh = new THREE.Mesh(geo, material);
   mesh.position.y = -length / 2;
   return mesh;
 }
@@ -36,30 +42,64 @@ function limb(width: number, length: number, material: THREE.Material): THREE.Me
 function buildLeg(side: -1 | 1, pants: THREE.Material): Leg {
   const hip = new THREE.Group();
   hip.position.set(side * HIP_X, 0, 0);
-  hip.add(limb(0.15, THIGH, pants));
+  hip.add(limb(0.085, 0.062, THIGH, pants));
   const knee = new THREE.Group();
   knee.position.y = -THIGH;
-  knee.add(limb(0.13, SHIN, pants));
+  knee.add(limb(0.06, 0.046, SHIN, pants));
   hip.add(knee);
   return { hip, knee };
 }
 
+const SCARF_SEGMENTS = 5;
+const SCARF_SEG_LEN = 0.16;
+
 export function createSkierView(scene: THREE.Scene): SkierView {
-  const jacket = new THREE.MeshStandardMaterial({ color: 0xd42a2a, roughness: 0.8 });
-  const pants = new THREE.MeshStandardMaterial({ color: 0x1c2a4a, roughness: 0.9 });
+  const jacket = new THREE.MeshStandardMaterial({
+    color: 0xd42a2a,
+    roughness: 0.8,
+    flatShading: true,
+  });
+  const pants = new THREE.MeshStandardMaterial({
+    color: 0x1c2a4a,
+    roughness: 0.9,
+    flatShading: true,
+  });
   const skin = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.9 });
   const skiMaterial = new THREE.MeshStandardMaterial({ color: 0x223a8f, roughness: 0.5 });
+  const helmet = new THREE.MeshStandardMaterial({
+    color: 0xeef2f8,
+    roughness: 0.35,
+    flatShading: true,
+  });
+  const goggleBand = new THREE.MeshStandardMaterial({ color: 0x131a2e, roughness: 0.6 });
+  // The lens carries a constant cyan ember — the face reads at dusk and in
+  // the grotto without waiting for the air glow.
+  const lens = new THREE.MeshStandardMaterial({
+    color: 0x0c2a3a,
+    emissive: new THREE.Color(0x2ee6ff),
+    emissiveIntensity: 0.7,
+    roughness: 0.25,
+  });
+  const pole = new THREE.MeshStandardMaterial({ color: 0x525c74, roughness: 0.4 });
+  const scarfMat = new THREE.MeshStandardMaterial({
+    color: 0xffd34d,
+    roughness: 0.8,
+    flatShading: true,
+  });
 
   // In real air the skier lights up from within — reading your own rotation
   // against a dark sky (or a fireworks barrage) is how tricks get landed,
   // so the figure must outshine everything behind it. The skis glow hottest:
-  // they're the needle you read the angle from.
+  // they're the needle you read the angle from; the gold scarf streams as a
+  // lit ribbon so the whip direction reads too.
   jacket.emissive = new THREE.Color(0xff6a4a);
   pants.emissive = new THREE.Color(0x4a7aff);
   skiMaterial.emissive = new THREE.Color(0x2ee6ff);
+  scarfMat.emissive = new THREE.Color(0xffd34d);
   const glowMats = [
     { mat: jacket, intensity: 0.55 },
     { mat: pants, intensity: 0.7 },
+    { mat: scarfMat, intensity: 0.8 },
     // Hot enough to cross the bloom threshold in the air: the skis get a
     // real halo, and they're the needle you read the rotation from.
     { mat: skiMaterial, intensity: 2.1 },
@@ -74,19 +114,74 @@ export function createSkierView(scene: THREE.Scene): SkierView {
   for (const leg of legs) pelvis.add(leg.hip);
 
   const torso = new THREE.Group();
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.55, 0.2), jacket);
+  // Chest: a tapered hexagonal prism — shoulders wider than the waist.
+  const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.145, 0.55, 6), jacket);
   chest.position.y = 0.28;
   torso.add(chest);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), skin);
+
+  // The head wears a helmet: face below, shell above, goggle band with a lit
+  // lens across the front (the model's forward is local +z — ski tips ahead).
+  const head = new THREE.Group();
   head.position.y = 0.68;
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.125, 12, 10), skin);
+  head.add(face);
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.148, 10, 8), helmet);
+  shell.position.y = 0.025;
+  shell.scale.y = 0.92;
+  head.add(shell);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.075, 0.03), goggleBand);
+  band.position.set(0, 0.015, 0.1);
+  head.add(band);
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.055, 0.02), lens);
+  visor.position.set(0, 0.015, 0.125);
+  head.add(visor);
   torso.add(head);
+
+  // The scarf roots at the neck and trails behind (-z): a chain of flattened
+  // segments, each pivoting at the tail of the one before. updateSkierView
+  // owns the animation; here they just hang.
+  const scarfSegments: THREE.Group[] = [];
+  let scarfParent: THREE.Object3D = torso;
+  for (let k = 0; k < SCARF_SEGMENTS; k++) {
+    const seg = new THREE.Group();
+    seg.position.set(0, k === 0 ? 0.58 : 0, k === 0 ? -0.1 : -SCARF_SEG_LEN);
+    const cloth = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12 - k * 0.008, 0.035, SCARF_SEG_LEN),
+      scarfMat
+    );
+    cloth.position.z = -SCARF_SEG_LEN / 2;
+    seg.add(cloth);
+    scarfParent.add(seg);
+    scarfParent = seg;
+    scarfSegments.push(seg);
+  }
+
   const arms: THREE.Group[] = [];
   for (const side of [-1, 1]) {
-    const arm = limb(0.09, 0.42, jacket);
+    const arm = limb(0.055, 0.042, 0.42, jacket);
     const shoulder = new THREE.Group();
     shoulder.position.set(side * 0.21, 0.5, 0);
-    shoulder.rotation.z = side * -0.45;
+    // A slight inward hang: hands ahead of the hips, poles clearly TWO —
+    // the old 0.45 angle converged both hands (and poles) at the sternum.
+    shoulder.rotation.z = side * -0.22;
     shoulder.add(arm);
+    // The hand: a glove at the arm's end holding a pole, tilted so the tip
+    // trails behind the boots — the silhouette every skier is missing
+    // without one.
+    const hand = new THREE.Group();
+    hand.position.y = -0.44;
+    const glove = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.075, 0.075), pants);
+    hand.add(glove);
+    const poleShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.02, 0.95, 5), pole);
+    poleShaft.position.y = -0.4;
+    const basket = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.055, 6), pole);
+    basket.position.y = -0.78;
+    const poleTilt = new THREE.Group();
+    poleTilt.rotation.x = 0.5; // tip back toward -z
+    poleTilt.add(poleShaft);
+    poleTilt.add(basket);
+    hand.add(poleTilt);
+    shoulder.add(hand);
     torso.add(shoulder);
     arms.push(shoulder);
   }
@@ -95,6 +190,15 @@ export function createSkierView(scene: THREE.Scene): SkierView {
   const buildSki = (side: -1 | 1): THREE.Mesh => {
     const ski = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 1.8), skiMaterial);
     ski.position.set(side * (HIP_X + 0.07), 0.03, 0.2);
+    // Upturned tip: the small angled shovel that makes a plank read as a ski.
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 0.24), skiMaterial);
+    tip.position.set(0, 0.045, 0.98);
+    tip.rotation.x = -0.42;
+    ski.add(tip);
+    // Boot: the dark block that ties leg to plank in silhouette.
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.3), pants);
+    boot.position.set(0, 0.09, 0.02);
+    ski.add(boot);
     group.add(ski);
     return ski;
   };
@@ -113,6 +217,7 @@ export function createSkierView(scene: THREE.Scene): SkierView {
     arms: [arms[0]!, arms[1]!],
     pose: { tuck: 0, plow: 0, glow: 0, grab: 0 },
     glowMats,
+    scarf: { segments: scarfSegments, phase: 0, lastSpin: 0 },
   };
 }
 
@@ -154,9 +259,9 @@ export function updateSkierView(
   // readable in silhouette against the sky.
   const grabTarget = state.airTime > 0.2 && state.tumbling === 0 && (input.boost ?? false) ? 1 : 0;
   pose.grab += (grabTarget - pose.grab) * k;
-  const [armL, armR] = view.arms; // base rotation.z: +0.45 left, -0.45 right
-  armL.rotation.z = 0.45 - 1.1 * pose.grab; // left arm throws out wide
-  armR.rotation.z = -0.45 + 0.25 * pose.grab; // right arm tucks in...
+  const [armL, armR] = view.arms; // base rotation.z: +0.22 left, -0.22 right
+  armL.rotation.z = 0.22 - 1.1 * pose.grab; // left arm throws out wide
+  armR.rotation.z = -0.22 + 0.25 * pose.grab; // right arm tucks in...
   armR.rotation.x = 1.25 * pose.grab; // ...and reaches down the ski line
 
   // A held jump charge sinks the skier into a preload crouch.
@@ -178,5 +283,22 @@ export function updateSkierView(
     const side = i === 0 ? -1 : 1;
     ski.position.x = side * skiX;
     ski.rotation.y = -side * 0.35 * pose.plow;
+  }
+
+  // The scarf: hangs at rest, streams straight back with speed, and WHIPS
+  // when the body rotates — spin rate feeds both the flutter tempo and its
+  // amplitude, so mid-trick the gold ribbon lashes in the turn's direction
+  // and reads against the sky. Pure render-side animation off sim state.
+  const scarf = view.scarf;
+  const spinRate = dt > 0 ? Math.min(12, Math.abs(state.spin - scarf.lastSpin) / dt) : 0;
+  scarf.lastSpin = state.spin;
+  const wind = Math.min(1, state.speed / 20); // streams properly by cruise pace
+  scarf.phase += dt * (3 + state.speed * 0.35 + spinRate * 1.6);
+  const flutter = 0.1 + 0.32 * wind + Math.min(0.55, spinRate * 0.09);
+  for (const [k, seg] of scarf.segments.entries()) {
+    // Base pitch: -1.15 (hanging down the back) easing to -0.1 (streaming).
+    const sway = 0.35 + k * 0.28; // the free end moves most
+    seg.rotation.x = -1.15 + 1.05 * wind + Math.sin(scarf.phase - k * 1.1) * flutter * sway;
+    seg.rotation.y = Math.sin(scarf.phase * 0.63 - k * 0.8) * flutter * sway * 0.55;
   }
 }

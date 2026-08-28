@@ -354,7 +354,8 @@ src/
 │   ├── chunks.ts      - Track ribbon, bollards, section-boundary gates, obstacles,
 │   │                    pickups, star beams, skyline/clouds; created and
 │   │                    disposed as you ski
-│   ├── skierView.ts   - Articulated skier model (posable legs/torso)
+│   ├── skierView.ts   - Articulated skier model: posable legs/torso, helmet
+│   │                    + lit visor, poles, and a wind/spin-animated scarf
 │   ├── fx.ts          - Particles (spray/sparks/fireworks), auras, flow trail
 │   ├── post.ts        - HDR post pipeline: ACES tone mapping + bloom;
 │   │                    glowColor() marks materials as bloom-hot

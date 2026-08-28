@@ -24,6 +24,10 @@ declare global {
       step?: (seconds: number) => void; // advance sim + render while rAF is paused
       readonly paused: boolean;
       readonly audio: GameAudio;
+      // The live camera: while PAUSED the follow-cam stops writing it, so a
+      // debug session can park it anywhere (e.g. a model closeup) and the
+      // paused render loop keeps drawing from there.
+      readonly camera: THREE.PerspectiveCamera;
     };
   }
 }
@@ -368,6 +372,7 @@ window.__game = {
     return paused;
   },
   audio,
+  camera,
 };
 
 window.addEventListener('resize', () => {
