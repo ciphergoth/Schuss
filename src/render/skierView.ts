@@ -60,7 +60,9 @@ export function createSkierView(scene: THREE.Scene): SkierView {
   const glowMats = [
     { mat: jacket, intensity: 0.55 },
     { mat: pants, intensity: 0.7 },
-    { mat: skiMaterial, intensity: 1.3 },
+    // Hot enough to cross the bloom threshold in the air: the skis get a
+    // real halo, and they're the needle you read the rotation from.
+    { mat: skiMaterial, intensity: 2.1 },
   ];
   for (const { mat } of glowMats) mat.emissiveIntensity = 0;
 

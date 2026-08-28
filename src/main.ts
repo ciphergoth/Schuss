@@ -10,6 +10,7 @@ import { ZONE_LENGTH } from './render/palette';
 import { ChunkRenderer } from './render/chunks';
 import { createSkierView, updateSkierView } from './render/skierView';
 import { createCamera, updateCamera } from './render/camera';
+import { createPost } from './render/post';
 import { Effects } from './render/fx';
 import { GameAudio } from './audio/engine';
 
@@ -58,6 +59,8 @@ const sceneSetup = createScene();
 const { scene, sun } = sceneSetup;
 sceneSetup.setCourse(currentSeed, courseDesign()); // the first course's zones + weather
 const camera = createCamera();
+// ACES tone mapping + HDR bloom: everything renders through the composer.
+const post = createPost(renderer, scene, camera);
 const skierView = createSkierView(scene);
 const fx = new Effects(scene);
 const timeText = document.getElementById('time')!;
@@ -108,7 +111,11 @@ let finishPanelAt: number | null = null;
 
 let sim = createSim(currentSeed, undefined, courseDesign());
 let lastInput: SkierInput = { steer: 0, stance: 0 };
-const chunkRenderer = new ChunkRenderer(scene, sim.terrain);
+const chunkRenderer = new ChunkRenderer(
+  scene,
+  sim.terrain,
+  renderer.capabilities.getMaxAnisotropy()
+);
 
 // The progress bar has one segment per course section; each fills as you
 // ski through it. Built from the terrain so it tracks the real length.
@@ -365,6 +372,7 @@ window.__game = {
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
+  post.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 });
@@ -560,7 +568,7 @@ function renderFrame(delta: number, events: SimEvent[] = []): void {
     trickText.classList.remove('visible');
   }
 
-  renderer.render(scene, camera);
+  post.render();
 }
 
 function showTrick(text: string, color: string, seconds: number): void {
@@ -583,7 +591,7 @@ function frame(): void {
     // Keep drawing (resizes still work) but freeze the world; the clock keeps
     // draining so resuming doesn't fast-forward.
     accumulator = 0;
-    renderer.render(scene, camera);
+    post.render();
     requestAnimationFrame(frame);
     return;
   }
