@@ -106,9 +106,10 @@ BONUS_RADIUS at the arc point, flaring BONUS_CONE_FLARE per meter of
 clearance) has NO ceiling, so crossing the slice anywhere above the arc
 collects and overflying is impossible by design — while passing beneath
 the base still misses, so reaching the arc stays the feat. The render
-layer draws the funnel from the SAME exported constants (a triangular
-veil fading to transparency ~110m up, reading as endless), so the shape
-you see is exactly the shape that collects. Plunge venues gate softly
+layer draws the funnel from the SAME exported constants — a triangular
+veil about as tall as the old cone (~6-8m visible, dissolving at the
+top; the dissolve is what says it keeps going), so the flare you see is
+exactly the flare that collects. Plunge venues gate softly
 (speed is free downhill there); hips carry only the x3 for now. Near misses celebrate (whoosh, puff) but pay
 nothing. The mouse
 is REQUIRED and never changes meaning (x steers / aims the landing, y is

@@ -35,14 +35,15 @@ const SNOW_CRUD = new THREE.Color(0x8494cf); // slow crud: dusty periwinkle
 const SNOW_ICE = new THREE.Color(0x9fd8ff); // glacier: the GRIP channel made visible
 
 // The prize marker: an INFINITE SLICE — a triangular funnel whose base sits
-// at the collection point and whose mouth opens forever upward, fading to
-// transparency with height so it reads as endless. Its flare is EXACTLY the
-// sim's catch law (BONUS_RADIUS + BONUS_CONE_FLARE per meter): cross the
-// glowing slice anywhere and you've grabbed the star; pass beneath its base
-// and you've missed. Three radial segments keep the pizza-slice silhouette
-// visibly turning as it spins. Vertex alpha (RGBA color attribute) carries
-// the fade.
-const SLICE_HEIGHT = 110;
+// at the collection point and whose walls flare on EXACTLY the sim's catch
+// law (BONUS_RADIUS + BONUS_CONE_FLARE per meter): cross the glowing slice
+// anywhere and you've grabbed the star; pass beneath its base and you've
+// missed. The CATCH has no ceiling, but the veil fades out quickly — it
+// reads about as tall as the old ~6m cone, a marker rather than a wall of
+// light, and the dissolve into nothing is what says "this keeps going".
+// Three radial segments keep the pizza-slice silhouette visibly turning as
+// it spins. Vertex alpha (RGBA color attribute) carries the fade.
+const SLICE_HEIGHT = 12; // drawn height; the fade reaches ~0 well before the top
 function sliceGeometry(): THREE.BufferGeometry {
   const geo = new THREE.CylinderGeometry(
     BONUS_RADIUS + SLICE_HEIGHT * BONUS_CONE_FLARE,
@@ -56,9 +57,9 @@ function sliceGeometry(): THREE.BufferGeometry {
   const pos = geo.getAttribute('position');
   const rgba = new Float32Array(pos.count * 4);
   for (let v = 0; v < pos.count; v++) {
-    const u = pos.getY(v) / SLICE_HEIGHT; // 0 at the base, 1 at the mouth
+    const u = pos.getY(v) / SLICE_HEIGHT; // 0 at the base, 1 at the top
     rgba[v * 4] = rgba[v * 4 + 1] = rgba[v * 4 + 2] = 1;
-    rgba[v * 4 + 3] = 0.45 * Math.pow(1 - u, 2.2); // a veil, dissolving upward
+    rgba[v * 4 + 3] = 0.6 * Math.pow(1 - u, 2.5); // bright base, gone by ~8m
   }
   geo.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
   return geo;
