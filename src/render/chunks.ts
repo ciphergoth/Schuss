@@ -15,6 +15,7 @@ import {
   yetiPose,
 } from '../sim/terrain';
 import { hash2, mulberry32 } from '../sim/rng';
+import { BONUS_CONE_FLARE, BONUS_RADIUS } from '../sim/sim';
 import { glowColor } from './post';
 import { SNOW_TILE, makeSnowTextures } from './textures';
 
@@ -33,18 +34,33 @@ const SNOW_FLOOR = new THREE.Color(0xf4f9ff);
 const SNOW_CRUD = new THREE.Color(0x8494cf); // slow crud: dusty periwinkle
 const SNOW_ICE = new THREE.Color(0x9fd8ff); // glacier: the GRIP channel made visible
 
-// The prize marker: a spinning cone that POINTS DOWN — a flat star at one
-// height was easy to overfly by popping too high. The apex sits at the
-// collection point and the mouth opens UP, so the wide part is up where a big
-// pop crests (the sim's catch fans out to match). Three radial segments make
-// it a crisp triangular cone whose silhouette visibly turns as it spins —
-// conical, low-poly, unmistakably rotating.
-function coneGeometry(radius: number, height: number): THREE.BufferGeometry {
-  // Cone apex is at +height/2 by default; flip it to point down and lift it so
-  // the apex lands at the collection point (y = 0) with the mouth `height` up.
-  const geo = new THREE.ConeGeometry(radius, height, 3);
-  geo.rotateX(Math.PI);
-  geo.translate(0, height / 2, 0);
+// The prize marker: an INFINITE SLICE — a triangular funnel whose base sits
+// at the collection point and whose mouth opens forever upward, fading to
+// transparency with height so it reads as endless. Its flare is EXACTLY the
+// sim's catch law (BONUS_RADIUS + BONUS_CONE_FLARE per meter): cross the
+// glowing slice anywhere and you've grabbed the star; pass beneath its base
+// and you've missed. Three radial segments keep the pizza-slice silhouette
+// visibly turning as it spins. Vertex alpha (RGBA color attribute) carries
+// the fade.
+const SLICE_HEIGHT = 110;
+function sliceGeometry(): THREE.BufferGeometry {
+  const geo = new THREE.CylinderGeometry(
+    BONUS_RADIUS + SLICE_HEIGHT * BONUS_CONE_FLARE,
+    BONUS_RADIUS,
+    SLICE_HEIGHT,
+    3,
+    10,
+    true // open-ended: a funnel, not a capped solid
+  );
+  geo.translate(0, SLICE_HEIGHT / 2, 0); // base at the collection point (y = 0)
+  const pos = geo.getAttribute('position');
+  const rgba = new Float32Array(pos.count * 4);
+  for (let v = 0; v < pos.count; v++) {
+    const u = pos.getY(v) / SLICE_HEIGHT; // 0 at the base, 1 at the mouth
+    rgba[v * 4] = rgba[v * 4 + 1] = rgba[v * 4 + 2] = 1;
+    rgba[v * 4 + 3] = 0.45 * Math.pow(1 - u, 2.2); // a veil, dissolving upward
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
   return geo;
 }
 
@@ -147,13 +163,24 @@ export class ChunkRenderer {
   private red = new THREE.Color(0xff3b30);
   private white = new THREE.Color(0xffffff);
   private orange = new THREE.Color(0xff8b1a);
+  // The star slices: vertex alpha carries the upward fade, so the material
+  // is transparent with per-vertex RGBA (see sliceGeometry). The HDR boost
+  // is deliberately MILD — at full glow the two sky-filling fans bloomed
+  // the whole frame to white; a slice should read as a colored veil with a
+  // hot seam near the base, not a floodlight.
   private goldStar = new THREE.MeshBasicMaterial({
-    color: glowColor(0xffd34d),
+    color: glowColor(0xffd34d, 1.5),
     side: THREE.DoubleSide,
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
   });
   private magenta = new THREE.MeshBasicMaterial({
-    color: glowColor(0xff3ddc),
+    color: glowColor(0xff3ddc, 1.5),
     side: THREE.DoubleSide,
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
   });
   private goldHalo = new THREE.MeshBasicMaterial({
     color: glowColor(0xffe9a8),
@@ -578,18 +605,16 @@ export class ChunkRenderer {
       this.pickupMeshes.set(p.id, mesh);
     }
 
-    // Trick-bonus stars past the kicker lip: gold x3, bigger magenta x5, each a
-    // spinning downward cone (apex at the grab point, mouth up top, so a high
-    // pop threads the wide part) with a halo ring marking the collection point,
-    // riding its own light beam up from the snow so the flight line reads from
-    // hundreds of meters out.
+    // Trick-bonus stars past the kicker lip: gold x3, magenta x5, each an
+    // infinite slice (base at the grab point, mouth fading out far overhead —
+    // its flare IS the sim's catch law, so crossing the glow anywhere grabs
+    // it) with a halo ring marking the collection point, riding its own
+    // light beam up from the snow so the flight line reads from hundreds of
+    // meters out.
     for (const b of this.terrain.bonusesForChunk(index)) {
       const big = b.mult === 5;
       const holder = new THREE.Group();
-      const star = new THREE.Mesh(
-        coneGeometry(big ? 1.35 : 1.05, big ? 6.5 : 5.0),
-        big ? this.magenta : this.goldStar
-      );
+      const star = new THREE.Mesh(sliceGeometry(), big ? this.magenta : this.goldStar);
       holder.add(star);
       // A horizontal ring at the collection point — rotationally symmetric
       // about the spin axis, so it hangs steady while the cone turns.

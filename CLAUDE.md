@@ -101,8 +101,15 @@ heightfield (terrain.starOnArc): the gold x3 rides the human-pop-at-cruise
 arc, the magenta x5 rides the superhuman-pop-at-boost-pace arc, 30-50m
 downrange — so slower or unpopped flights pass meters beneath it, early
 hops crest short, and placement survives physics changes because it IS the
-physics. Plunge venues gate softly (speed is free downhill there); hips
-carry only the x3 for now. Near misses celebrate (whoosh, puff) but pay
+physics. The star itself is an INFINITE SLICE: the catch cone (base disc
+BONUS_RADIUS at the arc point, flaring BONUS_CONE_FLARE per meter of
+clearance) has NO ceiling, so crossing the slice anywhere above the arc
+collects and overflying is impossible by design — while passing beneath
+the base still misses, so reaching the arc stays the feat. The render
+layer draws the funnel from the SAME exported constants (a triangular
+veil fading to transparency ~110m up, reading as endless), so the shape
+you see is exactly the shape that collects. Plunge venues gate softly
+(speed is free downhill there); hips carry only the x3 for now. Near misses celebrate (whoosh, puff) but pay
 nothing. The mouse
 is REQUIRED and never changes meaning (x steers / aims the landing, y is
 stance, buttons boost); WASD exists only for tricks: in real air (past

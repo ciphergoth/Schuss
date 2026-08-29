@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { SIM_DT, Sim, SimEvent, createSim, parallelCombine, stepSim } from './sim';
+import {
+  BONUS_CONE_FLARE,
+  BONUS_RADIUS,
+  SIM_DT,
+  Sim,
+  SimEvent,
+  createSim,
+  parallelCombine,
+  stepSim,
+} from './sim';
 import { SKIER_RADIUS, SkierInput } from './skier';
 
 const COAST = { steer: 0, stance: 0 };
@@ -114,6 +123,36 @@ describe('boost economy', () => {
     expect(events.some((e) => e.type === 'contract' && e.mult === 5)).toBe(true);
     expect(sim.contract).toEqual({ mult: 5, demand: star.demand });
     expect(sim.pendingContract).toBeNull();
+  });
+
+  it('the slice is infinite: crossing far above the arc grabs; beneath still misses', () => {
+    // The star is an infinite upward slice: the catch flares with clearance
+    // and has NO ceiling, so overflying is impossible — but its base is
+    // where generosity ends, and the flare is the law at every height.
+    const grabs = (dyAbove: number, xOff: number): boolean => {
+      const sim = createSim(1);
+      let index = 3;
+      while (!sim.terrain.bonusesForChunk(index).some((b) => b.mult === 3)) index++;
+      const star = sim.terrain.bonusesForChunk(index).find((b) => b.mult === 3)!;
+      sim.nextSectorZ = -1e9;
+      const s = sim.skier;
+      s.x = star.x + xOff;
+      s.z = star.z + 2;
+      s.y = star.y - 1.0 + dyAbove; // the chest (s.y + 1) sits dyAbove over the arc
+      s.heading = sim.terrain.trackHeading(star.z);
+      s.speed = 15;
+      s.vy = 0;
+      s.airTime = 0.4;
+      const events = runCollecting(sim, 0.3);
+      return events.some((e) => e.type === 'bonus' && e.mult === 3);
+    };
+    // 30m over the arc — far beyond the old 6m ceiling — and 12m off-axis:
+    // inside the widened slice, so it grabs.
+    expect(grabs(30, 12)).toBe(true);
+    // Passing beneath the slice's base still misses: the arc is the feat.
+    expect(grabs(-4, 0)).toBe(false);
+    // Outside the flare at that height: no grab — the widening is the law.
+    expect(grabs(30, BONUS_RADIUS + 30 * BONUS_CONE_FLARE + 2)).toBe(false);
   });
 
   it('the x5 star hangs further out than the x3, both well off the snow', () => {
