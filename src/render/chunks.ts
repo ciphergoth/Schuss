@@ -41,8 +41,8 @@ const SNOW_ICE = new THREE.Color(0x9fd8ff); // glacier: the GRIP channel made vi
 // missed. The CATCH has no ceiling, but the veil fades out quickly — it
 // reads about as tall as the old ~6m cone, a marker rather than a wall of
 // light, and the dissolve into nothing is what says "this keeps going".
-// Three radial segments keep the pizza-slice silhouette visibly turning as
-// it spins. Vertex alpha (RGBA color attribute) carries the fade.
+// Three radial segments give the still pizza-slice silhouette; vertex
+// alpha (RGBA color attribute) carries the fade.
 const SLICE_HEIGHT = 12; // drawn height; the fade reaches ~0 well before the top
 function sliceGeometry(): THREE.BufferGeometry {
   const geo = new THREE.CylinderGeometry(
@@ -385,9 +385,13 @@ export class ChunkRenderer {
         this.chunks.delete(i);
       }
     }
-    // Spin the discs, bob everything gently; hide the ones already grabbed.
+    // Spin the coin discs and bob them gently; hide anything already
+    // grabbed. Star slices sit perfectly STILL (userData.still) — a fixed
+    // region of sky to aim a flight through, not a trinket asking for
+    // attention.
     for (const [id, mesh] of this.pickupMeshes) {
       mesh.visible = !collected.has(id);
+      if (mesh.userData.still) continue;
       mesh.rotation.y = time * 3;
       const baseY = mesh.userData.baseY as number;
       mesh.position.y = baseY + Math.sin(time * 2.2 + mesh.position.x) * 0.14;
@@ -618,7 +622,7 @@ export class ChunkRenderer {
       const star = new THREE.Mesh(sliceGeometry(), big ? this.magenta : this.goldStar);
       holder.add(star);
       // A horizontal ring at the collection point — rotationally symmetric
-      // about the spin axis, so it hangs steady while the cone turns.
+      // about the vertical axis, hanging steady under the still slice.
       const halo = new THREE.Mesh(
         new THREE.TorusGeometry(big ? 1.5 : 1.15, 0.07, 8, 32),
         big ? this.magentaHalo : this.goldHalo
@@ -627,6 +631,7 @@ export class ChunkRenderer {
       holder.add(halo);
       holder.position.set(b.x, b.y, b.z);
       holder.userData.baseY = b.y;
+      holder.userData.still = true; // the slice is a place, not a spinner
       group.add(holder);
       this.pickupMeshes.set(b.id, holder);
 
